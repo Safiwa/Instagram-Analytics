@@ -1,0 +1,340 @@
+import type { CreatorProfile, Post } from "../data/types";
+
+export type EstimateImpact = "positive" | "neutral" | "negative";
+export type EstimateConfidence = "low" | "medium" | "high";
+
+export type EstimateSignal = {
+  label: string;
+  value: string;
+  impact: EstimateImpact;
+};
+
+export type PublicEstimates = {
+  fakeFollowers: number | null;
+  fakeFollowersPct: number | null;
+  authenticityPct: number | null;
+  followerGrowthPct: number | null;
+  confidence: EstimateConfidence | null;
+  signals: EstimateSignal[];
+  methodology: string | null;
+};
+
+const METHODOLOGY =
+  "Modeled from public signals: follower/following balance, engagement versus size benchmarks, comment-to-like ratio, engagement stability, posting cadence, verification, and public reach where available. Instagram does not publish fake-follower counts or historical follower data, so these are estimates, not measurements.";
+
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function average(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) {
+    return 0;
+  }
+
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function coefficientOfVariation(values: number[]): number {
+  const mean = average(values);
+  if (values.length === 0 || mean === 0) {
+    return 0;
+  }
+
+  const variance = average(values.map((value) => (value - mean) ** 2));
+  return Math.sqrt(variance) / mean;
+}
+
+function benchmarkEngagementRate(followers: number): number {
+  if (followers < 5_000) {
+    return 5.5;
+  }
+  if (followers < 20_000) {
+    return 3.5;
+  }
+  if (followers < 100_000) {
+    return 2.0;
+  }
+  if (followers < 500_000) {
+    return 1.4;
+  }
+  if (followers < 1_000_000) {
+    return 1.0;
+  }
+  return 0.8;
+}
+
+function engagementTrend(posts: Post[]): number | null {
+  const dated = posts
+    .map((post) => ({
+      at: new Date(post.postedAt).getTime(),
+      total: post.likes + post.comments,
+    }))
+    .filter((item) => Number.isFinite(item.at))
+    .sort((left, right) => left.at - right.at);
+
+  if (dated.length < 4) {
+    return null;
+  }
+
+  const middle = Math.floor(dated.length / 2);
+  const older = median(dated.slice(0, middle).map((item) => item.total));
+  const recent = median(dated.slice(middle).map((item) => item.total));
+
+  if (older <= 0) {
+    return null;
+  }
+
+  return ((recent - older) / older) * 100;
+}
+
+function postsPerWeek(posts: Post[]): number | null {
+  const times = posts
+    .map((post) => new Date(post.postedAt).getTime())
+    .filter((time) => Number.isFinite(time))
+    .sort((left, right) => left - right);
+
+  if (times.length < 2) {
+    return null;
+  }
+
+  const days = (times[times.length - 1] - times[0]) / (1000 * 60 * 60 * 24);
+  if (days <= 0) {
+    return null;
+  }
+
+  return (times.length - 1) / (days / 7);
+}
+
+function medianReachRatio(posts: Post[], followers: number): number | null {
+  const views = posts
+    .map((post) => post.viewCount)
+    .filter((value): value is number => typeof value === "number" && value > 0);
+
+  if (views.length === 0 || followers <= 0) {
+    return null;
+  }
+
+  return median(views) / followers;
+}
+
+function emptyEstimates(): PublicEstimates {
+  return {
+    fakeFollowers: null,
+    fakeFollowersPct: null,
+    authenticityPct: null,
+    followerGrowthPct: null,
+    confidence: null,
+    signals: [],
+    methodology: null,
+  };
+}
+
+export function estimatePublicSignals(profile: CreatorProfile): PublicEstimates {
+  const posts = profile.recentPosts;
+
+  if (
+    profile.isPrivate ||
+    profile.followers <= 0 ||
+    posts.length === 0
+  ) {
+    return emptyEstimates();
+  }
+
+  const avgLikes = average(posts.map((post) => post.likes));
+  const avgComments = average(posts.map((post) => post.comments));
+  const engagementRate = ((avgLikes + avgComments) / profile.followers) * 100;
+  const benchmark = benchmarkEngagementRate(profile.followers);
+  const engagementRatio = engagementRate / benchmark;
+  const followerRatio = profile.following / profile.followers;
+  const commentRatio = (() => {
+    const medianLikes = median(posts.map((post) => post.likes));
+    if (medianLikes <= 0) {
+      return 0;
+    }
+    return (median(posts.map((post) => post.comments)) / medianLikes) * 100;
+  })();
+  const variability = coefficientOfVariation(
+    posts.map((post) => post.likes + post.comments),
+  );
+  const cadence = postsPerWeek(posts);
+  const reachRatio = medianReachRatio(posts, profile.followers);
+  const trend = engagementTrend(posts);
+
+  let fakePct = 8;
+
+  if (followerRatio > 1) {
+    fakePct += 25;
+  } else if (followerRatio > 0.5) {
+    fakePct += 16;
+  } else if (followerRatio > 0.25) {
+    fakePct += 9;
+  } else if (followerRatio > 0.1) {
+    fakePct += 3;
+  } else if (followerRatio < 0.02) {
+    fakePct -= 3;
+  }
+
+  if (engagementRatio < 0.2) {
+    fakePct += 28;
+  } else if (engagementRatio < 0.4) {
+    fakePct += 20;
+  } else if (engagementRatio < 0.6) {
+    fakePct += 12;
+  } else if (engagementRatio < 0.8) {
+    fakePct += 6;
+  } else if (engagementRatio > 1.8) {
+    fakePct -= 4;
+  } else if (engagementRatio > 1.2) {
+    fakePct -= 2;
+  }
+
+  if (commentRatio < 0.4) {
+    fakePct += 8;
+  } else if (commentRatio < 0.8) {
+    fakePct += 4;
+  } else if (commentRatio > 12) {
+    fakePct += 7;
+  }
+
+  if (variability > 1.4) {
+    fakePct += 9;
+  } else if (variability > 1) {
+    fakePct += 5;
+  } else if (variability > 0.7) {
+    fakePct += 2;
+  } else if (variability < 0.25) {
+    fakePct -= 2;
+  }
+
+  if (profile.isVerified) {
+    fakePct -= 7;
+  }
+
+  if (profile.followers > 1_000_000) {
+    fakePct += 5;
+  } else if (profile.followers > 500_000) {
+    fakePct += 3;
+  } else if (profile.followers < 10_000) {
+    fakePct -= 1;
+  }
+
+  if (profile.postsCount < 30 && profile.followers > 5_000) {
+    fakePct += 6;
+  } else if (profile.postsCount > 500) {
+    fakePct -= 2;
+  }
+
+  fakePct = clamp(fakePct, 2, 65);
+
+  const authenticityPct = 100 - fakePct;
+  const fakeFollowers = Math.round((profile.followers * fakePct) / 100);
+
+  let growthPct = 6;
+  growthPct += clamp((engagementRatio - 1) * 10, -12, 18);
+  growthPct += clamp((authenticityPct - 85) * 0.2, -10, 3);
+  if (cadence !== null) {
+    growthPct += clamp((cadence - 3) * 1.5, -4, 6);
+  }
+  if (reachRatio !== null) {
+    growthPct += clamp((reachRatio - 0.5) * 8, -6, 12);
+  }
+  if (trend !== null) {
+    growthPct += clamp(trend * 0.15, -6, 8);
+  }
+  if (followerRatio > 0.5) {
+    growthPct -= 6;
+  } else if (followerRatio < 0.1) {
+    growthPct += 2;
+  }
+  if (profile.followers > 1_000_000) {
+    growthPct -= 3;
+  } else if (profile.followers > 500_000) {
+    growthPct -= 2;
+  } else if (profile.followers < 1_000) {
+    growthPct += 3;
+  } else if (profile.followers < 10_000) {
+    growthPct += 2;
+  }
+  growthPct = clamp(growthPct, -20, 90);
+
+  const signals: EstimateSignal[] = [
+    {
+      label: "Follower / following balance",
+      value: `${profile.following.toLocaleString("en-US")} following (${round2(followerRatio * 100)}% of followers)`,
+      impact:
+        followerRatio < 0.1 ? "positive" : followerRatio > 0.5 ? "negative" : "neutral",
+    },
+    {
+      label: "Engagement vs size benchmark",
+      value: `${round2(engagementRate)}% vs ${benchmark.toFixed(1)}% expected`,
+      impact:
+        engagementRatio >= 1 ? "positive" : engagementRatio >= 0.7 ? "neutral" : "negative",
+    },
+    {
+      label: "Comments per 100 likes",
+      value: `${round2(commentRatio)}`,
+      impact:
+        commentRatio < 0.4 || commentRatio > 12
+          ? "negative"
+          : commentRatio >= 1
+            ? "positive"
+            : "neutral",
+    },
+    {
+      label: "Engagement stability",
+      value: `${round2(variability)} variation`,
+      impact: variability <= 0.6 ? "positive" : variability >= 1 ? "negative" : "neutral",
+    },
+    {
+      label: "Posting cadence",
+      value: cadence === null ? "Not enough posts" : `${round2(cadence)} posts / week`,
+      impact:
+        cadence === null ? "neutral" : cadence > 21 ? "negative" : cadence >= 2 ? "positive" : "neutral",
+    },
+    {
+      label: "Verification",
+      value: profile.isVerified ? "Verified badge" : "No badge",
+      impact: profile.isVerified ? "positive" : "neutral",
+    },
+  ];
+
+  if (reachRatio !== null) {
+    signals.push({
+      label: "Public reach proxy",
+      value: `${round2(reachRatio * 100)}% of followers`,
+      impact: reachRatio >= 0.5 ? "positive" : reachRatio < 0.2 ? "negative" : "neutral",
+    });
+  }
+
+  const confidence: EstimateConfidence =
+    posts.length >= 10 && (profile.isVerified || profile.followers >= 10_000)
+      ? "high"
+      : posts.length >= 5
+        ? "medium"
+        : "low";
+
+  return {
+    fakeFollowers,
+    fakeFollowersPct: round2(fakePct),
+    authenticityPct: round2(authenticityPct),
+    followerGrowthPct: round2(growthPct),
+    confidence,
+    signals,
+    methodology: METHODOLOGY,
+  };
+}

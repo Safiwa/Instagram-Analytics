@@ -1,0 +1,347 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { computeMetrics } from "../src/core/analytics/metrics";
+import { resolveProfile } from "../src/core/data/adapter";
+import {
+  clearPublicCache,
+  fetchPublicProfile,
+  postedAtFromPk,
+  shortcodeFromPk,
+} from "../src/core/data/public";
+
+type MediaFixture = {
+  pk: string;
+  mediaType: number;
+  productType?: string;
+  caption?: string;
+  pinned?: boolean;
+};
+
+type ProfileFixture = {
+  username: string;
+  fullName?: string;
+  followers?: number;
+  following?: number;
+  posts?: number;
+  isPrivate?: boolean;
+  isVerified?: boolean;
+  media?: MediaFixture[];
+};
+
+const RECENT_REEL: MediaFixture = {
+  pk: "4033038341586285853",
+  mediaType: 2,
+  productType: "clips",
+  caption: "First reel #signal",
+};
+
+const RECENT_PHOTO: MediaFixture = {
+  pk: "4031892735966066362",
+  mediaType: 1,
+  productType: "feed",
+  caption: "Second photo",
+};
+
+const PINNED_CAROUSEL: MediaFixture = {
+  pk: "4028698441835361298",
+  mediaType: 8,
+  productType: "carousel_container",
+  caption: "Pinned carousel",
+  pinned: true,
+};
+
+function profileHtml(fixture: ProfileFixture): string {
+  const media = fixture.media ?? [];
+  const followers = fixture.followers ?? 59057;
+  const following = fixture.following ?? 8605;
+  const posts = fixture.posts ?? 453;
+
+  const payload = {
+    require: [
+      {
+        __bbox: {
+          result: {
+            data: {
+              xig_user_by_igid_v2: {
+                username: fixture.username,
+                full_name: fixture.fullName ?? "Public Test",
+                biography: "Public bio #signal",
+                is_verified: fixture.isVerified ?? true,
+                is_private: fixture.isPrivate ?? false,
+                follower_count: followers,
+                following_count: following,
+                profile_pic_url: "https://example.com/avatar.jpg",
+              },
+              polaris_timeline_connection: {
+                edges: media.map((item) => ({
+                  node: {
+                    pk: item.pk,
+                    is_timeline_pinned: item.pinned ?? false,
+                    media_type: item.mediaType,
+                    product_type: item.productType,
+                    caption: { text: item.caption ?? "Caption" },
+                  },
+                })),
+              },
+            },
+          },
+        },
+      },
+    ],
+  };
+
+  const description = `${followers.toLocaleString("en-US")} Followers, ${following.toLocaleString(
+    "en-US",
+  )} Following, ${posts} Posts - See Instagram photos and videos`;
+
+  return [
+    "<!DOCTYPE html><html><head>",
+    `<meta property="og:description" content="${description}" />`,
+    `<meta property="og:title" content="${fixture.fullName ?? "Public Test"} (@${fixture.username}) • Instagram photos and videos" />`,
+    "</head><body>",
+    `<script type="application/json" data-sjs>${JSON.stringify(payload)}</script>`,
+    "</body></html>",
+  ].join("");
+}
+
+function embedHtml(likes: number, comments: number, views?: number): string {
+  const payload = `{\\"edge_media_to_comment\\":{\\"count\\":${comments}},\\"edge_liked_by\\":{\\"count\\":${likes}}${
+    views === undefined ? "" : `,\\"video_view_count\\":${views}`
+  }}`;
+
+  return `<html><body><script>window.__data = ${payload};</script></body></html>`;
+}
+
+function htmlResponse(body: string): Response {
+  return new Response(body, { status: 200, headers: { "Content-Type": "text/html" } });
+}
+
+function installFetch(fixture: ProfileFixture, embeds: Record<string, Response>): ReturnType<typeof vi.fn> {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+
+    if (url === `https://www.instagram.com/${fixture.username}/`) {
+      return htmlResponse(profileHtml(fixture));
+    }
+
+    const embed = url.match(/\/p\/([^/]+)\/embed\/captioned\/$/);
+    if (embed && embeds[embed[1]]) {
+      return embeds[embed[1]];
+    }
+
+    return new Response("", { status: 404 });
+  });
+
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+describe("public Instagram reader", () => {
+  beforeEach(() => {
+    clearPublicCache();
+    vi.stubEnv("IG_ACCESS_TOKEN", "");
+    vi.stubEnv("IG_BUSINESS_ACCOUNT_ID", "");
+  });
+
+  afterEach(() => {
+    clearPublicCache();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("derives shortcodes and timestamps from media ids", () => {
+    expect(shortcodeFromPk("4033038341586285853")).toBe("Df4OwDzx_Ud");
+    expect(shortcodeFromPk("4031892735966066362")).toBe("Df0KRTbvDa6");
+    expect(postedAtFromPk("4033038341586285853")).toBe("2026-11-18T09:54:17.152Z");
+  });
+
+  it("maps a public profile and its recent posts", async () => {
+    const fetchMock = installFetch(
+      {
+        username: "public.test",
+        fullName: "Public Test",
+        media: [RECENT_REEL, RECENT_PHOTO, PINNED_CAROUSEL],
+      },
+      {
+        Df4OwDzx_Ud: htmlResponse(embedHtml(318, 28, 6984)),
+        Df0KRTbvDa6: htmlResponse(embedHtml(486, 62)),
+      },
+    );
+
+    const resolution = await resolveProfile("@Public.Test");
+
+    expect(resolution.status).toBe("found");
+    if (resolution.status !== "found") {
+      throw new Error("expected a public profile");
+    }
+
+    const { profile } = resolution;
+    expect(profile.source).toBe("public");
+    expect(profile.username).toBe("public.test");
+    expect(profile.displayName).toBe("Public Test");
+    expect(profile.followers).toBe(59057);
+    expect(profile.following).toBe(8605);
+    expect(profile.postsCount).toBe(453);
+    expect(profile.isVerified).toBe(true);
+    expect(profile.isPrivate).toBe(false);
+    expect(profile.followerHistory).toEqual([]);
+    expect(profile.audience).toBeUndefined();
+
+    // The pinned carousel is skipped, so only two embeds are requested.
+    expect(profile.recentPosts).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    const [reel, photo] = profile.recentPosts;
+    expect(reel).toMatchObject({
+      id: "Df4OwDzx_Ud",
+      type: "Reel",
+      likes: 318,
+      comments: 28,
+      viewCount: 6984,
+      postedAt: "2026-11-18T09:54:17.152Z",
+      hashtags: ["#signal"],
+    });
+    expect(reel.permalink).toBe("https://www.instagram.com/p/Df4OwDzx_Ud/");
+    expect(photo).toMatchObject({
+      id: "Df0KRTbvDa6",
+      type: "Photo",
+      likes: 486,
+      comments: 62,
+    });
+    expect(photo.viewCount).toBeUndefined();
+
+    const metrics = computeMetrics(profile);
+    expect(metrics.engagementBasis).toBe("likes+comments");
+    expect(metrics.engagementRate).toBe(0.76);
+    expect(metrics.avgSaves).toBeNull();
+    expect(metrics.followerGrowthPct).toBeNull();
+    expect(metrics.authenticityPct).toBeNull();
+  });
+
+  it("serves repeat lookups from the in-memory cache", async () => {
+    const fetchMock = installFetch(
+      { username: "cache.test", media: [RECENT_REEL] },
+      { Df4OwDzx_Ud: htmlResponse(embedHtml(100, 5)) },
+    );
+
+    await fetchPublicProfile("cache.test");
+    const callsAfterFirst = fetchMock.mock.calls.length;
+    await fetchPublicProfile("CACHE.TEST");
+
+    expect(fetchMock).toHaveBeenCalledTimes(callsAfterFirst);
+  });
+
+  it("keeps partial results when an embed cannot be read", async () => {
+    installFetch(
+      { username: "partial.test", media: [RECENT_REEL, RECENT_PHOTO] },
+      { Df4OwDzx_Ud: htmlResponse(embedHtml(100, 5)) },
+    );
+
+    const profile = await fetchPublicProfile("partial.test");
+
+    expect(profile.recentPosts).toHaveLength(1);
+    expect(profile.recentPosts[0].id).toBe("Df4OwDzx_Ud");
+  });
+
+  it("returns private accounts without posts or embeds", async () => {
+    const fetchMock = installFetch(
+      {
+        username: "private.test",
+        isPrivate: true,
+        media: [RECENT_REEL, RECENT_PHOTO],
+      },
+      {},
+    );
+
+    const resolution = await resolveProfile("private.test");
+
+    expect(resolution.status).toBe("found");
+    if (resolution.status !== "found") {
+      throw new Error("expected a private profile");
+    }
+
+    expect(resolution.profile.source).toBe("public");
+    expect(resolution.profile.isPrivate).toBe(true);
+    expect(resolution.profile.recentPosts).toEqual([]);
+    expect(resolution.profile.postsCount).toBe(453);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports unknown handles as not found", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 404 })));
+
+    const resolution = await resolveProfile("missing.handle");
+
+    expect(resolution.status).toBe("not_found");
+    if (resolution.status !== "not_found") {
+      throw new Error("expected not found");
+    }
+    expect(resolution.message).toContain("No public Instagram profile");
+  });
+
+  it("treats Instagram's generic 200 shell as not found", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        htmlResponse("<!DOCTYPE html><html><head><title>Instagram</title></head><body></body></html>"),
+      ),
+    );
+
+    const resolution = await resolveProfile("empty.shell");
+
+    expect(resolution.status).toBe("not_found");
+    if (resolution.status !== "not_found") {
+      throw new Error("expected not found");
+    }
+    expect(resolution.message).toContain("No public Instagram profile");
+  });
+
+  it("surfaces rate limiting as a retryable error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 429 })));
+
+    const resolution = await resolveProfile("limited.handle");
+
+    expect(resolution.status).toBe("error");
+    if (resolution.status !== "error") {
+      throw new Error("expected an error");
+    }
+    expect(resolution.message).toContain("limiting public lookups");
+  });
+
+  it("falls back to public data when the official API fails", async () => {
+    vi.stubEnv("IG_ACCESS_TOKEN", "test-token");
+    vi.stubEnv("IG_BUSINESS_ACCOUNT_ID", "17841400000000000");
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.startsWith("https://graph.facebook.com/")) {
+        return new Response(JSON.stringify({ error: { message: "temporary failure" } }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url === "https://www.instagram.com/fallback.test/") {
+        return htmlResponse(
+          profileHtml({ username: "fallback.test", media: [RECENT_REEL] }),
+        );
+      }
+
+      return htmlResponse(embedHtml(50, 4));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const resolution = await resolveProfile("fallback.test");
+
+    expect(resolution.status).toBe("found");
+    if (resolution.status !== "found") {
+      throw new Error("expected a public fallback");
+    }
+
+    expect(resolution.profile.source).toBe("public");
+    expect(resolution.profile.recentPosts[0].likes).toBe(50);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("graph.facebook.com");
+    expect(String(fetchMock.mock.calls[1][0])).toContain("instagram.com/fallback.test/");
+  });
+});
