@@ -36,7 +36,7 @@ const PIPELINE: PipelineStep[] = [
     icon: ScanSearch,
     number: "01",
     title: "Username in",
-    body: "Enter any public handle. Signal reads the account page and, only when configured, an official API source.",
+    body: "Enter any public handle. Trending Analytics reads the account page and, only when configured, an official API source.",
   },
   {
     icon: Database,
@@ -180,7 +180,7 @@ export default function Home() {
       <section data-testid="metric-engine" className="space-y-5">
         <SectionTitle
           eyebrow="Metric engine"
-          title="What Signal calculates"
+          title="What Trending Analytics calculates"
           body="Measured values come from public post interactions. Modeled values are estimates clearly labeled Est. in every view."
         />
         <div className="grid gap-4 md:grid-cols-2">
@@ -222,7 +222,7 @@ export default function Home() {
         <SectionTitle
           eyebrow="Data sources"
           title="What is public and what is not"
-          body="Signal only reads data Instagram exposes without a login. Anything unavailable is shown as a dash or N/A, never invented."
+          body="Trending Analytics only reads data Instagram exposes without a login. Anything unavailable is shown as a dash or N/A, never invented."
         />
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">

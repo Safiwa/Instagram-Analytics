@@ -5,7 +5,7 @@ import { isLiveConfigured } from "../core/data/adapter";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Signal — Instagram Profile Analytics",
+  title: "Trending Analytics — Instagram Profile Analytics",
   description: "Professional Instagram profile analysis, comparison, and PDF reporting.",
 };
 
@@ -17,11 +17,15 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body className="min-h-screen bg-slate-50 text-slate-900">
         <div className="flex min-h-screen">
           <aside className="hidden w-60 shrink-0 flex-col bg-slate-950 px-5 py-7 text-slate-300 lg:flex">
-            <Link href="/" className="flex items-center gap-2 text-lg font-bold tracking-tight text-white">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500">
+            <Link href="/" className="flex items-center gap-2 text-base font-bold leading-none tracking-tight text-white">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500">
                 <Activity className="h-4 w-4 text-white" aria-hidden="true" />
               </span>
-              SIGNAL
+              <span className="leading-tight">
+                Trending
+                <br />
+                Analytics
+              </span>
             </Link>
 
             <nav className="mt-10 space-y-1 text-sm">
@@ -54,7 +58,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
               <div className="flex items-center gap-2 lg:hidden">
                 <Link href="/" className="font-bold tracking-tight text-slate-950">
-                  SIGNAL
+                  Trending Analytics
                 </Link>
               </div>
               <p className="hidden text-sm font-medium text-slate-500 lg:block">

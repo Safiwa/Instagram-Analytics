@@ -73,7 +73,7 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
           ? "Public web data"
           : "Demo dataset";
 
-  page.drawText("SIGNAL", { x: MARGIN, y, size: 10, font: bold, color: ACCENT });
+  page.drawText("TRENDING ANALYTICS", { x: MARGIN, y, size: 10, font: bold, color: ACCENT });
   y -= 28;
 
   line("Instagram Analysis Report", 24, bold, INK, 10);

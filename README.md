@@ -1,4 +1,4 @@
-# Signal — Instagram Profile Analytics
+# Trending Analytics — Instagram Profile Analytics
 
 Professional Instagram profile analysis, side-by-side comparison, and PDF reports.
 Built with Next.js 16, React 19, Tailwind CSS 4, Recharts, and `pdf-lib`.
@@ -69,7 +69,7 @@ These are not published on public profile pages, so they render as `N/A` or `—
 ## Estimated metrics
 
 Instagram does not publish fake-follower counts or historical follower counts. For
-public and optional-API profiles with at least one visible post, Signal computes:
+public and optional-API profiles with at least one visible post, Trending Analytics computes:
 
 | Metric | How it is produced |
 |---|---|
