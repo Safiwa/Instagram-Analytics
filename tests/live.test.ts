@@ -89,8 +89,11 @@ describe("live Instagram adapter", () => {
     const metrics = computeMetrics(profile);
     expect(metrics.engagementBasis).toBe("likes+comments");
     expect(metrics.avgSaves).toBeNull();
-    expect(metrics.followerGrowthPct).toBeNull();
-    expect(metrics.authenticityPct).toBeNull();
+    expect(metrics.followerGrowthPct).not.toBeNull();
+    expect(metrics.authenticityPct).not.toBeNull();
+    expect(metrics.growthEstimated).toBe(true);
+    expect(metrics.authenticityEstimated).toBe(true);
+    expect(metrics.estimateConfidence).not.toBeNull();
 
     const requested = decodeURIComponent(String(fetchMock.mock.calls[0][0]));
     expect(requested).toContain("/v27.0/17841400000000000");

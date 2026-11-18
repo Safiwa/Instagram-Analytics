@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, Download, TriangleAlert } from "lucide-react";
+import { ESTIMATE_CONFIDENCE_LABEL } from "../../core/analytics/estimates";
 import type { ProfileMetrics } from "../../core/analytics/metrics";
 import type { CreatorProfile } from "../../core/data/types";
 import { formatCompact, formatPercent } from "../../core/format";
@@ -27,14 +28,47 @@ const SOURCE_BADGE_CLASS: Record<CreatorProfile["source"], string> = {
   live: "bg-emerald-50 text-emerald-700",
 };
 
+function withEstimate(value: string, estimated: boolean): string {
+  return estimated ? `${value} est.` : value;
+}
+
+function estimateBasis(row: ComparisonRow): string {
+  if (row.metrics.estimateConfidence) {
+    return `${ESTIMATE_CONFIDENCE_LABEL[row.metrics.estimateConfidence]} confidence`;
+  }
+  if (row.profile.source === "demo") {
+    return "Demo fixture";
+  }
+  return "Not available";
+}
+
 const metricRows: { label: string; value: (row: ComparisonRow) => string }[] = [
   { label: "Followers", value: (row) => formatCompact(row.profile.followers) },
+  {
+    label: "Fake-follower estimate",
+    value: (row) =>
+      withEstimate(
+        formatCompact(row.metrics.fakeFollowers, "N/A"),
+        row.metrics.authenticityEstimated,
+      ),
+  },
   { label: "Engagement rate", value: (row) => formatPercent(row.metrics.engagementRate) },
   {
     label: "12-month growth",
-    value: (row) => formatPercent(row.metrics.followerGrowthPct, "N/A"),
+    value: (row) =>
+      withEstimate(
+        formatPercent(row.metrics.followerGrowthPct, "N/A"),
+        row.metrics.growthEstimated,
+      ),
   },
-  { label: "Authenticity", value: (row) => formatPercent(row.metrics.authenticityPct, "N/A") },
+  {
+    label: "Authenticity",
+    value: (row) =>
+      withEstimate(
+        formatPercent(row.metrics.authenticityPct, "N/A"),
+        row.metrics.authenticityEstimated,
+      ),
+  },
   { label: "Avg likes", value: (row) => formatCompact(row.metrics.avgLikes) },
   { label: "Avg comments", value: (row) => formatCompact(row.metrics.avgComments) },
   { label: "Avg saves", value: (row) => formatCompact(row.metrics.avgSaves, "N/A") },
@@ -44,6 +78,7 @@ const metricRows: { label: string; value: (row: ComparisonRow) => string }[] = [
     label: "Source",
     value: (row) => SOURCE_LABEL[row.profile.source],
   },
+  { label: "Estimate basis", value: (row) => estimateBasis(row) },
 ];
 
 export function ComparisonTable({ rows, truncated, missing }: ComparisonTableProps) {
@@ -56,19 +91,19 @@ export function ComparisonTable({ rows, truncated, missing }: ComparisonTablePro
     ...(missing.length > 0 ? [`Unavailable handles skipped: ${missing.join(", ")}.`] : []),
     ...(privateRows.length > 0
       ? [
-          `Private accounts show follower counts only: ${privateRows
+          `Private accounts show follower counts only and have no modeled estimates: ${privateRows
             .map((row) => `@${row.profile.username}`)
             .join(", ")}.`,
         ]
       : []),
     ...(hasPublic
       ? [
-          "Public-web rows use Instagram public profile pages: saves, audience demographics, follower history, and authenticity are not exposed.",
+          "Public-web rows use Instagram public profile pages. Saves, audience demographics, and measured follower history are unavailable; fake followers, authenticity, and growth are modeled estimates when posts are visible.",
         ]
       : []),
     ...(hasLive
       ? [
-          "Official-API rows use Business Discovery: saves, audience demographics, follower history, and authenticity are not exposed.",
+          "Official-API rows use Business Discovery. Saves, audience demographics, and measured follower history are unavailable; fake followers, authenticity, and growth are modeled estimates when posts are visible.",
         ]
       : []),
   ];

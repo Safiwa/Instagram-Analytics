@@ -115,6 +115,43 @@ function htmlResponse(body: string): Response {
   return new Response(body, { status: 200, headers: { "Content-Type": "text/html" } });
 }
 
+function webProfileJson(fixture: ProfileFixture): Response {
+  const followers = fixture.followers ?? 59057;
+  const following = fixture.following ?? 8605;
+  const media = (fixture.media ?? []).map((item) => ({
+    pk: item.pk,
+    shortcode: shortcodeFromPk(item.pk),
+    taken_at_timestamp: 1760000000,
+    media_type: item.mediaType,
+    product_type: item.productType,
+    edge_media_to_caption: { edges: [{ node: { text: item.caption ?? "Caption" } }] },
+    edge_liked_by: { count: 420 },
+    edge_media_to_comment: { count: 33 },
+    video_view_count: item.mediaType === 2 ? 9000 : undefined,
+  }));
+
+  return new Response(
+    JSON.stringify({
+      data: {
+        user: {
+          username: fixture.username,
+          full_name: fixture.fullName ?? "Web Profile Test",
+          biography: "Fallback bio",
+          is_verified: fixture.isVerified ?? false,
+          is_private: fixture.isPrivate ?? false,
+          edge_followed_by: { count: followers },
+          edge_follow: { count: following },
+          edge_owner_to_timeline_media: {
+            count: fixture.posts ?? 100,
+            edges: media.map((node) => ({ node })),
+          },
+        },
+      },
+    }),
+    { status: 200, headers: { "Content-Type": "application/json" } },
+  );
+}
+
 function installFetch(fixture: ProfileFixture, embeds: Record<string, Response>): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -214,8 +251,65 @@ describe("public Instagram reader", () => {
     expect(metrics.engagementBasis).toBe("likes+comments");
     expect(metrics.engagementRate).toBe(0.76);
     expect(metrics.avgSaves).toBeNull();
-    expect(metrics.followerGrowthPct).toBeNull();
-    expect(metrics.authenticityPct).toBeNull();
+    expect(metrics.followerGrowthPct).not.toBeNull();
+    expect(metrics.authenticityPct).not.toBeNull();
+    expect(metrics.growthEstimated).toBe(true);
+    expect(metrics.authenticityEstimated).toBe(true);
+    expect(metrics.estimateConfidence).not.toBeNull();
+    expect(metrics.fakeFollowers).toBeGreaterThan(0);
+    expect(metrics.fakeFollowers).toBeLessThan(profile.followers);
+    expect(metrics.estimateMethodology).toContain("estimates, not measurements");
+  });
+
+  it("falls back to the web profile endpoint when crawler pages have no posts", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "https://www.instagram.com/web.fallback/") {
+        return htmlResponse(profileHtml({ username: "web.fallback", media: [] }));
+      }
+      if (url.includes("web_profile_info")) {
+        return webProfileJson({
+          username: "web.fallback",
+          fullName: "Web Fallback",
+          media: [RECENT_REEL],
+        });
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await fetchPublicProfile("web.fallback");
+
+    expect(profile.displayName).toBe("Public Test");
+    expect(profile.followers).toBe(59057);
+    expect(profile.bio).toBe("Public bio #signal");
+    expect(profile.recentPosts).toHaveLength(1);
+    expect(profile.recentPosts[0]).toMatchObject({
+      id: "Df4OwDzx_Ud",
+      caption: "First reel #signal",
+      likes: 420,
+      comments: 33,
+      viewCount: 9000,
+    });
+    // Inline engagement avoids any post-embed requests.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a zero-post profile when no public source exposes posts", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "https://www.instagram.com/gated.test/") {
+        return htmlResponse(profileHtml({ username: "gated.test", media: [] }));
+      }
+      return new Response("", { status: 429 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await fetchPublicProfile("gated.test");
+
+    expect(profile.followers).toBe(59057);
+    expect(profile.recentPosts).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("serves repeat lookups from the in-memory cache", async () => {
@@ -265,6 +359,12 @@ describe("public Instagram reader", () => {
     expect(resolution.profile.recentPosts).toEqual([]);
     expect(resolution.profile.postsCount).toBe(453);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const metrics = computeMetrics(resolution.profile);
+    expect(metrics.followerGrowthPct).toBeNull();
+    expect(metrics.authenticityPct).toBeNull();
+    expect(metrics.growthEstimated).toBe(false);
+    expect(metrics.authenticityEstimated).toBe(false);
   });
 
   it("reports unknown handles as not found", async () => {

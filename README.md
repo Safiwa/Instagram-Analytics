@@ -5,7 +5,11 @@ Built with Next.js 16, React 19, Tailwind CSS 4, Recharts, and `pdf-lib`.
 
 Username lookup works **without Meta keys or a Meta app**. Enter any public Instagram
 handle and the app reads the server-rendered public profile page and public post
-embeds. Eight local demo profiles stay available for offline testing.
+embeds. The home page is an analysis dashboard that explains the pipeline, metric
+engine, data sources, and confidence levels. Eight demo profiles remain available by
+direct URL for offline testing. Public accounts with visible posts also get clearly
+labeled fake-follower, authenticity, and 12-month-growth estimates derived from public
+signals.
 
 ## Quick start
 
@@ -20,8 +24,8 @@ Open <http://localhost:3000> and enter a public username such as `trending.vibz.
 
 | Route | Purpose |
 |---|---|
-| `/` | Public handle lookup, demo directory, and demo filter |
-| `/profile/[username]` | KPIs, interactions, recent posts, and public-data notices |
+| `/` | Public handle lookup and an analysis dashboard: pipeline, metric engine, sources, confidence |
+| `/profile/[username]` | KPIs, estimate disclosure, interactions, recent posts, and public-data notices |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison, maximum four accounts |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 
@@ -31,11 +35,15 @@ Open <http://localhost:3000> and enter a public username such as `trending.vibz.
    receives server-rendered HTML.
 2. Parse the embedded JSON payload for name, bio, verification, privacy, follower
    count, following count, and up to 12 recent media nodes.
-3. Read total posts from the page's Open Graph description.
-4. Derive each post's shortcode and timestamp from its numeric media id.
-5. Fetch `https://www.instagram.com/p/{shortcode}/embed/captioned/` for public
-   likes, comments, and video views, four at a time.
-6. Cache successful profiles in memory for 5 minutes (maximum 100 entries).
+3. If Instagram serves no preloaded posts, try the public `web_profile_info`
+   endpoint as a second source. It also carries inline likes/comments/views, so
+   no embed requests are needed when it succeeds.
+4. Read total posts from the page's Open Graph description.
+5. Derive each post's shortcode and timestamp from its numeric media id when the
+   source does not provide them directly.
+6. Fetch `https://www.instagram.com/p/{shortcode}/embed/captioned/` for public
+   likes, comments, and video views, four at a time, only when they are missing.
+7. Cache successful profiles in memory for 5 minutes (maximum 100 entries).
 
 Seeded demo handles are served from local fixtures first, so they never make a
 network call.
@@ -46,6 +54,8 @@ network call.
 - Followers, following, total post count
 - Up to 12 recent, non-pinned posts with likes, comments, type, date, caption,
   hashtags, permalink, and video views
+- Modeled fake-follower count, authenticity, and 12-month growth for accounts with
+  visible posts, labeled `Est.` in the UI and report
 
 ### What it cannot show
 
@@ -53,16 +63,34 @@ These are not published on public profile pages, so they render as `N/A` or `—
 
 - Saves and reach per post
 - Audience demographics (countries, age, gender)
-- Historical follower counts and 12-month growth
-- Fake-follower / authenticity estimates
+- Measured historical follower counts (the 12-month growth figure is modeled)
 - Stories, highlights, and private-account media
+
+## Estimated metrics
+
+Instagram does not publish fake-follower counts or historical follower counts. For
+public and optional-API profiles with at least one visible post, Signal computes:
+
+| Metric | How it is produced |
+|---|---|
+| Fake followers | A bounded model using follower/following balance, engagement versus account-size benchmarks, comment-to-like ratio, engagement stability, verification, follower tier, and posting history. |
+| Authenticity | `100 - modeled fake-follower share`. |
+| 12-month growth | A modeled direction and range from engagement strength, authenticity, posting cadence, public reach proxy, engagement trend, and account size. |
+
+These values are **estimates, not Instagram measurements**. The profile page shows an
+`Est.` badge, a confidence level (Low / Medium / High), the methodology, and the public
+signals used. Private accounts, accounts with no visible posts, and zero-follower
+accounts show `—`. Seeded demo profiles keep their exact fixture values and are never
+modeled.
 
 Other limits:
 
 - The account must be **public**; private accounts return counts only.
 - Facebook/Meta does not expose global keyword or creator search through public pages.
-- Public pages can rate-limit or change shape; the app reports a clear retryable
-  message instead of crashing.
+- Public pages can rate-limit or change shape. Instagram sometimes withholds all
+  posts from logged-out pages; when both public sources return none, the profile
+  shows an explicit “posts not exposed” notice and `—` instead of misleading zeros.
+  Retry in a few minutes.
 - Embedded collab posts are counted on every profile where they appear.
 - This is an unofficial reader of public pages, not the official Instagram API.
 
@@ -116,7 +144,8 @@ src/
 ├─ app/                         # routes: home, profile, compare, report API
 ├─ components/                  # MetricCard, EmptyState
 ├─ core/
-│  ├─ analytics/metrics.ts      # shared engagement/growth/authenticity math
+│  ├─ analytics/estimates.ts    # public-signal fake/authenticity/growth models
+│  ├─ analytics/metrics.ts      # measured metrics + disclosed estimate fallback
 │  ├─ data/adapter.ts           # demo, public, and optional official resolution
 │  ├─ data/public.ts            # public-page reader, parsers, cache, errors
 │  ├─ data/live.ts              # optional Business Discovery fetch, mapping, cache
@@ -128,7 +157,7 @@ src/
 │  ├─ profile/ProfileDashboard.tsx
 │  ├─ comparison/ComparisonTable.tsx
 │  └─ report/reportDocument.ts  # pdf-lib builder
-└─ tests/                       # Vitest: adapter, metrics, report, logger, live, public
+└─ tests/                       # Vitest: adapter, estimates, metrics, report, logger, live, public
 ```
 
 See `PROJECT_MAP.md` for architecture decisions, limitations, and the verification log.
@@ -140,7 +169,8 @@ See `PROJECT_MAP.md` for architecture decisions, limitations, and the verificati
 | “No public Instagram profile found” | Handle is misspelled, deleted, or not public | Check the spelling; private accounts show counts only |
 | “Instagram is temporarily limiting public lookups” | Public page rate limit | Wait a few minutes and retry |
 | “Instagram returned a page that could not be read” | Page shape changed or a login wall appeared | Retry; if it persists, the public page markup changed |
-| Public rows show `N/A` | Expected public-data limitation | Saves, audience, growth, and authenticity require account-owner insights |
+| “Instagram did not expose this account's posts” | Logged-out pages hid every post and the fallback endpoint was blocked | Retry in a few minutes; followers/following/post counts are still public |
+| Some public cells show `N/A` or `—` | Expected public-data limitation | Saves, audience, and measured history are unavailable; fake followers, authenticity, and growth appear as estimates only when posts are visible |
 | Official API says “token invalid” | Meta code `190` | Public lookup still works; refresh the token only if you want the optional path |
 
 ## Security

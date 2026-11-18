@@ -18,6 +18,12 @@ describe("profile metrics", () => {
     expect(metrics.engagementRate).toBe(1.63);
     expect(metrics.followerGrowthPct).toBe(25);
     expect(metrics.authenticityPct).toBe(96.5);
+    expect(metrics.fakeFollowers).toBe(350);
+    expect(metrics.fakeFollowersPct).toBe(3.5);
+    expect(metrics.growthEstimated).toBe(false);
+    expect(metrics.authenticityEstimated).toBe(false);
+    expect(metrics.estimateConfidence).toBeNull();
+    expect(metrics.estimateSignals).toEqual([]);
   });
 
   it("returns safe metrics for empty series instead of dividing by zero", () => {
@@ -42,5 +48,10 @@ describe("profile metrics", () => {
     expect(metrics.engagementBasis).toBe("likes+comments");
     expect(metrics.followerGrowthPct).toBeNull();
     expect(metrics.authenticityPct).toBeNull();
+    expect(metrics.fakeFollowers).toBeNull();
+    expect(metrics.fakeFollowersPct).toBeNull();
+    expect(metrics.growthEstimated).toBe(false);
+    expect(metrics.authenticityEstimated).toBe(false);
+    expect(metrics.estimateConfidence).toBeNull();
   });
 });

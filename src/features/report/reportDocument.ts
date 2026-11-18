@@ -1,4 +1,5 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { ESTIMATE_CONFIDENCE_LABEL } from "../../core/analytics/estimates";
 import { computeMetrics } from "../../core/analytics/metrics";
 import type { CreatorProfile } from "../../core/data/types";
 import { formatCompact, formatPercent } from "../../core/format";
@@ -59,8 +60,10 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
     y -= size + gap;
   };
 
-  const hasLive = profiles.some((profile) => profile.source === "live");
-  const hasPublic = profiles.some((profile) => profile.source === "public");
+  const reportRows = profiles.map((profile) => ({ profile, metrics: computeMetrics(profile) }));
+  const hasLive = reportRows.some((row) => row.profile.source === "live");
+  const hasPublic = reportRows.some((row) => row.profile.source === "public");
+  const hasEstimates = reportRows.some((row) => row.metrics.estimateConfidence !== null);
   const sourceLabel =
     hasLive && hasPublic
       ? "Mixed public sources"
@@ -92,9 +95,8 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
   });
   y -= 16;
 
-  for (const profile of profiles) {
-    ensureSpace(170);
-    const metrics = computeMetrics(profile);
+  for (const { profile, metrics } of reportRows) {
+    ensureSpace(190);
     const displayName = toAscii(profile.displayName, `@${profile.username}`);
 
     page.drawText(displayName, { x: MARGIN, y, size: 15, font: bold, color: INK });
@@ -109,9 +111,21 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
 
     const cells: [string, string][] = [
       ["FOLLOWERS", formatCompact(profile.followers)],
+      [
+        "FAKE FOLLOWERS",
+        formatCompact(metrics.fakeFollowers, "N/A") +
+          (metrics.authenticityEstimated ? " est." : ""),
+      ],
       ["ENGAGEMENT", formatPercent(metrics.engagementRate)],
-      ["12M GROWTH", formatPercent(metrics.followerGrowthPct, "N/A")],
-      ["AUTHENTICITY", formatPercent(metrics.authenticityPct, "N/A")],
+      [
+        "12M GROWTH",
+        formatPercent(metrics.followerGrowthPct, "N/A") + (metrics.growthEstimated ? " est." : ""),
+      ],
+      [
+        "AUTHENTICITY",
+        formatPercent(metrics.authenticityPct, "N/A") +
+          (metrics.authenticityEstimated ? " est." : ""),
+      ],
     ];
     const cellWidth = (PAGE_WIDTH - MARGIN * 2) / cells.length;
 
@@ -131,6 +145,16 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
       MUTED,
       4,
     );
+
+    if (metrics.estimateConfidence) {
+      line(
+        `Estimated metrics: ${ESTIMATE_CONFIDENCE_LABEL[metrics.estimateConfidence]} confidence from public signals; not Instagram measurements.`,
+        8,
+        regular,
+        MUTED,
+        4,
+      );
+    }
 
     if (profile.isPrivate) {
       line("Private account: posts and engagement are hidden.", 9, regular, MUTED, 4);
@@ -179,10 +203,10 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
     y -= 14;
   }
 
-  ensureSpace(20);
+  ensureSpace(34);
   page.drawText(
     hasLive || hasPublic
-      ? "Includes public Instagram data. Saves, reach, audience, and follower history may be unavailable."
+      ? "Includes public Instagram data. Saves, reach, audience, and measured follower history may be unavailable."
       : "Demo dataset. No live Instagram data was used.",
     {
       x: MARGIN,
@@ -192,6 +216,22 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
       color: MUTED,
     },
   );
+
+  if (hasEstimates) {
+    page.drawText(
+      toAscii(
+        "Fake followers, authenticity, and 12-month growth are modeled estimates where measured data is unavailable.",
+        "",
+      ),
+      {
+        x: MARGIN,
+        y: MARGIN - 26,
+        size: 8,
+        font: regular,
+        color: MUTED,
+      },
+    );
+  }
 
   const bytes = await pdf.save();
   const filename = `ig-analysis-${profiles.map((profile) => profile.username).join("-")}.pdf`;

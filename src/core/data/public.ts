@@ -4,10 +4,12 @@ import type { CreatorProfile, Post } from "./types";
 const ORIGIN = "https://www.instagram.com";
 const USER_AGENT = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 const REQUEST_TIMEOUT_MS = 8000;
+const WEB_PROFILE_TIMEOUT_MS = 5000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_MAX = 100;
 const EMBED_CONCURRENCY = 4;
 const MAX_POSTS = 12;
+const WEB_PROFILE_APP_ID = "936619743392459";
 
 const SHORTCODE_ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -20,6 +22,14 @@ const HEADERS = {
   Accept: "text/html,application/xhtml+xml",
   "Accept-Language": "en-US,en;q=0.9",
   "User-Agent": USER_AGENT,
+};
+
+const WEB_PROFILE_HEADERS = {
+  Accept: "*/*",
+  "Accept-Language": "en-US,en;q=0.9",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+  "x-ig-app-id": WEB_PROFILE_APP_ID,
 };
 
 const cache = new Map<string, { expiresAt: number; profile: CreatorProfile }>();
@@ -36,12 +46,28 @@ export class PublicProfileError extends Error {
   }
 }
 
+type CaptionNode = { text?: string };
+
 type PublicMediaNode = {
   pk?: string | number;
+  id?: string | number;
+  code?: string;
+  shortcode?: string;
+  taken_at?: number;
+  taken_at_timestamp?: number;
   is_timeline_pinned?: boolean;
   media_type?: number;
   product_type?: string;
-  caption?: { text?: string } | null;
+  caption?: CaptionNode | null;
+  edge_media_to_caption?: { edges?: { node?: CaptionNode }[] };
+  edge_liked_by?: { count?: number };
+  edge_media_to_comment?: { count?: number };
+  edge_media_to_parent_comment?: { count?: number };
+  like_count?: number;
+  comment_count?: number;
+  comments_count?: number;
+  video_view_count?: number;
+  view_count?: number;
 };
 
 type PublicEdge = { node?: PublicMediaNode };
@@ -55,7 +81,12 @@ type PublicUser = {
   follower_count?: number;
   following_count?: number;
   media_count?: number;
+  edge_followed_by?: { count?: number };
+  edge_follow?: { count?: number };
+  edge_owner_to_timeline_media?: { count?: number; edges?: PublicEdge[] };
+  timeline_media?: { count?: number; edges?: PublicEdge[] };
   profile_pic_url?: string;
+  profile_pic_url_hd?: string;
   external_url?: string;
   bio_links?: { url?: string }[];
   category_name?: string;
@@ -134,6 +165,103 @@ function parseOgStats(html: string): {
   };
 }
 
+function connectionCount(connection?: { count?: number }): number | undefined {
+  return typeof connection?.count === "number" ? connection.count : undefined;
+}
+
+function followersOf(user: PublicUser | null): number | undefined {
+  if (!user) {
+    return undefined;
+  }
+  return user.follower_count ?? connectionCount(user.edge_followed_by);
+}
+
+function followingOf(user: PublicUser | null): number | undefined {
+  if (!user) {
+    return undefined;
+  }
+  return user.following_count ?? connectionCount(user.edge_follow);
+}
+
+function mediaCountOf(user: PublicUser | null): number | undefined {
+  if (!user) {
+    return undefined;
+  }
+  return (
+    user.media_count ??
+    connectionCount(user.edge_owner_to_timeline_media) ??
+    connectionCount(user.timeline_media)
+  );
+}
+
+function captionFromNode(node: PublicMediaNode): string {
+  return (
+    node.caption?.text?.trim() ||
+    node.edge_media_to_caption?.edges?.[0]?.node?.text?.trim() ||
+    "No caption."
+  );
+}
+
+function shortcodeFromNode(node: PublicMediaNode): string | null {
+  const direct = node.shortcode || node.code;
+  if (direct) {
+    return direct;
+  }
+  const pk = node.pk ?? node.id;
+  if (pk === undefined || pk === null || pk === "") {
+    return null;
+  }
+  try {
+    return shortcodeFromPk(String(pk));
+  } catch {
+    return null;
+  }
+}
+
+function postedAtFromNode(node: PublicMediaNode): string | null {
+  if (typeof node.taken_at_timestamp === "number") {
+    return new Date(node.taken_at_timestamp * 1000).toISOString();
+  }
+  if (typeof node.taken_at === "number") {
+    return new Date(node.taken_at * 1000).toISOString();
+  }
+  const pk = node.pk ?? node.id;
+  if (pk === undefined || pk === null || pk === "") {
+    return null;
+  }
+  try {
+    return postedAtFromPk(String(pk));
+  } catch {
+    return null;
+  }
+}
+
+function likesFromNode(node: PublicMediaNode): number | undefined {
+  if (typeof node.like_count === "number") {
+    return node.like_count;
+  }
+  return connectionCount(node.edge_liked_by);
+}
+
+function commentsFromNode(node: PublicMediaNode): number | undefined {
+  if (typeof node.comment_count === "number") {
+    return node.comment_count;
+  }
+  if (typeof node.comments_count === "number") {
+    return node.comments_count;
+  }
+  return (
+    connectionCount(node.edge_media_to_comment) ??
+    connectionCount(node.edge_media_to_parent_comment)
+  );
+}
+
+function viewsFromNode(node: PublicMediaNode): number | undefined {
+  return typeof node.video_view_count === "number"
+    ? node.video_view_count
+    : node.view_count;
+}
+
 function parseJsonScripts(html: string): unknown[] {
   const documents: unknown[] = [];
   const pattern = /<script[^>]*type="application\/json"[^>]*>([\s\S]*?)<\/script>/gi;
@@ -164,10 +292,7 @@ function findUser(root: unknown, username: string): PublicUser | null {
     visited += 1;
 
     const record = node as Record<string, unknown>;
-    if (
-      record.username === username &&
-      typeof record.follower_count === "number"
-    ) {
+    if (record.username === username && followersOf(record as PublicUser) !== undefined) {
       return record as PublicUser;
     }
 
@@ -177,6 +302,12 @@ function findUser(root: unknown, username: string): PublicUser | null {
   }
 
   return null;
+}
+
+function mediaEdgesFromUser(user: PublicUser | null): PublicEdge[] {
+  const edges =
+    user?.edge_owner_to_timeline_media?.edges ?? user?.timeline_media?.edges ?? [];
+  return Array.isArray(edges) ? edges : [];
 }
 
 function findMediaEdges(root: unknown): PublicEdge[] {
@@ -312,12 +443,51 @@ async function fetchEmbeds(shortcodes: string[]): Promise<Map<string, EmbedMetri
   return metrics;
 }
 
+type WebProfileResult = {
+  user: PublicUser | null;
+  edges: PublicEdge[];
+};
+
+async function fetchWebProfile(username: string): Promise<WebProfileResult | null> {
+  try {
+    const response = await fetch(
+      `${ORIGIN}/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
+      {
+        headers: WEB_PROFILE_HEADERS,
+        cache: "no-store",
+        signal: AbortSignal.timeout(WEB_PROFILE_TIMEOUT_MS),
+      },
+    );
+
+    if (response.status === 404 || response.status === 429 || !response.ok) {
+      log.warn("instagram web profile fallback rejected", {
+        username,
+        status: response.status,
+      });
+      return null;
+    }
+
+    const payload = await response.json();
+    const user = findUser(payload, username);
+    return { user, edges: mediaEdgesFromUser(user) };
+  } catch (error) {
+    log.warn("instagram web profile fallback failed", {
+      username,
+      message: error instanceof Error ? error.message : "network",
+    });
+    return null;
+  }
+}
+
 type MediaCandidate = {
   shortcode: string;
   postedAt: string;
   mediaType: number | undefined;
   productType: string | undefined;
   caption: string;
+  likes?: number;
+  comments?: number;
+  views?: number;
 };
 
 function buildCandidates(edges: PublicEdge[]): MediaCandidate[] {
@@ -325,22 +495,30 @@ function buildCandidates(edges: PublicEdge[]): MediaCandidate[] {
 
   for (const edge of edges) {
     const node = edge.node;
-    if (!node?.pk || node.is_timeline_pinned) {
+    if (!node || node.is_timeline_pinned) {
       continue;
     }
 
-    try {
-      const pk = String(node.pk);
-      candidates.push({
-        shortcode: shortcodeFromPk(pk),
-        postedAt: postedAtFromPk(pk),
-        mediaType: node.media_type,
-        productType: node.product_type,
-        caption: node.caption?.text?.trim() || "No caption.",
-      });
-    } catch {
-      // Ignore nodes whose media id cannot be decoded.
+    const shortcode = shortcodeFromNode(node);
+    const postedAt = postedAtFromNode(node);
+    if (!shortcode || !postedAt) {
+      continue;
     }
+
+    const likes = likesFromNode(node);
+    const comments = commentsFromNode(node);
+    const views = viewsFromNode(node);
+
+    candidates.push({
+      shortcode,
+      postedAt,
+      mediaType: node.media_type,
+      productType: node.product_type,
+      caption: captionFromNode(node),
+      ...(likes === undefined ? {} : { likes }),
+      ...(comments === undefined ? {} : { comments }),
+      ...(views === undefined ? {} : { views }),
+    });
 
     if (candidates.length >= MAX_POSTS) {
       break;
@@ -477,16 +655,37 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     );
   }
 
-  const isPrivate = Boolean(user?.is_private);
+  let isPrivate = Boolean(user?.is_private);
+
+  // Instagram sometimes serves logged-out crawler pages with zero preloaded
+  // posts. The public web-profile endpoint is a second source for the same
+  // data; it also carries inline engagement, avoiding extra embed requests.
+  if (!isPrivate && edges.length === 0) {
+    const webProfile = await fetchWebProfile(key);
+    if (webProfile) {
+      if (webProfile.user && (!user || followersOf(user) === undefined)) {
+        user = webProfile.user;
+      }
+      isPrivate = Boolean(isPrivate || user?.is_private);
+      edges = webProfile.edges;
+    }
+  }
+
   const candidates = isPrivate ? [] : buildCandidates(edges);
-  const embedMetrics = await fetchEmbeds(candidates.map((candidate) => candidate.shortcode));
+  const missingEmbeds = candidates
+    .filter((candidate) => candidate.likes === undefined || candidate.comments === undefined)
+    .map((candidate) => candidate.shortcode);
+  const embedMetrics =
+    missingEmbeds.length > 0 ? await fetchEmbeds(missingEmbeds) : new Map<string, EmbedMetrics>();
 
   const recentPosts: Post[] = [];
   let skipped = 0;
 
   for (const candidate of candidates) {
     const metrics = embedMetrics.get(candidate.shortcode);
-    if (!metrics) {
+    const likes = candidate.likes ?? metrics?.likes;
+    const comments = candidate.comments ?? metrics?.comments;
+    if (likes === undefined && comments === undefined) {
       skipped += 1;
       continue;
     }
@@ -496,9 +695,9 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
       type: mapMediaType(candidate.mediaType, candidate.productType),
       caption: candidate.caption,
       postedAt: candidate.postedAt,
-      likes: metrics.likes,
-      comments: metrics.comments,
-      viewCount: metrics.views,
+      likes: likes ?? 0,
+      comments: comments ?? 0,
+      viewCount: candidate.views ?? metrics?.views,
       permalink: `${ORIGIN}/p/${candidate.shortcode}/`,
       hashtags: extractHashtags(candidate.caption),
     });
@@ -509,9 +708,9 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     displayName: user?.full_name?.trim() || displayNameFromTitle(html, key),
     category: preferredCategory(user),
     bio: user?.biography?.trim() || "No biography provided.",
-    followers: Math.max(0, user?.follower_count ?? ogStats.followers ?? 0),
-    following: Math.max(0, user?.following_count ?? ogStats.following ?? 0),
-    postsCount: Math.max(0, ogStats.posts ?? user?.media_count ?? edges.length),
+    followers: Math.max(0, followersOf(user) ?? ogStats.followers ?? 0),
+    following: Math.max(0, followingOf(user) ?? ogStats.following ?? 0),
+    postsCount: Math.max(0, ogStats.posts ?? mediaCountOf(user) ?? edges.length),
     isVerified: Boolean(user?.is_verified),
     isPrivate,
     source: "public",

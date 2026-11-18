@@ -79,6 +79,35 @@ describe("PDF report", () => {
     await expect(PDFDocument.load(report.bytes)).resolves.toBeDefined();
   });
 
+  it("builds a report with modeled public estimates", async () => {
+    const profile: CreatorProfile = {
+      username: "estimate.test",
+      displayName: "Estimate Test",
+      category: "Creator",
+      bio: "Public estimate report",
+      followers: 12_000,
+      following: 300,
+      postsCount: 60,
+      isVerified: false,
+      source: "public",
+      followerHistory: [],
+      recentPosts: Array.from({ length: 5 }, (_, index) => ({
+        id: `e${index}`,
+        type: "Reel",
+        caption: `Post ${index}`,
+        postedAt: new Date(Date.UTC(2026, 9, 1 + index * 7)).toISOString(),
+        likes: 300 + index,
+        comments: 20,
+        hashtags: [],
+      })),
+    };
+
+    const report = await buildReport([profile]);
+
+    expect(report.filename).toBe("ig-analysis-estimate.test.pdf");
+    await expect(PDFDocument.load(report.bytes)).resolves.toBeDefined();
+  });
+
   it("rejects an empty handle list", async () => {
     const response = await GET(new Request("http://localhost/api/report"));
 

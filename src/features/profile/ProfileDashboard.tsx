@@ -21,6 +21,7 @@ import {
   YAxis,
 } from "recharts";
 import { MetricCard } from "../../components/MetricCard";
+import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
 import type { ProfileMetrics } from "../../core/analytics/metrics";
 import type { AudienceSlice, CreatorProfile } from "../../core/data/types";
 import { formatCompact, formatDate, formatPercent } from "../../core/format";
@@ -43,6 +44,12 @@ const SOURCE_BADGE_CLASS: Record<CreatorProfile["source"], string> = {
   live: "bg-emerald-50 text-emerald-700",
 };
 
+const IMPACT_DOT_CLASS: Record<EstimateSignal["impact"], string> = {
+  positive: "bg-emerald-500",
+  neutral: "bg-slate-400",
+  negative: "bg-amber-500",
+};
+
 type ProfileDashboardProps = {
   profile: CreatorProfile;
   metrics: ProfileMetrics;
@@ -52,10 +59,12 @@ function Stat({
   icon: Icon,
   label,
   value,
+  note,
 }: {
   icon: typeof Users;
   label: string;
   value: string;
+  note?: string;
 }) {
   return (
     <div className="flex items-center gap-3">
@@ -65,6 +74,7 @@ function Stat({
       <div>
         <p className="text-xs text-slate-500">{label}</p>
         <p className="text-sm font-semibold text-slate-950">{value}</p>
+        {note ? <p className="text-[11px] text-slate-400">{note}</p> : null}
       </div>
     </div>
   );
@@ -101,6 +111,8 @@ export function ProfileDashboard({ profile, metrics }: ProfileDashboardProps) {
   }));
   const hasSaves = metrics.avgSaves !== null;
   const hasViews = profile.recentPosts.some((post) => typeof post.viewCount === "number");
+  const noPublicPosts =
+    profile.source !== "demo" && !profile.isPrivate && profile.recentPosts.length === 0;
 
   const initials =
     profile.displayName
@@ -182,10 +194,23 @@ export function ProfileDashboard({ profile, metrics }: ProfileDashboardProps) {
           <Stat
             icon={Video}
             label="Fake-follower estimate"
-            value={formatCompact(profile.fakeFollowers)}
+            value={formatCompact(metrics.fakeFollowers)}
+            note={metrics.authenticityEstimated ? "Modeled from public signals" : undefined}
           />
         </div>
       </section>
+
+      {noPublicPosts ? (
+        <div
+          data-testid="no-posts-notice"
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          Instagram did not expose this account&apos;s posts to its public pages on this lookup, so
+          engagement and modeled metrics cannot be calculated yet. The follower, following, and
+          post counts above are public. Try again in a few minutes, or connect the official API for
+          accounts you manage.
+        </div>
+      ) : null}
 
       {profile.source !== "demo" ? (
         <div
@@ -197,20 +222,20 @@ export function ProfileDashboard({ profile, metrics }: ProfileDashboardProps) {
           }`}
         >
           {profile.isPrivate
-            ? "This account is private. Public follower and post counts are available, but posts and engagement are hidden."
+            ? "This account is private. Public follower and post counts are available, but posts and engagement are hidden, so modeled metrics are unavailable."
             : profile.source === "public"
-              ? "Public web data from Instagram's public profile page. Saves, reach, audience demographics, follower history, and fake-follower estimates are not exposed. Likes and comments come from public post embeds."
-              : "Official API data via Instagram Business Discovery. Saves, reach, audience demographics, fake-follower estimates, and follower history are not exposed for public accounts."}
+              ? "Public web data from Instagram's public profile page. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."
+              : "Official API data via Instagram Business Discovery. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."}
         </div>
       ) : null}
 
       <section data-testid="metric-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Engagement rate"
-          value={profile.isPrivate ? "—" : formatPercent(metrics.engagementRate)}
+          value={profile.isPrivate || noPublicPosts ? "—" : formatPercent(metrics.engagementRate)}
           hint={
-            profile.isPrivate
-              ? "Posts are hidden"
+            profile.isPrivate || noPublicPosts
+              ? "No public posts available"
               : metrics.engagementBasis === "likes+comments"
                 ? "Public likes + comments / followers"
                 : "Avg interactions / followers"
@@ -219,33 +244,85 @@ export function ProfileDashboard({ profile, metrics }: ProfileDashboardProps) {
         <MetricCard
           label="12-month growth"
           value={formatPercent(metrics.followerGrowthPct)}
+          badge={metrics.growthEstimated ? "Est." : undefined}
           hint={
-            metrics.followerGrowthPct === null
-              ? "Not exposed for public accounts"
-              : "First to last monthly point"
+            metrics.growthEstimated
+              ? "Modeled from public signals"
+              : metrics.followerGrowthPct === null
+                ? "History not available"
+                : "First to last monthly point"
           }
         />
         <MetricCard
           label="Authenticity"
           value={formatPercent(metrics.authenticityPct)}
+          badge={metrics.authenticityEstimated ? "Est." : undefined}
           hint={
-            metrics.authenticityPct === null
-              ? "Not exposed for public accounts"
-              : "100 - fake follower share"
+            metrics.authenticityEstimated
+              ? "100 - modeled fake follower share"
+              : metrics.authenticityPct === null
+                ? "Not available from public data"
+                : "100 - fake follower share"
           }
         />
         <MetricCard
           label="Avg interactions"
-          value={profile.isPrivate ? "—" : formatCompact(metrics.avgLikes + metrics.avgComments + (metrics.avgSaves ?? 0))}
+          value={
+            profile.isPrivate || noPublicPosts
+              ? "—"
+              : formatCompact(metrics.avgLikes + metrics.avgComments + (metrics.avgSaves ?? 0))
+          }
           hint={
-            profile.isPrivate
-              ? "Posts are hidden"
+            profile.isPrivate || noPublicPosts
+              ? "No public posts available"
               : metrics.engagementBasis === "likes+comments"
                 ? "Likes + comments"
                 : "Likes + comments + saves"
           }
         />
       </section>
+
+      {metrics.estimateConfidence ? (
+        <section
+          data-testid="estimate-panel"
+          className="rounded-2xl border border-amber-200 bg-amber-50 p-5"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-950">How these estimates work</h3>
+              <p className="text-xs text-slate-500">
+                Fake followers, authenticity, and 12-month growth
+              </p>
+            </div>
+            <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-amber-800">
+              {ESTIMATE_CONFIDENCE_LABEL[metrics.estimateConfidence]} confidence
+            </span>
+          </div>
+          {metrics.estimateMethodology ? (
+            <p className="mt-3 text-sm leading-relaxed text-slate-700">
+              {metrics.estimateMethodology}
+            </p>
+          ) : null}
+          {metrics.estimateSignals.length > 0 ? (
+            <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+              {metrics.estimateSignals.map((signal) => (
+                <li
+                  key={signal.label}
+                  className="flex items-start gap-2 rounded-xl border border-amber-100 bg-white/70 px-3 py-2"
+                >
+                  <span
+                    className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${IMPACT_DOT_CLASS[signal.impact]}`}
+                  />
+                  <div>
+                    <p className="text-xs font-semibold text-slate-900">{signal.label}</p>
+                    <p className="text-xs text-slate-500">{signal.value}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-2">
         {profile.followerHistory.length >= 2 ? (
@@ -291,10 +368,17 @@ export function ProfileDashboard({ profile, metrics }: ProfileDashboardProps) {
             className="rounded-2xl border border-dashed border-slate-300 bg-white p-5"
           >
             <h3 className="text-sm font-semibold text-slate-950">Follower growth</h3>
-            <p className="text-xs text-slate-500">Not exposed publicly</p>
+            <p className="text-xs text-slate-500">
+              {metrics.growthEstimated ? "Modeled 12-month estimate" : "Not available"}
+            </p>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
-              Instagram publishes the current follower count, but not historical follower counts
-              for public accounts.
+              {metrics.growthEstimated
+                ? `Instagram does not publish historical follower counts. The ${formatPercent(
+                    metrics.followerGrowthPct,
+                  )} figure above is modeled from current public signals, not measured history. See “How these estimates work” for the inputs.`
+                : profile.isPrivate
+                  ? "This account is private, so public posts and engagement are hidden and no growth estimate is produced."
+                  : "Instagram publishes the current follower count, but not historical follower counts for public accounts."}
             </p>
           </div>
         )}
@@ -307,7 +391,9 @@ export function ProfileDashboard({ profile, metrics }: ProfileDashboardProps) {
           <p className="text-xs text-slate-500">Latest published posts</p>
           {interactions.length === 0 ? (
             <p className="mt-6 text-sm text-slate-500">
-              No public posts were returned, so there are no interactions to chart.
+              {noPublicPosts
+                ? "Instagram did not expose posts for this handle on this lookup. Retry shortly to see per-post interactions."
+                : "No public posts were returned, so there are no interactions to chart."}
             </p>
           ) : (
             <div className="mt-4 h-64 w-full">
@@ -354,7 +440,9 @@ export function ProfileDashboard({ profile, metrics }: ProfileDashboardProps) {
               {profile.recentPosts.length === 0 ? (
                 <tr>
                   <td colSpan={hasSaves || hasViews ? 6 : 5} className="py-6 text-center text-sm text-slate-500">
-                    No public media was returned for this account.
+                    {noPublicPosts
+                      ? "Instagram did not expose posts for this handle on this lookup. Retry shortly."
+                      : "No public media was returned for this account."}
                   </td>
                 </tr>
               ) : (

@@ -3,6 +3,12 @@ import type { CreatorProfile, Post } from "../data/types";
 export type EstimateImpact = "positive" | "neutral" | "negative";
 export type EstimateConfidence = "low" | "medium" | "high";
 
+export const ESTIMATE_CONFIDENCE_LABEL: Record<EstimateConfidence, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+};
+
 export type EstimateSignal = {
   label: string;
   value: string;
