@@ -1,4 +1,4 @@
-# Trending Analytics — Instagram Profile Analytics
+# Instagram Analytics — Instagram Profile Analytics
 
 Professional Instagram profile analysis, side-by-side comparison, and PDF reports.
 Built with Next.js 16, React 19, Tailwind CSS 4, Recharts, and `pdf-lib`.
@@ -97,7 +97,7 @@ In **Project → Settings → Environment Variables**, add:
 | `PROXY_SECRET` | the same secret from step 1 |
 
 Delete `SCRAPINGBEE_API_KEY` if it still exists. Redeploy, then test
-`https://trending-analytics.vercel.app/profile/natgeo`.
+`https://instagram-analytics.vercel.app/profile/natgeo`.
 
 The proxy endpoint allowlists only public Instagram profile, `web_profile_info`, and
 post-embed URLs, and rejects every request without the shared secret. Profiles are
@@ -158,7 +158,7 @@ These are not published on public profile pages, so they render as `N/A` or `—
 ## Estimated metrics
 
 Instagram does not publish fake-follower counts or historical follower counts. For
-public and optional-API profiles with at least one visible post, Trending Analytics computes:
+public and optional-API profiles with at least one visible post, Instagram Analytics computes:
 
 | Metric | How it is produced |
 |---|---|

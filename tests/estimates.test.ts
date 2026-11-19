@@ -20,7 +20,7 @@ function post(index: number, likes: number, comments: number, views?: number): P
 function strongProfile(): CreatorProfile {
   return {
     username: "signal.public",
-    displayName: "Trending Public",
+    displayName: "Instagram Public",
     category: "Creator",
     bio: "Public signals",
     followers: 20_000,

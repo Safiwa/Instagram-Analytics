@@ -5,7 +5,7 @@ import { isLiveConfigured } from "../core/data/adapter";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Trending Analytics — Instagram Profile Analytics",
+  title: "Instagram Analytics — Profile Analytics",
   description: "Professional Instagram profile analysis, comparison, and PDF reporting.",
 };
 
@@ -22,7 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 <Activity className="h-4 w-4 text-white" aria-hidden="true" />
               </span>
               <span className="leading-tight">
-                Trending
+                Instagram
                 <br />
                 Analytics
               </span>
@@ -58,7 +58,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
               <div className="flex items-center gap-2 lg:hidden">
                 <Link href="/" className="font-bold tracking-tight text-slate-950">
-                  Trending Analytics
+                  Instagram Analytics
                 </Link>
               </div>
               <p className="hidden text-sm font-medium text-slate-500 lg:block">
