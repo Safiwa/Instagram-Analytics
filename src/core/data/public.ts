@@ -676,7 +676,17 @@ export async function inspectScraper(username: string) {
       hasLogin: /log in|login/i.test(body),
       hasRateLimit: /429/.test(body),
       jsonScripts: scripts.length,
-      scriptPreview: scripts.slice(0, 3).map((script) => JSON.stringify(script).slice(0, 600)),
+      scriptHits: scripts.filter((script) => JSON.stringify(script).includes(username)).length,
+      userMatches: scripts
+        .map((script) => findUser(script, key))
+        .filter((user): user is PublicUser => user !== null)
+        .map((user) => ({
+          keys: Object.keys(user),
+          followers: followersOf(user),
+          fullName: user.full_name,
+          edgeCount: mediaEdgesFromUser(user).length,
+        })),
+      timelineEdges: scripts.reduce((total, script) => total + findMediaEdges(script).length, 0),
       preview: body.slice(0, 160),
     };
   };
