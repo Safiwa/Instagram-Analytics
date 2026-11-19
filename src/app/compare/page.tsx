@@ -3,7 +3,7 @@ import { computeMetrics } from "../../core/analytics/metrics";
 import { parseHandles, resolveProfile } from "../../core/data/adapter";
 import { ComparisonTable, type ComparisonRow } from "../../features/comparison/ComparisonTable";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 type ComparePageProps = {
   searchParams: Promise<{ handles?: string | string[] }>;

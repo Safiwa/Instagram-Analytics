@@ -533,4 +533,84 @@ describe("public Instagram reader", () => {
     expect(profile.recentPosts).toHaveLength(3);
     expect(embedCalls).toHaveLength(3);
   });
+
+  it("forwards Instagram's app header to web_profile_info through the scraper", async () => {
+    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      const target = url.searchParams.get("url") ?? "";
+      if (target === "https://www.instagram.com/header.test/") {
+        return htmlResponse(profileHtml({ username: "header.test", media: [] }));
+      }
+      if (target.includes("web_profile_info")) {
+        expect(url.searchParams.get("forward_headers")).toBe("true");
+        expect(init?.headers).toMatchObject({ "Spb-x-ig-app-id": "936619743392459" });
+        return webProfileJson({ username: "header.test", media: [RECENT_REEL] });
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await fetchPublicProfile("header.test");
+
+    expect(profile.username).toBe("header.test");
+    expect(profile.recentPosts).toHaveLength(1);
+    expect(profile.recentPosts[0]).toMatchObject({ likes: 420, comments: 33 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a metadata-free scraper response instead of reporting not found", async () => {
+    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+    let calls = 0;
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const target = new URL(String(input)).searchParams.get("url") ?? "";
+      if (target === "https://www.instagram.com/retry.shell/") {
+        calls += 1;
+        if (calls === 1) {
+          return htmlResponse(
+            "<!DOCTYPE html><html><head><title>Instagram</title></head><body></body></html>",
+          );
+        }
+        return htmlResponse(
+          profileHtml({
+            username: "retry.shell",
+            media: [{ ...RECENT_REEL, likes: 10, comments: 2 }],
+          }),
+        );
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await fetchPublicProfile("retry.shell");
+
+    expect(profile.username).toBe("retry.shell");
+    expect(profile.recentPosts).toHaveLength(1);
+    expect(calls).toBe(2);
+  });
+
+  it("retries a transient scraper 404 before declaring a handle missing", async () => {
+    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+    let calls = 0;
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const target = new URL(String(input)).searchParams.get("url") ?? "";
+      if (target === "https://www.instagram.com/retry.404/") {
+        calls += 1;
+        if (calls === 1) {
+          return new Response("", { status: 404 });
+        }
+        return htmlResponse(profileHtml({ username: "retry.404", media: [] }));
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await fetchPublicProfile("retry.404");
+
+    expect(profile.followers).toBe(59057);
+    expect(calls).toBe(2);
+  });
 });

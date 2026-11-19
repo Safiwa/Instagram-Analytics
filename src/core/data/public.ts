@@ -11,7 +11,7 @@ const EMBED_CONCURRENCY = 4;
 const MAX_POSTS = 12;
 const WEB_PROFILE_APP_ID = "936619743392459";
 const SCRAPINGBEE_ENDPOINT = "https://app.scrapingbee.com/api/v1/";
-const SCRAPER_TIMEOUT_MS = 25_000;
+const SCRAPER_TIMEOUT_MS = 15_000;
 const SCRAPER_EMBED_LIMIT = 3;
 
 const SHORTCODE_ALPHABET =
@@ -45,28 +45,40 @@ export function isScraperConfigured(): boolean {
   return scraperApiKey().length > 0;
 }
 
-function scraperRequestUrl(targetUrl: string): string {
+function scraperRequestUrl(targetUrl: string, forwardHeaders: Record<string, string>): string {
   const url = new URL(SCRAPINGBEE_ENDPOINT);
   url.searchParams.set("url", targetUrl);
   url.searchParams.set("premium_proxy", "true");
   url.searchParams.set("render_js", "false");
   url.searchParams.set("transparent_status_code", "true");
   url.searchParams.set("timeout", String(SCRAPER_TIMEOUT_MS - 2000));
+  if (Object.keys(forwardHeaders).length > 0) {
+    // ScrapingBee only forwards Spb-prefixed headers when this is enabled.
+    url.searchParams.set("forward_headers", "true");
+  }
   return url.toString();
 }
 
-async function tryScraper(targetUrl: string): Promise<Response | null> {
+async function tryScraper(
+  targetUrl: string,
+  forwardHeaders: Record<string, string> = {},
+): Promise<Response | null> {
   const key = scraperApiKey();
   if (!key) {
     return null;
   }
 
+  const forwarded = Object.fromEntries(
+    Object.entries(forwardHeaders).map(([name, value]) => [`Spb-${name}`, value]),
+  );
+
   try {
-    const response = await fetch(scraperRequestUrl(targetUrl), {
+    const response = await fetch(scraperRequestUrl(targetUrl, forwardHeaders), {
       headers: {
         Authorization: `Bearer ${key}`,
         Accept: "text/html,application/xhtml+xml,application/json",
         "Accept-Language": "en-US,en;q=0.9",
+        ...forwarded,
       },
       cache: "no-store",
       signal: AbortSignal.timeout(SCRAPER_TIMEOUT_MS),
@@ -94,8 +106,9 @@ async function fetchInstagram(
   targetUrl: string,
   headers: Record<string, string>,
   timeoutMs: number,
+  forwardHeaders: Record<string, string> = {},
 ): Promise<Response> {
-  const scraped = await tryScraper(targetUrl);
+  const scraped = await tryScraper(targetUrl, forwardHeaders);
   if (scraped) {
     return scraped;
   }
@@ -527,6 +540,10 @@ async function fetchWebProfile(username: string): Promise<WebProfileResult | nul
       `${ORIGIN}/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
       WEB_PROFILE_HEADERS,
       WEB_PROFILE_TIMEOUT_MS,
+      {
+        Accept: WEB_PROFILE_HEADERS.Accept,
+        "x-ig-app-id": WEB_PROFILE_APP_ID,
+      },
     );
 
     if (response.status === 404 || response.status === 429 || !response.ok) {
@@ -636,6 +653,38 @@ export function clearPublicCache(): void {
   cache.clear();
 }
 
+type ParsedProfileHtml = {
+  user: PublicUser | null;
+  edges: PublicEdge[];
+  ogStats: ReturnType<typeof parseOgStats>;
+  ogTitle: string | null;
+};
+
+function parseProfileHtml(html: string, username: string): ParsedProfileHtml {
+  const documents = parseJsonScripts(html);
+  let user: PublicUser | null = null;
+  let edges: PublicEdge[] = [];
+
+  for (const document of documents) {
+    if (!user) {
+      user = findUser(document, username);
+    }
+    if (edges.length === 0) {
+      edges = findMediaEdges(document);
+    }
+    if (user && edges.length > 0) {
+      break;
+    }
+  }
+
+  return {
+    user,
+    edges,
+    ogStats: parseOgStats(html),
+    ogTitle: metaContent(html, "og:title"),
+  };
+}
+
 export async function fetchPublicProfile(username: string): Promise<CreatorProfile> {
   const key = username.trim().replace(/^@/, "").toLowerCase();
 
@@ -651,22 +700,30 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     return cached.profile;
   }
 
-  let response: Response;
-  try {
-    response = await fetchInstagram(
-      `${ORIGIN}/${encodeURIComponent(key)}/`,
-      HEADERS,
-      REQUEST_TIMEOUT_MS,
-    );
-  } catch (error) {
-    log.error("instagram public fetch failed", {
-      username: key,
-      message: error instanceof Error ? error.message : "network",
-    });
-    throw new PublicProfileError(
-      "network",
-      "Could not reach Instagram. Check the network and try again.",
-    );
+  const profileUrl = `${ORIGIN}/${encodeURIComponent(key)}/`;
+
+  async function requestProfilePage(): Promise<Response> {
+    try {
+      return await fetchInstagram(profileUrl, HEADERS, REQUEST_TIMEOUT_MS);
+    } catch (error) {
+      log.error("instagram public fetch failed", {
+        username: key,
+        message: error instanceof Error ? error.message : "network",
+      });
+      throw new PublicProfileError(
+        "network",
+        "Could not reach Instagram. Check the network and try again.",
+      );
+    }
+  }
+
+  let response = await requestProfilePage();
+
+  // Scraper proxies occasionally return a transient 404/429 for a valid handle.
+  // One fresh request prevents a false "Profile not found" on Vercel.
+  if (isScraperConfigured() && (response.status === 404 || response.status === 429)) {
+    log.warn("retrying instagram public lookup", { username: key, status: response.status });
+    response = await requestProfilePage();
   }
 
   if (response.status === 404) {
@@ -692,25 +749,28 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     );
   }
 
-  const html = await response.text();
-  const documents = parseJsonScripts(html);
-  let user: PublicUser | null = null;
-  let edges: PublicEdge[] = [];
+  let html = await response.text();
+  let { user, edges, ogStats, ogTitle } = parseProfileHtml(html, key);
 
-  for (const document of documents) {
-    if (!user) {
-      user = findUser(document, key);
+  // A scraper can return a metadata-free app shell for a real account. Retry once
+  // through a fresh proxy before treating the handle as genuinely missing.
+  if (!user && !ogTitle && isScraperConfigured()) {
+    log.warn("instagram public profile was empty; retrying", {
+      username: key,
+      length: html.length,
+    });
+    const retry = await requestProfilePage();
+    if (retry.status === 429) {
+      throw new PublicProfileError(
+        "rate_limit",
+        "Instagram is temporarily limiting public lookups. Try again in a few minutes.",
+      );
     }
-    if (edges.length === 0) {
-      edges = findMediaEdges(document);
-    }
-    if (user && edges.length > 0) {
-      break;
+    if (retry.ok) {
+      html = await retry.text();
+      ({ user, edges, ogStats, ogTitle } = parseProfileHtml(html, key));
     }
   }
-
-  const ogStats = parseOgStats(html);
-  const ogTitle = metaContent(html, "og:title");
 
   if (!user && !ogTitle) {
     // Instagram answers unknown handles with a generic 200 app shell that has no

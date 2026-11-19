@@ -3,7 +3,7 @@ import { computeMetrics } from "../../../core/analytics/metrics";
 import { resolveProfile } from "../../../core/data/adapter";
 import { ProfileDashboard } from "../../../features/profile/ProfileDashboard";
 
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 type ProfilePageProps = {
   params: Promise<{ username: string }>;

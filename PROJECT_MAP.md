@@ -105,7 +105,7 @@ Fixture anchor `nora.style`: `followers=10000`, `fakeFollowers=350`, followers `
 | **G10** | Public disclosure UI | “Public web” badges, limitation notices, private-account handling, source-aware comparison/report labels, username-only lookup with no key messaging. | Route smoke + typecheck/build |
 | **G11** | Disclosed public-signal estimates | Fake followers, authenticity, and 12-month growth appear for any public/official profile with visible posts; `Est.` badge, confidence, methodology, and signals are disclosed; demo fixtures keep exact values; private/no-post accounts return `null`/`—`. | `tests/estimates.test.ts`, updated adapter/metrics/report tests, route smoke |
 | **G12** | Resilient public fetch | When crawler HTML has no posts, try `web_profile_info` and use inline engagement; show an explicit no-posts notice with `—` instead of zeros when neither source exposes posts. | `tests/public.test.ts` fallback + gated-account cases, route smoke |
-| **G13** | Cloud-host scraper fallback | When `SCRAPINGBEE_API_KEY` is set, profile/embed/web-profile requests go through premium proxies with `render_js=false`; scraper service failures fall back to direct fetch; embed top-ups cap at 3 per profile; no key in logs. | `tests/public.test.ts` scraper routing/fallback/cap cases + build |
+| **G13** | Cloud-host scraper fallback | When `SCRAPINGBEE_API_KEY` is set, profile/embed/web-profile requests go through premium proxies with `render_js=false`; `x-ig-app-id` is forwarded via `forward_headers=true`; transient 404/429/empty-shell responses retry once; scraper service failures fall back to direct fetch; embed top-ups cap at 3 per profile; no key in logs. | `tests/public.test.ts` scraper routing/fallback/cap/header/retry cases + build |
 
 Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12 → G13**. No step is marked done until its verification passes.
 
@@ -203,7 +203,7 @@ is never committed. The scraping key is read server-side only and is never logge
 
 | Gate | Command / probe | Result |
 |---|---|---|
-| Unit + integration tests | `npm test` | **7 files, 39 tests passed** |
+| Unit + integration tests | `npm test` | **7 files, 42 tests passed** |
 | Static types | `npm run typecheck` | **exit 0** |
 | Lint | `npx eslint .` | **exit 0, zero warnings** |
 | Production build | `npm run build` | **exit 0**, routes `/`, `/profile/[username]`, `/compare`, `/api/report` |
@@ -217,7 +217,7 @@ is never committed. The scraping key is read server-side only and is never logge
 | PDF error path | `GET /api/report?handles=ghost.account` | **400**, `Unavailable handle(s)` |
 | Estimate units | `tests/estimates.test.ts` | strong/weak signal scoring, confidence levels, bounds, disclosure fields, private/empty/zero-follower guards, demo isolation |
 | Public reader units | mocked profile + embed HTML | mapping, pk helpers, cache, pinned skip, partial embed, private, 404, 200 shell, 429, API fallback, `web_profile_info` fallback with inline engagement, gated no-post profile |
-| Scraper adapter units | `tests/public.test.ts` with mocked `fetch` | premium-proxy URL, bearer header, `render_js=false`, scraper→direct fallback on 5xx, 3-embed cap, no key in logs |
+| Scraper adapter units | `tests/public.test.ts` with mocked `fetch` | premium-proxy URL, bearer header, `render_js=false`, `Spb-x-ig-app-id` forwarding for web-profile, scraper→direct fallback on 5xx, 3-embed cap, empty-shell/404 retry, no key in logs |
 | Vercel rate-limit diagnosis | `GET /profile/natgeo` on `https://trending-analytics.vercel.app` | **200 HTML** with “Instagram is temporarily limiting public lookups”; all live handles affected while local direct fetch works |
 | Gated public handle (real) | `GET /profile/the.matis` | **200**, 1M followers / 1,314 following / 1,546 posts from Open Graph; `no-posts-notice` shown, engagement `—`, no false `0.00%` |
 | Official API adapter | mocked `fetch` | URL, bearer header, mapping, `190`, `100`, public fallback all pass |

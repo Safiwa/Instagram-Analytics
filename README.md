@@ -54,7 +54,8 @@ the fallback when the scraper is unavailable.
 1. `GET https://www.instagram.com/{username}/` with a crawler user agent that
    receives server-rendered HTML. When `SCRAPINGBEE_API_KEY` is set, the same URL is
    fetched through ScrapingBee's residential proxies first; direct fetch is the
-   fallback.
+   fallback. A transient 404, 429, or metadata-free page is retried once through a
+   fresh proxy before a handle is reported as missing.
 2. Parse the embedded JSON payload for name, bio, verification, privacy, follower
    count, following count, and up to 12 recent media nodes.
 3. If Instagram serves no preloaded posts, try the public `web_profile_info`
@@ -66,6 +67,8 @@ the fallback when the scraper is unavailable.
 6. Fetch `https://www.instagram.com/p/{shortcode}/embed/captioned/` for public
    likes, comments, and video views, four at a time, only when they are missing.
    With a scraping key configured, at most 3 embeds are fetched per profile.
+   The `web_profile_info` request forwards `x-ig-app-id` through ScrapingBee so
+   Instagram returns the post payload with inline engagement.
 7. Cache successful profiles in memory for 5 minutes (maximum 100 entries).
 
 Seeded demo handles are served from local fixtures first, so they never make a
