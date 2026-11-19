@@ -695,12 +695,17 @@ export async function inspectScraper(username: string) {
   };
 
   const page = await inspect(`${ORIGIN}/${encodeURIComponent(key)}/`, {});
+  const crawler = await inspect(`${ORIGIN}/${encodeURIComponent(key)}/`, {
+    "User-Agent": USER_AGENT,
+    Accept: HEADERS.Accept,
+    "Accept-Language": HEADERS["Accept-Language"],
+  });
   const api = await inspect(
     `${ORIGIN}/api/v1/users/web_profile_info/?username=${encodeURIComponent(key)}`,
     { Accept: WEB_PROFILE_HEADERS.Accept, "x-ig-app-id": WEB_PROFILE_APP_ID },
   );
 
-  return { configured: true, page, api };
+  return { configured: true, page, crawler, api };
 }
 
 type ParsedProfileHtml = {
