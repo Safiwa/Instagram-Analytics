@@ -686,7 +686,10 @@ export async function inspectScraper(username: string) {
           fullName: user.full_name,
           edgeCount: mediaEdgesFromUser(user).length,
         })),
-      timelineEdges: scripts.reduce((total, script) => total + findMediaEdges(script).length, 0),
+      timelineEdges: scripts.reduce(
+        (total: number, script) => total + findMediaEdges(script).length,
+        0,
+      ),
       preview: body.slice(0, 160),
     };
   };
