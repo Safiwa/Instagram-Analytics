@@ -1,8 +1,8 @@
 # PROJECT_MAP.md — Instagram Profile Analytics (v1.3)
 
-> Snapshot: **2026-11-18** (system date confirmed via `shell`)  
-> Phase: **COMPLETE for v1.3** — public reader, optional official API, demo fixtures, and disclosed public-signal estimates.  
-> Locked user decisions: **no Meta keys required** · **public Instagram handle lookup** · **analysis + comparison + PDF report** · **English / LTR**.  
+> Snapshot: **2026-11-19** (system date confirmed via `shell`)  
+> Phase: **COMPLETE for v1.4** — public reader, optional managed scraper for cloud hosts, optional official API, demo fixtures, and disclosed public-signal estimates.  
+> Locked user decisions: **no Meta keys required** · **public Instagram handle lookup** · **analysis + comparison + PDF report** · **English / LTR** · **one optional scraping key for Vercel**.  
 > Reference positioning: Not Just Analytics = functional core; Modash + Collabstr = visual/dashboard inspiration only.
 
 ---
@@ -52,7 +52,11 @@ Actor: an analyst checking public Instagram profiles. No login, no database.
        ├─ seeded demo → local fixture → /profile/[username]
        ├─ official API configured → Business Discovery
        │    └─ failure → public web page reader
-       └─ no credentials → public web page reader → /profile/[username]
+       └─ no credentials → public web page reader
+              ├─ SCRAPINGBEE_API_KEY set → ScrapingBee premium proxy
+              │    └─ failure → direct public page fetch
+              └─ no key → direct public page fetch
+         → /profile/[username]
               ├─ add handles → /compare?handles=a,b,c,d → side-by-side table (max 4)
               └─ request report → /api/report?handles=a,b → PDF download
 ```
@@ -65,9 +69,10 @@ Actor: an analyst checking public Instagram profiles. No login, no database.
 - `not_found` — unknown public handle
 - `error` — rate limit, network, unreadable page, auth, or API failure
 
-Resolution order: seeded demo → optional official API → public web reader. When no
-credentials exist the public reader is the only network path. Public failures never
-mention Meta keys.
+Resolution order: seeded demo → optional official API → public web reader. Inside the
+public reader, a configured ScrapingBee key is tried first and direct fetch is the
+fallback. When no credentials exist the public reader is the only network path. Public
+failures never mention Meta keys.
 
 ### Metrics contract (single source: `core/analytics/metrics.ts`)
 
@@ -100,8 +105,9 @@ Fixture anchor `nora.style`: `followers=10000`, `fakeFollowers=350`, followers `
 | **G10** | Public disclosure UI | “Public web” badges, limitation notices, private-account handling, source-aware comparison/report labels, username-only lookup with no key messaging. | Route smoke + typecheck/build |
 | **G11** | Disclosed public-signal estimates | Fake followers, authenticity, and 12-month growth appear for any public/official profile with visible posts; `Est.` badge, confidence, methodology, and signals are disclosed; demo fixtures keep exact values; private/no-post accounts return `null`/`—`. | `tests/estimates.test.ts`, updated adapter/metrics/report tests, route smoke |
 | **G12** | Resilient public fetch | When crawler HTML has no posts, try `web_profile_info` and use inline engagement; show an explicit no-posts notice with `—` instead of zeros when neither source exposes posts. | `tests/public.test.ts` fallback + gated-account cases, route smoke |
+| **G13** | Cloud-host scraper fallback | When `SCRAPINGBEE_API_KEY` is set, profile/embed/web-profile requests go through premium proxies with `render_js=false`; scraper service failures fall back to direct fetch; embed top-ups cap at 3 per profile; no key in logs. | `tests/public.test.ts` scraper routing/fallback/cap cases + build |
 
-Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12**. No step is marked done until its verification passes.
+Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12 → G13**. No step is marked done until its verification passes.
 
 ---
 
@@ -126,7 +132,7 @@ src/
 │  ├─ data/types.ts                      # CreatorProfile, Post, Audience, MonthlyPoint
 │  ├─ data/seed.ts                       # 8 demo fixtures, source: "demo"
 │  ├─ data/adapter.ts                    # listProfiles / searchProfiles / getProfile / resolveProfile
-│  ├─ data/public.ts                     # public-page reader, parsers, pk helpers, cache, error kinds
+│  ├─ data/public.ts                     # public-page reader, ScrapingBee fallback, parsers, pk helpers, cache, error kinds
 │  ├─ data/live.ts                       # optional Business Discovery fetch, mapping, cache, error kinds
 │  ├─ analytics/estimates.ts             # public-signal models + confidence/signals/methodology
 │  ├─ analytics/metrics.ts               # measured metrics + disclosed estimate fallback
@@ -147,7 +153,7 @@ src/
 
 **Rules**
 - Demo handles are served from local fixtures with no network calls.
-- Public mode performs one profile request plus up to 12 embed requests per uncached handle, four at a time. When the crawler page has no posts, one `web_profile_info` request is attempted; its inline likes/comments/views replace embed requests when available.
+- Public mode performs one profile request plus up to 12 embed requests per uncached handle, four at a time. When the crawler page has no posts, one `web_profile_info` request is attempted; its inline likes/comments/views replace embed requests when available. With `SCRAPINGBEE_API_KEY` set, all three request types go through ScrapingBee first and embeds are capped at 3 per profile.
 - The optional official API performs exactly one outbound `GET` to `graph.facebook.com` per uncached handle; failure falls back to the public reader.
 - The access token travels in the `Authorization: Bearer` header, never the query string, and is never logged.
 - `"use client"` limited to `ProfileDashboard` (charts) and `HandleLookup` (navigation + validation). Data loading stays in server components/route handlers.
@@ -161,7 +167,7 @@ src/
 - Exact-username lookup only. Instagram does not expose global keyword or creator search through public pages.
 - Measured saves, reach, audience demographics, and follower history are unavailable. Fake-follower, authenticity, and 12-month-growth values are modeled estimates when public posts are visible.
 - Pinned posts are excluded from the recent-post sample so stale metrics do not skew engagement.
-- Public pages can rate-limit or change markup; failures surface as retryable messages. Instagram can hide every post from logged-out pages: when both the HTML and `web_profile_info` fallback expose no posts, the UI shows an explicit `no-posts-notice` with `—` metrics instead of false zeros.
+- Public pages can rate-limit or change markup; failures surface as retryable messages. Datacenter IPs (including Vercel functions) are refused with HTTP 429; set `SCRAPINGBEE_API_KEY` for cloud deployments. Instagram can hide every post from logged-out pages: when both the HTML and `web_profile_info` fallback expose no posts, the UI shows an explicit `no-posts-notice` with `—` metrics instead of false zeros.
 - This reader is unofficial and independent of the official API. When official credentials exist, the API is tried first.
 
 ---
@@ -170,29 +176,34 @@ src/
 
 | Variable | Required | Purpose |
 |---|---|---|
+| `SCRAPINGBEE_API_KEY` | optional | Residential scraping key for cloud hosts whose IPs Instagram rate-limits; 10 credits/profile |
 | `IG_ACCESS_TOKEN` | optional | Long-lived Facebook user token enabling the official API path |
 | `IG_BUSINESS_ACCOUNT_ID` | optional | Instagram Business Account ID performing the query |
 | `IG_GRAPH_VERSION` | optional | Graph API version, default `v27.0` |
 
-Public lookup needs no environment variables. `.env.example` documents the optional
-official API contract; `.env.local` is only needed for that path and is never committed.
+Local public lookup needs no environment variables. Cloud deployments need
+`SCRAPINGBEE_API_KEY`. `.env.example` documents both optional contracts; `.env.local`
+is never committed. The scraping key is read server-side only and is never logged.
 
 ---
 
 ## [ORPHANS & PENDING]
 
 - No blocking items.
+- `[P11]` **Optional:** a live ScrapingBee smoke test with a real key and redeploy. The
+  adapter is fully mocked in tests; a real-key Vercel deployment confirms the provider
+  still returns Instagram profile JSON for the current target markup.
 - `[P10]` **Optional:** a real-credential official-API smoke test. Public lookup and all
   mocked API paths are verified. The official path remains structurally tested but does
   not gate v1.2, because the product no longer requires Meta credentials.
 
 ---
 
-## Verification log — 2026-11-18
+## Verification log — 2026-11-19
 
 | Gate | Command / probe | Result |
 |---|---|---|
-| Unit + integration tests | `npm test` | **7 files, 36 tests passed** |
+| Unit + integration tests | `npm test` | **7 files, 39 tests passed** |
 | Static types | `npm run typecheck` | **exit 0** |
 | Lint | `npx eslint .` | **exit 0, zero warnings** |
 | Production build | `npm run build` | **exit 0**, routes `/`, `/profile/[username]`, `/compare`, `/api/report` |
@@ -206,6 +217,8 @@ official API contract; `.env.local` is only needed for that path and is never co
 | PDF error path | `GET /api/report?handles=ghost.account` | **400**, `Unavailable handle(s)` |
 | Estimate units | `tests/estimates.test.ts` | strong/weak signal scoring, confidence levels, bounds, disclosure fields, private/empty/zero-follower guards, demo isolation |
 | Public reader units | mocked profile + embed HTML | mapping, pk helpers, cache, pinned skip, partial embed, private, 404, 200 shell, 429, API fallback, `web_profile_info` fallback with inline engagement, gated no-post profile |
+| Scraper adapter units | `tests/public.test.ts` with mocked `fetch` | premium-proxy URL, bearer header, `render_js=false`, scraper→direct fallback on 5xx, 3-embed cap, no key in logs |
+| Vercel rate-limit diagnosis | `GET /profile/natgeo` on `https://trending-analytics.vercel.app` | **200 HTML** with “Instagram is temporarily limiting public lookups”; all live handles affected while local direct fetch works |
 | Gated public handle (real) | `GET /profile/the.matis` | **200**, 1M followers / 1,314 following / 1,546 posts from Open Graph; `no-posts-notice` shown, engagement `—`, no false `0.00%` |
 | Official API adapter | mocked `fetch` | URL, bearer header, mapping, `190`, `100`, public fallback all pass |
 | Public PDF safety | emoji/Arabic name + no audience | valid `%PDF-` document |

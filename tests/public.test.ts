@@ -14,6 +14,8 @@ type MediaFixture = {
   productType?: string;
   caption?: string;
   pinned?: boolean;
+  likes?: number;
+  comments?: number;
 };
 
 type ProfileFixture = {
@@ -79,6 +81,10 @@ function profileHtml(fixture: ProfileFixture): string {
                     media_type: item.mediaType,
                     product_type: item.productType,
                     caption: { text: item.caption ?? "Caption" },
+                    ...(item.likes === undefined ? {} : { edge_liked_by: { count: item.likes } }),
+                    ...(item.comments === undefined
+                      ? {}
+                      : { edge_media_to_comment: { count: item.comments } }),
                   },
                 })),
               },
@@ -177,6 +183,7 @@ describe("public Instagram reader", () => {
     clearPublicCache();
     vi.stubEnv("IG_ACCESS_TOKEN", "");
     vi.stubEnv("IG_BUSINESS_ACCOUNT_ID", "");
+    vi.stubEnv("SCRAPINGBEE_API_KEY", "");
   });
 
   afterEach(() => {
@@ -443,5 +450,87 @@ describe("public Instagram reader", () => {
     expect(resolution.profile.recentPosts[0].likes).toBe(50);
     expect(String(fetchMock.mock.calls[0][0])).toContain("graph.facebook.com");
     expect(String(fetchMock.mock.calls[1][0])).toContain("instagram.com/fallback.test/");
+  });
+
+  it("routes lookups through ScrapingBee when a key is configured", async () => {
+    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+    const media = { ...RECENT_REEL, likes: 500, comments: 40 };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.startsWith("https://app.scrapingbee.com/api/v1/")) {
+        const parsed = new URL(url);
+        expect(parsed.searchParams.get("url")).toBe("https://www.instagram.com/scraper.test/");
+        expect(parsed.searchParams.get("premium_proxy")).toBe("true");
+        expect(parsed.searchParams.get("render_js")).toBe("false");
+        expect(init?.headers).toMatchObject({ Authorization: "Bearer test-key" });
+        return htmlResponse(profileHtml({ username: "scraper.test", media: [media] }));
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await fetchPublicProfile("scraper.test");
+
+    expect(profile.username).toBe("scraper.test");
+    expect(profile.recentPosts).toHaveLength(1);
+    expect(profile.recentPosts[0]).toMatchObject({ likes: 500, comments: 40 });
+    expect(String(fetchMock.mock.calls[0][0])).toContain("app.scrapingbee.com");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to a direct fetch when the scraper service fails", async () => {
+    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+    const media = { ...RECENT_REEL, likes: 120, comments: 12 };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://app.scrapingbee.com/")) {
+        return new Response("service unavailable", { status: 500 });
+      }
+      if (url === "https://www.instagram.com/direct.fallback/") {
+        return htmlResponse(profileHtml({ username: "direct.fallback", media: [media] }));
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await fetchPublicProfile("direct.fallback");
+
+    expect(profile.username).toBe("direct.fallback");
+    expect(profile.recentPosts).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1][0])).toContain("instagram.com/direct.fallback/");
+  });
+
+  it("caps post-embed requests when a paid scraper key is configured", async () => {
+    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+    const media = Array.from({ length: 5 }, (_, index) => ({
+      ...RECENT_REEL,
+      pk: String(Number(RECENT_REEL.pk) + index * 10_000_000_000_000),
+    }));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (
+        url.startsWith("https://app.scrapingbee.com/api/v1/") &&
+        new URL(url).searchParams.get("url")?.includes("/embed/captioned/")
+      ) {
+        return htmlResponse(embedHtml(42, 3));
+      }
+      if (url.startsWith("https://app.scrapingbee.com/api/v1/")) {
+        return htmlResponse(profileHtml({ username: "embed.cap", media }));
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const profile = await fetchPublicProfile("embed.cap");
+
+    const embedCalls = fetchMock.mock.calls.filter(([input]) =>
+      new URL(String(input)).searchParams.get("url")?.includes("/embed/captioned/"),
+    );
+    expect(profile.recentPosts).toHaveLength(3);
+    expect(embedCalls).toHaveLength(3);
   });
 });

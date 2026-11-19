@@ -3,6 +3,8 @@ import type { CreatorProfile } from "../../../core/data/types";
 import { log } from "../../../core/logging/logger";
 import { buildReport } from "../../../features/report/reportDocument";
 
+export const maxDuration = 30;
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const parsed = parseHandles(url.searchParams.get("handles"));

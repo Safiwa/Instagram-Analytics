@@ -5,11 +5,13 @@ Built with Next.js 16, React 19, Tailwind CSS 4, Recharts, and `pdf-lib`.
 
 Username lookup works **without Meta keys or a Meta app**. Enter any public Instagram
 handle and the app reads the server-rendered public profile page and public post
-embeds. The home page is an analysis dashboard that explains the pipeline, metric
-engine, data sources, and confidence levels. Eight demo profiles remain available by
-direct URL for offline testing. Public accounts with visible posts also get clearly
-labeled fake-follower, authenticity, and 12-month-growth estimates derived from public
-signals.
+embeds. On local machines this works directly. Cloud hosts such as Vercel use an
+optional `SCRAPINGBEE_API_KEY` so requests come from a residential proxy instead of a
+rate-limited datacenter IP. The home page is an analysis dashboard that explains the
+pipeline, metric engine, data sources, and confidence levels. Eight demo profiles
+remain available by direct URL for offline testing. Public accounts with visible posts
+also get clearly labeled fake-follower, authenticity, and 12-month-growth estimates
+derived from public signals.
 
 ## Quick start
 
@@ -19,6 +21,24 @@ npm run dev
 ```
 
 Open <http://localhost:3000> and enter a public username such as `trending.vibz.uae`.
+
+## Deploying to Vercel
+
+Vercel functions run on cloud IPs that Instagram rate-limits with HTTP 429, so a
+keyless deployment will show “Instagram is temporarily limiting public lookups”. Add
+one optional scraping key to make the public URL work:
+
+1. Create a free account at <https://www.scrapingbee.com/> (1,000 credits, no card).
+2. Copy the API key from the dashboard. **Do not paste it into chat or commit it.**
+3. In Vercel: **Project → Settings → Environment Variables → Add New**, name it
+   `SCRAPINGBEE_API_KEY`, paste the value, select Production/Preview/Development,
+   and save.
+4. **Deployments → Redeploy** (or push a commit).
+
+The app then fetches Instagram through ScrapingBee premium proxies with JavaScript
+rendering disabled (10 credits per request; 5-minute in-memory cache). Post-embed
+top-ups are capped at 3 per profile while the key is active. Direct fetching remains
+the fallback when the scraper is unavailable.
 
 ## Routes
 
@@ -32,7 +52,9 @@ Open <http://localhost:3000> and enter a public username such as `trending.vibz.
 ## How public lookup works
 
 1. `GET https://www.instagram.com/{username}/` with a crawler user agent that
-   receives server-rendered HTML.
+   receives server-rendered HTML. When `SCRAPINGBEE_API_KEY` is set, the same URL is
+   fetched through ScrapingBee's residential proxies first; direct fetch is the
+   fallback.
 2. Parse the embedded JSON payload for name, bio, verification, privacy, follower
    count, following count, and up to 12 recent media nodes.
 3. If Instagram serves no preloaded posts, try the public `web_profile_info`
@@ -43,6 +65,7 @@ Open <http://localhost:3000> and enter a public username such as `trending.vibz.
    source does not provide them directly.
 6. Fetch `https://www.instagram.com/p/{shortcode}/embed/captioned/` for public
    likes, comments, and video views, four at a time, only when they are missing.
+   With a scraping key configured, at most 3 embeds are fetched per profile.
 7. Cache successful profiles in memory for 5 minutes (maximum 100 entries).
 
 Seeded demo handles are served from local fixtures first, so they never make a
@@ -91,6 +114,8 @@ Other limits:
   posts from logged-out pages; when both public sources return none, the profile
   shows an explicit “posts not exposed” notice and `—` instead of misleading zeros.
   Retry in a few minutes.
+- Datacenter IPs (including Vercel functions) are refused by Instagram with HTTP 429.
+  Set `SCRAPINGBEE_API_KEY` on cloud deployments; local lookups need no key.
 - Embedded collab posts are counted on every profile where they appear.
 - This is an unofficial reader of public pages, not the official Instagram API.
 
@@ -167,7 +192,7 @@ See `PROJECT_MAP.md` for architecture decisions, limitations, and the verificati
 | Symptom | Cause | Fix |
 |---|---|---|
 | “No public Instagram profile found” | Handle is misspelled, deleted, or not public | Check the spelling; private accounts show counts only |
-| “Instagram is temporarily limiting public lookups” | Public page rate limit | Wait a few minutes and retry |
+| “Instagram is temporarily limiting public lookups” | Instagram refused the server IP (common on Vercel) | Add `SCRAPINGBEE_API_KEY` in Vercel and redeploy; otherwise wait a few minutes and retry |
 | “Instagram returned a page that could not be read” | Page shape changed or a login wall appeared | Retry; if it persists, the public page markup changed |
 | “Instagram did not expose this account's posts” | Logged-out pages hid every post and the fallback endpoint was blocked | Retry in a few minutes; followers/following/post counts are still public |
 | Some public cells show `N/A` or `—` | Expected public-data limitation | Saves, audience, and measured history are unavailable; fake followers, authenticity, and growth appear as estimates only when posts are visible |
@@ -176,6 +201,8 @@ See `PROJECT_MAP.md` for architecture decisions, limitations, and the verificati
 ## Security
 
 - `.env.local` is never committed; only `.env.example` is tracked.
+- `SCRAPINGBEE_API_KEY` is read only on the server and must be set in the hosting
+  provider's environment-variable UI. Never commit or share the real key.
 - When the optional official API is enabled, tokens are sent in the `Authorization`
   header and are never logged.
 - Logs include handles and error codes, never token values.
