@@ -653,6 +653,15 @@ export function clearPublicCache(): void {
   cache.clear();
 }
 
+export async function inspectScraperStatus(username: string) {
+  const key = username.trim().replace(/^@/, "").toLowerCase();
+  const response = await tryScraper(`${ORIGIN}/${encodeURIComponent(key)}/`);
+  if (!response) {
+    return { result: "scraper service rejected the request" };
+  }
+  return { status: response.status, body: (await response.text()).slice(0, 300) };
+}
+
 type ParsedProfileHtml = {
   user: PublicUser | null;
   edges: PublicEdge[];
