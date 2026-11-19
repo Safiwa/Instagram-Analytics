@@ -653,61 +653,6 @@ export function clearPublicCache(): void {
   cache.clear();
 }
 
-export async function inspectScraper(username: string) {
-  if (!scraperApiKey()) {
-    return { configured: false };
-  }
-
-  const key = username.trim().replace(/^@/, "").toLowerCase();
-  const inspect = async (targetUrl: string, forwardHeaders: Record<string, string>) => {
-    const response = await tryScraper(targetUrl, forwardHeaders);
-    if (!response) {
-      return { result: "no response" };
-    }
-    const body = await response.text();
-    const scripts = parseJsonScripts(body);
-    return {
-      status: response.status,
-      length: body.length,
-      ogTitle: metaContent(body, "og:title"),
-      title: body.match(/<title>([^<]*)<\/title>/i)?.[1] ?? null,
-      hasFollowers: /Followers/i.test(body),
-      hasNatgeo: /natgeo/i.test(body),
-      hasLogin: /log in|login/i.test(body),
-      hasRateLimit: /429/.test(body),
-      jsonScripts: scripts.length,
-      scriptHits: scripts.filter((script) => JSON.stringify(script).includes(username)).length,
-      userMatches: scripts
-        .map((script) => findUser(script, key))
-        .filter((user): user is PublicUser => user !== null)
-        .map((user) => ({
-          keys: Object.keys(user),
-          followers: followersOf(user),
-          fullName: user.full_name,
-          edgeCount: mediaEdgesFromUser(user).length,
-        })),
-      timelineEdges: scripts.reduce(
-        (total: number, script) => total + findMediaEdges(script).length,
-        0,
-      ),
-      preview: body.slice(0, 160),
-    };
-  };
-
-  const page = await inspect(`${ORIGIN}/${encodeURIComponent(key)}/`, {});
-  const crawler = await inspect(`${ORIGIN}/${encodeURIComponent(key)}/`, {
-    "User-Agent": USER_AGENT,
-    Accept: HEADERS.Accept,
-    "Accept-Language": HEADERS["Accept-Language"],
-  });
-  const api = await inspect(
-    `${ORIGIN}/api/v1/users/web_profile_info/?username=${encodeURIComponent(key)}`,
-    { Accept: WEB_PROFILE_HEADERS.Accept, "x-ig-app-id": WEB_PROFILE_APP_ID },
-  );
-
-  return { configured: true, page, crawler, api };
-}
-
 type ParsedProfileHtml = {
   user: PublicUser | null;
   edges: PublicEdge[];
