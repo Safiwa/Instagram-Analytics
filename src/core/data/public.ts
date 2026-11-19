@@ -653,6 +653,36 @@ export function clearPublicCache(): void {
   cache.clear();
 }
 
+export async function inspectScraper(username: string) {
+  if (!scraperApiKey()) {
+    return { configured: false };
+  }
+
+  const key = username.trim().replace(/^@/, "").toLowerCase();
+  const inspect = async (targetUrl: string, forwardHeaders: Record<string, string>) => {
+    const response = await tryScraper(targetUrl, forwardHeaders);
+    if (!response) {
+      return { result: "no response" };
+    }
+    const body = await response.text();
+    return {
+      status: response.status,
+      length: body.length,
+      ogTitle: metaContent(body, "og:title"),
+      jsonScripts: parseJsonScripts(body).length,
+      preview: body.slice(0, 160),
+    };
+  };
+
+  const page = await inspect(`${ORIGIN}/${encodeURIComponent(key)}/`, {});
+  const api = await inspect(
+    `${ORIGIN}/api/v1/users/web_profile_info/?username=${encodeURIComponent(key)}`,
+    { Accept: WEB_PROFILE_HEADERS.Accept, "x-ig-app-id": WEB_PROFILE_APP_ID },
+  );
+
+  return { configured: true, page, api };
+}
+
 type ParsedProfileHtml = {
   user: PublicUser | null;
   edges: PublicEdge[];
