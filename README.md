@@ -66,7 +66,7 @@ You need a domain added to Cloudflare. Install `cloudflared`, then run:
 winget install --id Cloudflare.cloudflared
 cloudflared tunnel login
 cloudflared tunnel create trending-analytics-proxy
-cloudflared tunnel route dns trending-analytics-proxy analytics-proxy.YOUR_DOMAIN
+cloudflared tunnel route dns trending-analytics-proxy analytics-proxy.instagram-analytics.com
 ```
 
 Create `%USERPROFILE%\.cloudflared\config.yml`:
@@ -75,7 +75,7 @@ Create `%USERPROFILE%\.cloudflared\config.yml`:
 tunnel: <TUNNEL_ID_FROM_PREVIOUS_COMMAND>
 credentials-file: C:\Users\<YOU>\.cloudflared\<TUNNEL_ID_FROM_PREVIOUS_COMMAND>.json
 ingress:
-  - hostname: analytics-proxy.YOUR_DOMAIN
+  - hostname: analytics-proxy.instagram-analytics.com
     service: http://localhost:3000
   - service: http_status:404
 ```
@@ -93,11 +93,11 @@ In **Project → Settings → Environment Variables**, add:
 
 | Name | Value |
 |---|---|
-| `INSTAGRAM_PROXY_URL` | `https://analytics-proxy.YOUR_DOMAIN/api/instagram-proxy` |
+| `INSTAGRAM_PROXY_URL` | `https://analytics-proxy.instagram-analytics.com/api/instagram-proxy` |
 | `PROXY_SECRET` | the same secret from step 1 |
 
 Delete `SCRAPINGBEE_API_KEY` if it still exists. Redeploy, then test
-`https://instagram-analytics.vercel.app/profile/natgeo`.
+`https://www.instagram-analytics.com/profile/natgeo`.
 
 The proxy endpoint allowlists only public Instagram profile, `web_profile_info`, and
 post-embed URLs, and rejects every request without the shared secret. Profiles are

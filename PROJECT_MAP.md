@@ -231,7 +231,7 @@ the Cloudflare Tunnel setup, permanent hostname, Vercel variables, and smoke-tes
 | Public reader units | mocked profile + embed HTML | mapping, pk helpers, cache, pinned skip, partial embed, private, 404, 200 shell, 429, API fallback, `web_profile_info` fallback with inline engagement, gated no-post profile |
 | Proxy bridge units | `tests/public.test.ts` with mocked `fetch` | all three request types routed through `INSTAGRAM_PROXY_URL` with `Bearer` secret; direct fallback on proxy 5xx; empty-shell/404 retry; no secret in logs |
 | Proxy endpoint units | `tests/proxy.test.ts` | 503 without secret, 401 on wrong secret, 400 on non-Instagram or unexpected paths, crawler user agent, `x-ig-app-id` for `web_profile_info` |
-| Vercel rate-limit diagnosis | `GET /profile/natgeo` on `https://instagram-analytics.vercel.app` | **200 HTML** with “Instagram is temporarily limiting public lookups”; datacenter egress gets 429 while local home IP works |
+| Vercel rate-limit diagnosis | `GET /profile/natgeo` on `https://www.instagram-analytics.com` | **200 HTML** with “Instagram is temporarily limiting public lookups”; datacenter egress gets 429 while local home IP works |
 | Gated public handle (real) | `GET /profile/the.matis` | **200**, 1M followers / 1,314 following / 1,546 posts from Open Graph; `no-posts-notice` shown, engagement `—`, no false `0.00%` |
 | Official API adapter | mocked `fetch` | URL, bearer header, mapping, `190`, `100`, public fallback all pass |
 | Public PDF safety | emoji/Arabic name + no audience | valid `%PDF-` document |
