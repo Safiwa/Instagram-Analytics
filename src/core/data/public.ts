@@ -665,11 +665,18 @@ export async function inspectScraper(username: string) {
       return { result: "no response" };
     }
     const body = await response.text();
+    const scripts = parseJsonScripts(body);
     return {
       status: response.status,
       length: body.length,
       ogTitle: metaContent(body, "og:title"),
-      jsonScripts: parseJsonScripts(body).length,
+      title: body.match(/<title>([^<]*)<\/title>/i)?.[1] ?? null,
+      hasFollowers: /Followers/i.test(body),
+      hasNatgeo: /natgeo/i.test(body),
+      hasLogin: /log in|login/i.test(body),
+      hasRateLimit: /429/.test(body),
+      jsonScripts: scripts.length,
+      scriptPreview: scripts.slice(0, 3).map((script) => JSON.stringify(script).slice(0, 600)),
       preview: body.slice(0, 160),
     };
   };
