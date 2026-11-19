@@ -10,9 +10,7 @@ const CACHE_MAX = 100;
 const EMBED_CONCURRENCY = 4;
 const MAX_POSTS = 12;
 const WEB_PROFILE_APP_ID = "936619743392459";
-const SCRAPINGBEE_ENDPOINT = "https://app.scrapingbee.com/api/v1/";
-const SCRAPER_TIMEOUT_MS = 15_000;
-const SCRAPER_EMBED_LIMIT = 3;
+const PROXY_TIMEOUT_MS = 25_000;
 
 const SHORTCODE_ALPHABET =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -37,80 +35,48 @@ const WEB_PROFILE_HEADERS = {
 
 const cache = new Map<string, { expiresAt: number; profile: CreatorProfile }>();
 
-function scraperApiKey(): string {
-  return process.env.SCRAPINGBEE_API_KEY?.trim() ?? "";
+function proxyEndpoint(): string {
+  return process.env.INSTAGRAM_PROXY_URL?.trim() ?? "";
 }
 
-export function isScraperConfigured(): boolean {
-  return scraperApiKey().length > 0;
-}
-
-function scraperRequestUrl(targetUrl: string, forwardHeaders: Record<string, string>): string {
-  const url = new URL(SCRAPINGBEE_ENDPOINT);
-  url.searchParams.set("url", targetUrl);
-  url.searchParams.set("premium_proxy", "true");
-  url.searchParams.set("render_js", "false");
-  url.searchParams.set("transparent_status_code", "true");
-  url.searchParams.set("timeout", String(SCRAPER_TIMEOUT_MS - 2000));
-  if (Object.keys(forwardHeaders).length > 0) {
-    // ScrapingBee only forwards Spb-prefixed headers when this is enabled.
-    url.searchParams.set("forward_headers", "true");
-  }
-  return url.toString();
-}
-
-async function tryScraper(
-  targetUrl: string,
-  forwardHeaders: Record<string, string> = {},
-): Promise<Response | null> {
-  const key = scraperApiKey();
-  if (!key) {
-    return null;
-  }
-
-  const forwarded = Object.fromEntries(
-    Object.entries(forwardHeaders).map(([name, value]) => [`Spb-${name}`, value]),
-  );
-
-  try {
-    const response = await fetch(scraperRequestUrl(targetUrl, forwardHeaders), {
-      headers: {
-        Authorization: `Bearer ${key}`,
-        Accept: "text/html,application/xhtml+xml,application/json",
-        "Accept-Language": "en-US,en;q=0.9",
-        ...forwarded,
-      },
-      cache: "no-store",
-      signal: AbortSignal.timeout(SCRAPER_TIMEOUT_MS),
-    });
-
-    // 401/402/403 and 5xx are scraper-service failures, not Instagram responses.
-    // 404/429 are passed through with transparent_status_code and stay meaningful.
-    if (response.status >= 500 || [401, 402, 403].includes(response.status)) {
-      log.warn("instagram scraper rejected", { target: targetUrl, status: response.status });
-      return null;
-    }
-
-    log.info("instagram fetched through scraper", { target: targetUrl, status: response.status });
-    return response;
-  } catch (error) {
-    log.warn("instagram scraper failed", {
-      target: targetUrl,
-      message: error instanceof Error ? error.message : "network",
-    });
-    return null;
-  }
+export function isProxyConfigured(): boolean {
+  return proxyEndpoint().length > 0;
 }
 
 async function fetchInstagram(
   targetUrl: string,
   headers: Record<string, string>,
   timeoutMs: number,
-  forwardHeaders: Record<string, string> = {},
 ): Promise<Response> {
-  const scraped = await tryScraper(targetUrl, forwardHeaders);
-  if (scraped) {
-    return scraped;
+  const endpoint = proxyEndpoint();
+
+  if (endpoint) {
+    try {
+      const url = new URL(endpoint);
+      url.searchParams.set("url", targetUrl);
+      const response = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${process.env.PROXY_SECRET?.trim() ?? ""}`,
+          Accept: "text/html,application/xhtml+xml,application/json",
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
+      });
+      log.info("instagram fetched through local proxy", {
+        target: targetUrl,
+        status: response.status,
+      });
+      if (response.status < 500 && ![401, 402, 403].includes(response.status)) {
+        return response;
+      }
+      log.warn("instagram local proxy rejected", { target: targetUrl, status: response.status });
+    } catch (error) {
+      log.warn("instagram local proxy failed", {
+        target: targetUrl,
+        message: error instanceof Error ? error.message : "network",
+      });
+      // Fall back to a direct fetch for local development without a tunnel.
+    }
   }
 
   return fetch(targetUrl, {
@@ -540,10 +506,6 @@ async function fetchWebProfile(username: string): Promise<WebProfileResult | nul
       `${ORIGIN}/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
       WEB_PROFILE_HEADERS,
       WEB_PROFILE_TIMEOUT_MS,
-      {
-        Accept: WEB_PROFILE_HEADERS.Accept,
-        "x-ig-app-id": WEB_PROFILE_APP_ID,
-      },
     );
 
     if (response.status === 404 || response.status === 429 || !response.ok) {
@@ -721,7 +683,7 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
 
   // Scraper proxies occasionally return a transient 404/429 for a valid handle.
   // One fresh request prevents a false "Profile not found" on Vercel.
-  if (isScraperConfigured() && (response.status === 404 || response.status === 429)) {
+  if (isProxyConfigured() && (response.status === 404 || response.status === 429)) {
     log.warn("retrying instagram public lookup", { username: key, status: response.status });
     response = await requestProfilePage();
   }
@@ -754,7 +716,7 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
 
   // A scraper can return a metadata-free app shell for a real account. Retry once
   // through a fresh proxy before treating the handle as genuinely missing.
-  if (!user && !ogTitle && isScraperConfigured()) {
+  if (!user && !ogTitle && isProxyConfigured()) {
     log.warn("instagram public profile was empty; retrying", {
       username: key,
       length: html.length,
@@ -802,10 +764,8 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
   }
 
   const candidates = isPrivate ? [] : buildCandidates(edges);
-  const embedLimit = isScraperConfigured() ? SCRAPER_EMBED_LIMIT : Number.MAX_SAFE_INTEGER;
   const missingEmbeds = candidates
     .filter((candidate) => candidate.likes === undefined || candidate.comments === undefined)
-    .slice(0, embedLimit)
     .map((candidate) => candidate.shortcode);
   const embedMetrics =
     missingEmbeds.length > 0 ? await fetchEmbeds(missingEmbeds) : new Map<string, EmbedMetrics>();
@@ -868,7 +828,7 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     username: key,
     posts: recentPosts.length,
     private: isPrivate ? "yes" : "no",
-    via: isScraperConfigured() ? "scraper" : "direct",
+    via: isProxyConfigured() ? "proxy" : "direct",
   });
 
   return profile;

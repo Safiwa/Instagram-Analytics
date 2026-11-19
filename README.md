@@ -3,15 +3,16 @@
 Professional Instagram profile analysis, side-by-side comparison, and PDF reports.
 Built with Next.js 16, React 19, Tailwind CSS 4, Recharts, and `pdf-lib`.
 
-Username lookup works **without Meta keys or a Meta app**. Enter any public Instagram
-handle and the app reads the server-rendered public profile page and public post
-embeds. On local machines this works directly. Cloud hosts such as Vercel use an
-optional `SCRAPINGBEE_API_KEY` so requests come from a residential proxy instead of a
-rate-limited datacenter IP. The home page is an analysis dashboard that explains the
-pipeline, metric engine, data sources, and confidence levels. Eight demo profiles
-remain available by direct URL for offline testing. Public accounts with visible posts
-also get clearly labeled fake-follower, authenticity, and 12-month-growth estimates
-derived from public signals.
+Username lookup works **without Meta keys, paid APIs, or credits**. Enter any public
+Instagram handle and the app reads the server-rendered public profile page and public
+post embeds. Local lookups work directly. Vercel functions are rate-limited by
+Instagram, so the deployed site sends those requests through a secure endpoint on your
+own computer via a free Cloudflare Tunnel; the data then comes from your home IP and
+matches `localhost`. The home page is an analysis dashboard that explains the pipeline,
+metric engine, data sources, and confidence levels. Eight demo profiles remain
+available by direct URL for offline testing. Public accounts with visible posts also
+get clearly labeled fake-follower, authenticity, and 12-month-growth estimates derived
+from public signals.
 
 ## Quick start
 
@@ -22,23 +23,86 @@ npm run dev
 
 Open <http://localhost:3000> and enter a public username such as `trending.vibz.uae`.
 
-## Deploying to Vercel
+## Deploying to Vercel with a free local proxy bridge
 
-Vercel functions run on cloud IPs that Instagram rate-limits with HTTP 429, so a
-keyless deployment will show “Instagram is temporarily limiting public lookups”. Add
-one optional scraping key to make the public URL work:
+Vercel functions run on cloud IPs that Instagram rate-limits with HTTP 429. This app
+sends Instagram requests from your own computer instead, through a free Cloudflare
+Tunnel. No paid API, scraping credits, or Meta app is involved. Your computer must stay
+on and connected.
 
-1. Create a free account at <https://www.scrapingbee.com/> (1,000 credits, no card).
-2. Copy the API key from the dashboard. **Do not paste it into chat or commit it.**
-3. In Vercel: **Project → Settings → Environment Variables → Add New**, name it
-   `SCRAPINGBEE_API_KEY`, paste the value, select Production/Preview/Development,
-   and save.
-4. **Deployments → Redeploy** (or push a commit).
+### 1. Create a shared secret
 
-The app then fetches Instagram through ScrapingBee premium proxies with JavaScript
-rendering disabled (10 credits per request; 5-minute in-memory cache). Post-embed
-top-ups are capped at 3 per profile while the key is active. Direct fetching remains
-the fallback when the scraper is unavailable.
+Generate a long random value locally, for example in PowerShell:
+
+```powershell
+-join ((48..57 + 65..90 + 97..122) | Get-Random -Count 40)
+```
+
+**Never paste this value into chat or commit it.**
+
+### 2. Configure the local machine
+
+Create `.env.local` in the project root:
+
+```text
+PROXY_SECRET=<the same secret from step 1>
+```
+
+Build and start the local server that the tunnel will target:
+
+```powershell
+npm install
+npm run build
+npm run start
+```
+
+Keep it running on `http://localhost:3000`.
+
+### 3. Create the Cloudflare Tunnel
+
+You need a domain added to Cloudflare. Install `cloudflared`, then run:
+
+```powershell
+winget install --id Cloudflare.cloudflared
+cloudflared tunnel login
+cloudflared tunnel create trending-analytics-proxy
+cloudflared tunnel route dns trending-analytics-proxy analytics-proxy.YOUR_DOMAIN
+```
+
+Create `%USERPROFILE%\.cloudflared\config.yml`:
+
+```yaml
+tunnel: <TUNNEL_ID_FROM_PREVIOUS_COMMAND>
+credentials-file: C:\Users\<YOU>\.cloudflared\<TUNNEL_ID_FROM_PREVIOUS_COMMAND>.json
+ingress:
+  - hostname: analytics-proxy.YOUR_DOMAIN
+    service: http://localhost:3000
+  - service: http_status:404
+```
+
+Run and install it as a Windows service so it starts automatically:
+
+```powershell
+cloudflared tunnel --config C:\Users\<YOU>\.cloudflared\config.yml run trending-analytics-proxy
+cloudflared --config C:\Users\<YOU>\.cloudflared\config.yml service install
+```
+
+### 4. Configure Vercel
+
+In **Project → Settings → Environment Variables**, add:
+
+| Name | Value |
+|---|---|
+| `INSTAGRAM_PROXY_URL` | `https://analytics-proxy.YOUR_DOMAIN/api/instagram-proxy` |
+| `PROXY_SECRET` | the same secret from step 1 |
+
+Delete `SCRAPINGBEE_API_KEY` if it still exists. Redeploy, then test
+`https://trending-analytics.vercel.app/profile/natgeo`.
+
+The proxy endpoint allowlists only public Instagram profile, `web_profile_info`, and
+post-embed URLs, and rejects every request without the shared secret. Profiles are
+cached in the Vercel function for 5 minutes, so one lookup typically uses one tunnel
+request plus a few embed requests.
 
 ## Routes
 
@@ -52,10 +116,10 @@ the fallback when the scraper is unavailable.
 ## How public lookup works
 
 1. `GET https://www.instagram.com/{username}/` with a crawler user agent that
-   receives server-rendered HTML. When `SCRAPINGBEE_API_KEY` is set, the same URL is
-   fetched through ScrapingBee's residential proxies first; direct fetch is the
-   fallback. A transient 404, 429, or metadata-free page is retried once through a
-   fresh proxy before a handle is reported as missing.
+   receives server-rendered HTML. On Vercel, when `INSTAGRAM_PROXY_URL` is set, the
+   request goes to the authenticated local proxy endpoint and is fetched from your
+   home IP; direct fetch is the fallback. A transient 404, 429, or metadata-free page
+   is retried once before a handle is reported as missing.
 2. Parse the embedded JSON payload for name, bio, verification, privacy, follower
    count, following count, and up to 12 recent media nodes.
 3. If Instagram serves no preloaded posts, try the public `web_profile_info`
@@ -66,9 +130,8 @@ the fallback when the scraper is unavailable.
    source does not provide them directly.
 6. Fetch `https://www.instagram.com/p/{shortcode}/embed/captioned/` for public
    likes, comments, and video views, four at a time, only when they are missing.
-   With a scraping key configured, at most 3 embeds are fetched per profile.
-   The `web_profile_info` request forwards `x-ig-app-id` through ScrapingBee so
-   Instagram returns the post payload with inline engagement.
+   The local proxy sends the required `x-ig-app-id` header for `web_profile_info`
+   and a crawler user agent for HTML pages.
 7. Cache successful profiles in memory for 5 minutes (maximum 100 entries).
 
 Seeded demo handles are served from local fixtures first, so they never make a
@@ -118,7 +181,8 @@ Other limits:
   shows an explicit “posts not exposed” notice and `—` instead of misleading zeros.
   Retry in a few minutes.
 - Datacenter IPs (including Vercel functions) are refused by Instagram with HTTP 429.
-  Set `SCRAPINGBEE_API_KEY` on cloud deployments; local lookups need no key.
+  Configure the local proxy bridge described above for the public deployment; local
+  lookups need no proxy.
 - Embedded collab posts are counted on every profile where they appear.
 - This is an unofficial reader of public pages, not the official Instagram API.
 
@@ -169,7 +233,7 @@ npm run lint       # ESLint
 
 ```text
 src/
-├─ app/                         # routes: home, profile, compare, report API
+├─ app/                         # routes: home, profile, compare, report API, local Instagram proxy
 ├─ components/                  # MetricCard, EmptyState
 ├─ core/
 │  ├─ analytics/estimates.ts    # public-signal fake/authenticity/growth models
@@ -185,7 +249,7 @@ src/
 │  ├─ profile/ProfileDashboard.tsx
 │  ├─ comparison/ComparisonTable.tsx
 │  └─ report/reportDocument.ts  # pdf-lib builder
-└─ tests/                       # Vitest: adapter, estimates, metrics, report, logger, live, public
+└─ tests/                       # Vitest: adapter, estimates, metrics, report, logger, live, public, proxy
 ```
 
 See `PROJECT_MAP.md` for architecture decisions, limitations, and the verification log.
@@ -195,7 +259,7 @@ See `PROJECT_MAP.md` for architecture decisions, limitations, and the verificati
 | Symptom | Cause | Fix |
 |---|---|---|
 | “No public Instagram profile found” | Handle is misspelled, deleted, or not public | Check the spelling; private accounts show counts only |
-| “Instagram is temporarily limiting public lookups” | Instagram refused the server IP (common on Vercel) | Add `SCRAPINGBEE_API_KEY` in Vercel and redeploy; otherwise wait a few minutes and retry |
+| “Instagram is temporarily limiting public lookups” | Instagram refused the server IP, or the local proxy bridge is offline | Check that your PC, local server, and Cloudflare Tunnel are running; verify `INSTAGRAM_PROXY_URL` and `PROXY_SECRET` in Vercel |
 | “Instagram returned a page that could not be read” | Page shape changed or a login wall appeared | Retry; if it persists, the public page markup changed |
 | “Instagram did not expose this account's posts” | Logged-out pages hid every post and the fallback endpoint was blocked | Retry in a few minutes; followers/following/post counts are still public |
 | Some public cells show `N/A` or `—` | Expected public-data limitation | Saves, audience, and measured history are unavailable; fake followers, authenticity, and growth appear as estimates only when posts are visible |
@@ -204,8 +268,10 @@ See `PROJECT_MAP.md` for architecture decisions, limitations, and the verificati
 ## Security
 
 - `.env.local` is never committed; only `.env.example` is tracked.
-- `SCRAPINGBEE_API_KEY` is read only on the server and must be set in the hosting
-  provider's environment-variable UI. Never commit or share the real key.
+- `PROXY_SECRET` is shared only between Vercel and your local server. Set it in both
+  environments; never commit or share it. The proxy endpoint rejects unauthenticated
+  calls and non-Instagram targets.
+- `INSTAGRAM_PROXY_URL` must be the Cloudflare Tunnel hostname for your local server.
 - When the optional official API is enabled, tokens are sent in the `Authorization`
   header and are never logged.
 - Logs include handles and error codes, never token values.

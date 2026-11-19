@@ -183,7 +183,8 @@ describe("public Instagram reader", () => {
     clearPublicCache();
     vi.stubEnv("IG_ACCESS_TOKEN", "");
     vi.stubEnv("IG_BUSINESS_ACCOUNT_ID", "");
-    vi.stubEnv("SCRAPINGBEE_API_KEY", "");
+    vi.stubEnv("INSTAGRAM_PROXY_URL", "");
+    vi.stubEnv("PROXY_SECRET", "");
   });
 
   afterEach(() => {
@@ -452,43 +453,41 @@ describe("public Instagram reader", () => {
     expect(String(fetchMock.mock.calls[1][0])).toContain("instagram.com/fallback.test/");
   });
 
-  it("routes lookups through ScrapingBee when a key is configured", async () => {
-    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+  it("routes lookups through the local proxy when configured", async () => {
+    vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
+    vi.stubEnv("PROXY_SECRET", "test-secret");
     const media = { ...RECENT_REEL, likes: 500, comments: 40 };
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (url.startsWith("https://app.scrapingbee.com/api/v1/")) {
-        const parsed = new URL(url);
-        expect(parsed.searchParams.get("url")).toBe("https://www.instagram.com/scraper.test/");
-        expect(parsed.searchParams.get("premium_proxy")).toBe("true");
-        expect(parsed.searchParams.get("render_js")).toBe("false");
-        expect(init?.headers).toMatchObject({ Authorization: "Bearer test-key" });
-        return htmlResponse(profileHtml({ username: "scraper.test", media: [media] }));
-      }
-      return new Response("", { status: 404 });
+      const url = new URL(String(input));
+      expect(url.origin + url.pathname).toBe(
+        "https://analytics.example.com/api/instagram-proxy",
+      );
+      expect(url.searchParams.get("url")).toBe("https://www.instagram.com/proxy.test/");
+      expect(init?.headers).toMatchObject({ Authorization: "Bearer test-secret" });
+      return htmlResponse(profileHtml({ username: "proxy.test", media: [media] }));
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const profile = await fetchPublicProfile("scraper.test");
+    const profile = await fetchPublicProfile("proxy.test");
 
-    expect(profile.username).toBe("scraper.test");
+    expect(profile.username).toBe("proxy.test");
     expect(profile.recentPosts).toHaveLength(1);
     expect(profile.recentPosts[0]).toMatchObject({ likes: 500, comments: 40 });
-    expect(String(fetchMock.mock.calls[0][0])).toContain("app.scrapingbee.com");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to a direct fetch when the scraper service fails", async () => {
-    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+  it("falls back to a direct fetch when the local proxy fails", async () => {
+    vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
+    vi.stubEnv("PROXY_SECRET", "test-secret");
     const media = { ...RECENT_REEL, likes: 120, comments: 12 };
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.startsWith("https://app.scrapingbee.com/")) {
+      const url = new URL(String(input));
+      if (url.hostname === "analytics.example.com") {
         return new Response("service unavailable", { status: 500 });
       }
-      if (url === "https://www.instagram.com/direct.fallback/") {
+      if (url.href === "https://www.instagram.com/direct.fallback/") {
         return htmlResponse(profileHtml({ username: "direct.fallback", media: [media] }));
       }
       return new Response("", { status: 404 });
@@ -503,49 +502,45 @@ describe("public Instagram reader", () => {
     expect(String(fetchMock.mock.calls[1][0])).toContain("instagram.com/direct.fallback/");
   });
 
-  it("caps post-embed requests when a paid scraper key is configured", async () => {
-    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+  it("routes every post embed through the proxy", async () => {
+    vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
+    vi.stubEnv("PROXY_SECRET", "test-secret");
     const media = Array.from({ length: 5 }, (_, index) => ({
       ...RECENT_REEL,
       pk: String(Number(RECENT_REEL.pk) + index * 10_000_000_000_000),
     }));
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (
-        url.startsWith("https://app.scrapingbee.com/api/v1/") &&
-        new URL(url).searchParams.get("url")?.includes("/embed/captioned/")
-      ) {
+      const target = new URL(String(input)).searchParams.get("url") ?? "";
+      if (target.includes("/embed/captioned/")) {
         return htmlResponse(embedHtml(42, 3));
       }
-      if (url.startsWith("https://app.scrapingbee.com/api/v1/")) {
-        return htmlResponse(profileHtml({ username: "embed.cap", media }));
+      if (target === "https://www.instagram.com/embed.proxy/") {
+        return htmlResponse(profileHtml({ username: "embed.proxy", media }));
       }
       return new Response("", { status: 404 });
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const profile = await fetchPublicProfile("embed.cap");
+    const profile = await fetchPublicProfile("embed.proxy");
 
     const embedCalls = fetchMock.mock.calls.filter(([input]) =>
       new URL(String(input)).searchParams.get("url")?.includes("/embed/captioned/"),
     );
-    expect(profile.recentPosts).toHaveLength(3);
-    expect(embedCalls).toHaveLength(3);
+    expect(profile.recentPosts).toHaveLength(5);
+    expect(embedCalls).toHaveLength(5);
   });
 
-  it("forwards Instagram's app header to web_profile_info through the scraper", async () => {
-    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+  it("resolves web_profile_info through the proxy", async () => {
+    vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
+    vi.stubEnv("PROXY_SECRET", "test-secret");
 
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = new URL(String(input));
-      const target = url.searchParams.get("url") ?? "";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const target = new URL(String(input)).searchParams.get("url") ?? "";
       if (target === "https://www.instagram.com/header.test/") {
         return htmlResponse(profileHtml({ username: "header.test", media: [] }));
       }
       if (target.includes("web_profile_info")) {
-        expect(url.searchParams.get("forward_headers")).toBe("true");
-        expect(init?.headers).toMatchObject({ "Spb-x-ig-app-id": "936619743392459" });
         return webProfileJson({ username: "header.test", media: [RECENT_REEL] });
       }
       return new Response("", { status: 404 });
@@ -560,8 +555,9 @@ describe("public Instagram reader", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("retries a metadata-free scraper response instead of reporting not found", async () => {
-    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+  it("retries a metadata-free proxy response instead of reporting not found", async () => {
+    vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
+    vi.stubEnv("PROXY_SECRET", "test-secret");
     let calls = 0;
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -591,8 +587,9 @@ describe("public Instagram reader", () => {
     expect(calls).toBe(2);
   });
 
-  it("retries a transient scraper 404 before declaring a handle missing", async () => {
-    vi.stubEnv("SCRAPINGBEE_API_KEY", "test-key");
+  it("retries a transient proxy 404 before declaring a handle missing", async () => {
+    vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
+    vi.stubEnv("PROXY_SECRET", "test-secret");
     let calls = 0;
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

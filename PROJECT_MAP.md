@@ -1,8 +1,8 @@
-# PROJECT_MAP.md — Instagram Profile Analytics (v1.3)
+# PROJECT_MAP.md — Trending Analytics (v1.5)
 
 > Snapshot: **2026-11-19** (system date confirmed via `shell`)  
-> Phase: **COMPLETE for v1.4** — public reader, optional managed scraper for cloud hosts, optional official API, demo fixtures, and disclosed public-signal estimates.  
-> Locked user decisions: **no Meta keys required** · **public Instagram handle lookup** · **analysis + comparison + PDF report** · **English / LTR** · **one optional scraping key for Vercel**.  
+> Phase: **COMPLETE for v1.5** — public reader, free local proxy bridge for cloud hosts, optional official API, demo fixtures, and disclosed public-signal estimates.  
+> Locked user decisions: **no Meta keys required** · **public Instagram handle lookup** · **analysis + comparison + PDF report** · **English / LTR** · **no paid scraping credits** · **Vercel + authenticated local proxy through a free Cloudflare Tunnel**.  
 > Reference positioning: Not Just Analytics = functional core; Modash + Collabstr = visual/dashboard inspiration only.
 
 ---
@@ -26,6 +26,7 @@ All versions read from official registries on 2026-11-18: `registry.npmjs.org`, 
 | Lint | `eslint` + `eslint-config-next` | `10.15.0` + `16.4.6` | npm latest | no |
 | Types | `@types/node`, `@types/react`, `@types/react-dom` | `26.6.6`, `19.3.0`, `19.3.0` | npm latest | no |
 | Format | `prettier` | `3.10.1` | npm latest | no |
+| Tunnel (external) | `cloudflared` | latest stable | Cloudflare install via `winget`; no npm dependency | no |
 
 **Explicitly evaluated and rejected (No Feature Creep):**
 - `@tanstack/react-table@9.3.1` — a native `<table>` is sufficient for ≤4 comparison columns.
@@ -35,6 +36,7 @@ All versions read from official registries on 2026-11-18: `registry.npmjs.org`, 
 - `@playwright/test@1.65.1` — deferred; verification is Vitest + route smoke.
 - `typescript@7.0.2` — rejected at execution time: `typescript-eslint` (via `eslint-config-next` 16.4.6) hard-fails with “does not support TS 7.0”; pinned `6.0.3` instead so the lint gate remains real, not skipped.
 - Dedicated Instagram scraper libraries — rejected: extra dependency weight and unstable APIs. The public reader instead parses the server-rendered HTML that Instagram already serves to crawlers, and the official Business Discovery endpoint remains available when credentials exist.
+- ScrapingBee / paid residential proxies — rejected after Vercel datacenter 429s: credits were exhausted without a persistent fix. The free local proxy bridge uses the home IP and matches `localhost` results with no per-request cost.
 
 **Next.js 16 constraints respected:** `params`/`searchParams` are async; `next lint` was removed → call `eslint` directly; no `middleware.ts`; Tailwind v4 via `@tailwindcss/postcss`; no deprecated `revalidateTag(tag)` single-arg form.
 
@@ -53,9 +55,10 @@ Actor: an analyst checking public Instagram profiles. No login, no database.
        ├─ official API configured → Business Discovery
        │    └─ failure → public web page reader
        └─ no credentials → public web page reader
-              ├─ SCRAPINGBEE_API_KEY set → ScrapingBee premium proxy
-              │    └─ failure → direct public page fetch
-              └─ no key → direct public page fetch
+              ├─ INSTAGRAM_PROXY_URL set (Vercel) → authenticated /api/instagram-proxy
+              │    └─ through Cloudflare Tunnel → local server → home IP → Instagram
+              │         └─ proxy 401/5xx/network failure → direct public fetch
+              └─ no proxy URL (local) → direct public page fetch
          → /profile/[username]
               ├─ add handles → /compare?handles=a,b,c,d → side-by-side table (max 4)
               └─ request report → /api/report?handles=a,b → PDF download
@@ -70,9 +73,11 @@ Actor: an analyst checking public Instagram profiles. No login, no database.
 - `error` — rate limit, network, unreadable page, auth, or API failure
 
 Resolution order: seeded demo → optional official API → public web reader. Inside the
-public reader, a configured ScrapingBee key is tried first and direct fetch is the
-fallback. When no credentials exist the public reader is the only network path. Public
-failures never mention Meta keys.
+public reader, a configured `INSTAGRAM_PROXY_URL` sends every request (profile HTML,
+`web_profile_info`, and post embeds) to the authenticated local proxy endpoint first;
+direct fetch is the fallback when the proxy is unreachable or rejects with 401/5xx.
+A transient 404, 429, or metadata-free page is retried once. Public failures never
+mention Meta keys.
 
 ### Metrics contract (single source: `core/analytics/metrics.ts`)
 
@@ -105,7 +110,7 @@ Fixture anchor `nora.style`: `followers=10000`, `fakeFollowers=350`, followers `
 | **G10** | Public disclosure UI | “Public web” badges, limitation notices, private-account handling, source-aware comparison/report labels, username-only lookup with no key messaging. | Route smoke + typecheck/build |
 | **G11** | Disclosed public-signal estimates | Fake followers, authenticity, and 12-month growth appear for any public/official profile with visible posts; `Est.` badge, confidence, methodology, and signals are disclosed; demo fixtures keep exact values; private/no-post accounts return `null`/`—`. | `tests/estimates.test.ts`, updated adapter/metrics/report tests, route smoke |
 | **G12** | Resilient public fetch | When crawler HTML has no posts, try `web_profile_info` and use inline engagement; show an explicit no-posts notice with `—` instead of zeros when neither source exposes posts. | `tests/public.test.ts` fallback + gated-account cases, route smoke |
-| **G13** | Cloud-host scraper fallback | When `SCRAPINGBEE_API_KEY` is set, profile/embed/web-profile requests go through premium proxies with `render_js=false`; `x-ig-app-id` is forwarded via `forward_headers=true`; transient 404/429/empty-shell responses retry once; scraper service failures fall back to direct fetch; embed top-ups cap at 3 per profile; no key in logs. | `tests/public.test.ts` scraper routing/fallback/cap/header/retry cases + build |
+| **G13** | Free cloud-host proxy bridge | When `INSTAGRAM_PROXY_URL` is set, all profile/embed/web-profile requests go to the authenticated `/api/instagram-proxy` endpoint through a Cloudflare Tunnel; `PROXY_SECRET` is required in both environments; the endpoint allowlists only public Instagram profile/`web_profile_info`/embed URLs; 401/402/403/5xx and network failures fall back to direct fetch; transient 404/429/empty-shell responses retry once; no secret in logs; no credits or paid keys. | `tests/proxy.test.ts`, `tests/public.test.ts` proxy routing/fallback/retry cases, `npm run build` |
 
 Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12 → G13**. No step is marked done until its verification passes.
 
@@ -122,7 +127,8 @@ src/
 │  ├─ page.tsx                           # handle lookup + analysis dashboard (server component)
 │  ├─ profile/[username]/page.tsx        # async params → resolveProfile → ProfileDashboard
 │  ├─ compare/page.tsx                   # async searchParams → resolveProfile → ComparisonTable
-│  └─ api/report/route.ts                # GET → resolveProfile → reportDocument → PDF Response
+│  ├─ api/report/route.ts                # GET → resolveProfile → reportDocument → PDF Response
+│  └─ api/instagram-proxy/route.ts       # authenticated, allowlisted fetch from the local home IP
 ├─ features/
 │  ├─ discovery/HandleLookup.tsx         # "use client" — validated username → /profile/[username]
 │  ├─ profile/ProfileDashboard.tsx       # ONE file: header + KPIs + estimate panel + charts + posts
@@ -132,7 +138,7 @@ src/
 │  ├─ data/types.ts                      # CreatorProfile, Post, Audience, MonthlyPoint
 │  ├─ data/seed.ts                       # 8 demo fixtures, source: "demo"
 │  ├─ data/adapter.ts                    # listProfiles / searchProfiles / getProfile / resolveProfile
-│  ├─ data/public.ts                     # public-page reader, ScrapingBee fallback, parsers, pk helpers, cache, error kinds
+│  ├─ data/public.ts                     # public-page reader, proxy bridge, parsers, pk helpers, cache, error kinds
 │  ├─ data/live.ts                       # optional Business Discovery fetch, mapping, cache, error kinds
 │  ├─ analytics/estimates.ts             # public-signal models + confidence/signals/methodology
 │  ├─ analytics/metrics.ts               # measured metrics + disclosed estimate fallback
@@ -148,14 +154,16 @@ src/
    ├─ report.test.ts
    ├─ logger.test.ts
    ├─ live.test.ts
-   └─ public.test.ts
+   ├─ public.test.ts
+   └─ proxy.test.ts
 ```
 
 **Rules**
 - Demo handles are served from local fixtures with no network calls.
-- Public mode performs one profile request plus up to 12 embed requests per uncached handle, four at a time. When the crawler page has no posts, one `web_profile_info` request is attempted; its inline likes/comments/views replace embed requests when available. With `SCRAPINGBEE_API_KEY` set, all three request types go through ScrapingBee first and embeds are capped at 3 per profile.
+- Public mode performs one profile request plus up to 12 embed requests per uncached handle, four at a time. When the crawler page has no posts, one `web_profile_info` request is attempted; its inline likes/comments/views replace embed requests when available. On Vercel, all three request types go through the authenticated local proxy first; there is no embed cap because the bridge has no per-request cost.
+- The local proxy requires `PROXY_SECRET` and allows only `https://www.instagram.com/{username}/`, `/p/{shortcode}/embed/captioned/`, and `/api/v1/users/web_profile_info/` targets. It sends the crawler user agent for HTML and `x-ig-app-id` for the JSON endpoint. Unauthorized, malformed, or non-Instagram targets are rejected before any outbound fetch.
 - The optional official API performs exactly one outbound `GET` to `graph.facebook.com` per uncached handle; failure falls back to the public reader.
-- The access token travels in the `Authorization: Bearer` header, never the query string, and is never logged.
+- The access token and `PROXY_SECRET` travel in `Authorization: Bearer` headers, never the query string, and are never logged.
 - `"use client"` limited to `ProfileDashboard` (charts) and `HandleLookup` (navigation + validation). Data loading stays in server components/route handlers.
 - Any failure (unknown handle, >4 handles, rate limit, network, PDF build error) becomes an `EmptyState`, `400`, or `500` **and** is logged — never an unhandled throw.
 - `core/data/public.ts` owns every public-page selector and embed parser; UI and metrics never parse HTML.
@@ -167,7 +175,7 @@ src/
 - Exact-username lookup only. Instagram does not expose global keyword or creator search through public pages.
 - Measured saves, reach, audience demographics, and follower history are unavailable. Fake-follower, authenticity, and 12-month-growth values are modeled estimates when public posts are visible.
 - Pinned posts are excluded from the recent-post sample so stale metrics do not skew engagement.
-- Public pages can rate-limit or change markup; failures surface as retryable messages. Datacenter IPs (including Vercel functions) are refused with HTTP 429; set `SCRAPINGBEE_API_KEY` for cloud deployments. Instagram can hide every post from logged-out pages: when both the HTML and `web_profile_info` fallback expose no posts, the UI shows an explicit `no-posts-notice` with `—` metrics instead of false zeros.
+- Public pages can rate-limit or change markup; failures surface as retryable messages. Datacenter IPs (including Vercel functions) are refused with HTTP 429, so the public deployment requires the local proxy bridge and the computer running it must stay on and connected. Instagram can hide every post from logged-out pages: when both the HTML and `web_profile_info` fallback expose no posts, the UI shows an explicit `no-posts-notice` with `—` metrics instead of false zeros.
 - This reader is unofficial and independent of the official API. When official credentials exist, the API is tried first.
 
 ---
@@ -176,23 +184,27 @@ src/
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `SCRAPINGBEE_API_KEY` | optional | Residential scraping key for cloud hosts whose IPs Instagram rate-limits; 10 credits/profile |
+| `INSTAGRAM_PROXY_URL` | required on Vercel | Cloudflare Tunnel URL of the local `/api/instagram-proxy` endpoint; unset locally for direct fetch |
+| `PROXY_SECRET` | required for the bridge | Shared secret set in both Vercel and local `.env.local`; never committed or logged |
 | `IG_ACCESS_TOKEN` | optional | Long-lived Facebook user token enabling the official API path |
 | `IG_BUSINESS_ACCOUNT_ID` | optional | Instagram Business Account ID performing the query |
 | `IG_GRAPH_VERSION` | optional | Graph API version, default `v27.0` |
 
-Local public lookup needs no environment variables. Cloud deployments need
-`SCRAPINGBEE_API_KEY`. `.env.example` documents both optional contracts; `.env.local`
-is never committed. The scraping key is read server-side only and is never logged.
+Local direct lookup needs no environment variables. The public Vercel deployment needs
+`INSTAGRAM_PROXY_URL` and `PROXY_SECRET`; the local server needs `PROXY_SECRET` to
+answer the proxy route. `.env.example` documents the contract; `.env.local` is never
+committed. The secret is read server-side only and is never logged. `README.md` contains
+the Cloudflare Tunnel setup, permanent hostname, Vercel variables, and smoke-test steps.
 
 ---
 
 ## [ORPHANS & PENDING]
 
 - No blocking items.
-- `[P11]` **Optional:** a live ScrapingBee smoke test with a real key and redeploy. The
-  adapter is fully mocked in tests; a real-key Vercel deployment confirms the provider
-  still returns Instagram profile JSON for the current target markup.
+- `[P13]` **Deployment operator step:** create the Cloudflare Tunnel hostname, set
+  `PROXY_SECRET` in local `.env.local` and Vercel, set `INSTAGRAM_PROXY_URL` in Vercel,
+  delete any stale `SCRAPINGBEE_API_KEY`, and smoke-test the public URL. This cannot be
+  completed from the repository alone because it requires the user's domain and secret.
 - `[P10]` **Optional:** a real-credential official-API smoke test. Public lookup and all
   mocked API paths are verified. The official path remains structurally tested but does
   not gate v1.2, because the product no longer requires Meta credentials.
@@ -203,10 +215,10 @@ is never committed. The scraping key is read server-side only and is never logge
 
 | Gate | Command / probe | Result |
 |---|---|---|
-| Unit + integration tests | `npm test` | **7 files, 42 tests passed** |
+| Unit + integration tests | `npm test` | **8 files, 48 tests passed** |
 | Static types | `npm run typecheck` | **exit 0** |
 | Lint | `npx eslint .` | **exit 0, zero warnings** |
-| Production build | `npm run build` | **exit 0**, routes `/`, `/profile/[username]`, `/compare`, `/api/report` |
+| Production build | `npm run build` | **exit 0**, routes `/`, `/profile/[username]`, `/compare`, `/api/report`, `/api/instagram-proxy` |
 | Home analysis dashboard | `GET /` | **200**, `analysis-dashboard` + `pipeline` + `metric-engine` + `source-panel` + `confidence-legend`; no “Demo profiles” grid or filter |
 | Public profile (real) | `GET /profile/trending.vibz.uae` | **200**, 59.1K followers, 453 posts, verified, 11 recent posts, ER **1.33%**, fake followers **5.9K (10%)**, authenticity **90.00% est.**, growth **-3.47% est.**, “Public web” badge and “High confidence” disclosure panel |
 | Public home copy | `GET /` | **200**, “Public web” badge, “No API keys” lookup copy |
@@ -217,8 +229,9 @@ is never committed. The scraping key is read server-side only and is never logge
 | PDF error path | `GET /api/report?handles=ghost.account` | **400**, `Unavailable handle(s)` |
 | Estimate units | `tests/estimates.test.ts` | strong/weak signal scoring, confidence levels, bounds, disclosure fields, private/empty/zero-follower guards, demo isolation |
 | Public reader units | mocked profile + embed HTML | mapping, pk helpers, cache, pinned skip, partial embed, private, 404, 200 shell, 429, API fallback, `web_profile_info` fallback with inline engagement, gated no-post profile |
-| Scraper adapter units | `tests/public.test.ts` with mocked `fetch` | premium-proxy URL, bearer header, `render_js=false`, `Spb-x-ig-app-id` forwarding for web-profile, scraper→direct fallback on 5xx, 3-embed cap, empty-shell/404 retry, no key in logs |
-| Vercel rate-limit diagnosis | `GET /profile/natgeo` on `https://trending-analytics.vercel.app` | **200 HTML** with “Instagram is temporarily limiting public lookups”; all live handles affected while local direct fetch works |
+| Proxy bridge units | `tests/public.test.ts` with mocked `fetch` | all three request types routed through `INSTAGRAM_PROXY_URL` with `Bearer` secret; direct fallback on proxy 5xx; empty-shell/404 retry; no secret in logs |
+| Proxy endpoint units | `tests/proxy.test.ts` | 503 without secret, 401 on wrong secret, 400 on non-Instagram or unexpected paths, crawler user agent, `x-ig-app-id` for `web_profile_info` |
+| Vercel rate-limit diagnosis | `GET /profile/natgeo` on `https://trending-analytics.vercel.app` | **200 HTML** with “Instagram is temporarily limiting public lookups”; datacenter egress gets 429 while local home IP works |
 | Gated public handle (real) | `GET /profile/the.matis` | **200**, 1M followers / 1,314 following / 1,546 posts from Open Graph; `no-posts-notice` shown, engagement `—`, no false `0.00%` |
 | Official API adapter | mocked `fetch` | URL, bearer header, mapping, `190`, `100`, public fallback all pass |
 | Public PDF safety | emoji/Arabic name + no audience | valid `%PDF-` document |
@@ -226,10 +239,11 @@ is never committed. The scraping key is read server-side only and is never logge
 
 ---
 
-## Deferred — out of v1.3 by explicit user decision (not orphans)
+## Deferred — out of v1.5 by explicit user decision (not orphans)
 
 - Audience demographics, saves, reach, and follower history for public accounts — unavailable from public pages and Business Discovery.
 - Keyword / creator discovery search — not offered by Instagram's public pages or API.
 - Authenticated account insights, saved lists, client-branded reports, billing.
 - Marketplace, campaigns, chat, escrow/payments (Modash/Collabstr scope deliberately excluded).
 - Arabic RTL / bilingual toggle, Playwright E2E suite.
+- Paid scraping providers — rejected; the local proxy bridge has no per-request cost.
