@@ -188,6 +188,33 @@ Also make sure no Worker route such as `analytics-proxy.instagram-analytics.com/
 still exists in Cloudflare. A Worker route takes precedence over the tunnel and can
 send Instagram requests from Cloudflare egress, which Instagram rejects with HTTP 429.
 
+### 3b. Test a VPS before migrating the proxy
+
+The tunnel keeps lookups working while this PC is on, but it is not always-on. Before
+moving the proxy to a VPS, prove that the VPS IP can read public Instagram data.
+Instagram pre-flags datacenter ranges, so this test is a hard gate, not a formality.
+
+On a fresh Ubuntu VPS (only TCP `22` open — do **not** open port `3000`):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Safiwa/Instagram-Analytics/main/scripts/egress-test.sh -o egress-test.sh
+chmod +x egress-test.sh
+./egress-test.sh
+```
+
+The script makes two requests with the exact headers from `src/core/data/public.ts`:
+the server-rendered profile page (primary source) and `web_profile_info` (fallback).
+It prints `PASS` (exit 0), `INCONCLUSIVE` (exit 2, try another known handle), or
+`FAIL` (exit 1, login wall / 429 / challenge — delete the VPS). A 429 on
+`web_profile_info` alone is informational; the profile page decides the verdict.
+
+Do not re-run it more than once every few minutes from the same IP.
+
+A low-cost option is Hetzner CPX02 (€5.49/mo in Helsinki, 1 vCPU / 1 GB RAM, hourly
+billing, no commitment). It is too small to build the Next.js app, but it is enough
+to run this test. If it passes, production needs a 4 GB plan such as CX23 or CPX22,
+or the proxy logic must be extracted into a standalone Node service.
+
 ### 4. Configure Vercel
 
 In **Project → Settings → Environment Variables**, add:
