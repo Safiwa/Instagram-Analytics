@@ -62,21 +62,24 @@ Keep it running on `http://localhost:3000`.
 ### 2b. Auto-start the local app at logon
 
 The tunnel forwards to `http://localhost:3000`, so the Next.js server must also be
-running after a reboot. Register a per-user Task Scheduler task to start it at logon:
+running after a reboot. After `npm run build`, register a per-user Task Scheduler
+task that starts the production server directly at logon:
 
 ```powershell
 $project = (Get-Location).Path
+$node = 'C:\Program Files\nodejs\node.exe'
+$next = 'C:\Users\safiw\Downloads\Default Project\node_modules\next\dist\bin\next'
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$command = '$listener = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if (-not $listener) { & ''C:\Program Files\nodejs\npm.cmd'' run dev }'
-$action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -Argument ('-NoProfile -WindowStyle Hidden -Command "' + $command + '"') -WorkingDirectory $project
+$action = New-ScheduledTaskAction -Execute $node -Argument ('"' + $next + '" start -H 127.0.0.1 -p 3000') -WorkingDirectory $project
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName 'Instagram Analytics Dev Server' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
 ```
 
-The task skips startup if port 3000 is already listening, so it will not create a
-duplicate server. Check or start it manually with:
+The task runs `next start`, not `next dev`, and restarts up to three times, one minute
+apart, if the server exits. Make sure port 3000 is free before registering it. Check
+or start it manually with:
 
 ```powershell
 Get-ScheduledTask -TaskName 'Instagram Analytics Dev Server'
