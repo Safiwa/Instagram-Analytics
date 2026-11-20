@@ -90,6 +90,24 @@ This starts the app only after you log in. The `cloudflared` service itself star
 before login, so a full recovery after reboot is: log in → app task starts → tunnel
 service forwards to `localhost:3000`.
 
+Because a console control event can still terminate the long-running task, also add a
+one-minute watchdog that starts it again if port 3000 is not listening:
+
+```powershell
+$dir = "$env:LOCALAPPDATA\InstagramAnalytics"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+@'
+$taskName = 'Instagram Analytics Dev Server'
+if (-not (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)) {
+  Start-ScheduledTask -TaskName $taskName
+}
+'@ | Set-Content "$dir\watchdog.ps1"
+
+schtasks /Create /SC MINUTE /MO 1 /TN "Instagram Analytics Watchdog" /TR "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $dir\watchdog.ps1" /F
+```
+
+This keeps recovery under one minute even if the main task exits unexpectedly.
+
 ### 3. Create the Cloudflare Tunnel
 
 You need a domain added to Cloudflare. Install `cloudflared`, then run:
