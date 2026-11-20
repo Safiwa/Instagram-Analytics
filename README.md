@@ -89,8 +89,19 @@ cloudflared service install
 ```
 
 On Windows the service runs as `LocalSystem` and looks for its config under
-`C:\Windows\System32\config\systemprofile\.cloudflared`. Copy `config.yml` and the
-tunnel JSON credential there if the service does not register a connection.
+`C:\Windows\System32\config\systemprofile\.cloudflared`. Copy the tunnel JSON credential
+there, write `config.yml` with a `credentials-file` path pointing to that same folder,
+and set the service `ImagePath` so it loads the config and starts the tunnel:
+
+```powershell
+$dst = "C:\Windows\System32\config\systemprofile\.cloudflared"
+New-Item -ItemType Directory -Force -Path $dst | Out-Null
+Copy-Item "$env:USERPROFILE\.cloudflared\<TUNNEL_ID>.json" "$dst\" -Force
+Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\cloudflared' -Name ImagePath -Value '"C:\Program Files (x86)\cloudflared\cloudflared.exe" --config=C:\Windows\System32\config\systemprofile\.cloudflared\config.yml tunnel run'
+Restart-Service cloudflared
+```
+
+Without the `--config` and `tunnel run` arguments the service exits with code `1067`.
 
 Also make sure no Worker route such as `analytics-proxy.instagram-analytics.com/*`
 still exists in Cloudflare. A Worker route takes precedence over the tunnel and can
