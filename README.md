@@ -124,7 +124,7 @@ Dim shell, script, command
 Set shell = CreateObject("WScript.Shell")
 script = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\InstagramAnalytics\watchdog.ps1"
 command = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & script & """"
-shell.Run command, 0, False
+WScript.Quit shell.Run(command, 0, True)
 '@ | Set-Content "$dir\watchdog.vbs"
 
 $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('//B "' + "$dir\watchdog.vbs" + '"')
@@ -135,8 +135,9 @@ Register-ScheduledTask -TaskName 'Instagram Analytics Watchdog' -Action $action 
 ```
 
 Do not create this task with `schtasks /Create`; its defaults add battery and idle
-restrictions that make the watchdog skip runs. The `wscript.exe //B` + `shell.Run ..., 0`
-wrapper keeps PowerShell fully hidden, so no command window flashes every minute.
+restrictions that make the watchdog skip runs. The `wscript.exe //B` + `shell.Run ..., 0, True`
+wrapper keeps PowerShell fully hidden and waits for it to finish, so no command window
+flashes every minute and Task Scheduler cannot cut off `Start-ScheduledTask`.
 This keeps recovery under one minute even if the main task exits unexpectedly.
 
 ### 3. Create the Cloudflare Tunnel
