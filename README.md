@@ -67,19 +67,34 @@ task that starts the production server directly at logon:
 
 ```powershell
 $project = (Get-Location).Path
-$node = 'C:\Program Files\nodejs\node.exe'
-$next = 'C:\Users\safiw\Downloads\Default Project\node_modules\next\dist\bin\next'
+$dir = "$env:LOCALAPPDATA\InstagramAnalytics"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-$action = New-ScheduledTaskAction -Execute $node -Argument ('"' + $next + '" start -H 127.0.0.1 -p 3000') -WorkingDirectory $project
+
+@'
+Option Explicit
+Dim shell, project, node, nextBin, command
+Set shell = CreateObject("WScript.Shell")
+project = "C:\Users\safiw\Downloads\Default Project"
+node = "C:\Program Files\nodejs\node.exe"
+nextBin = project & "\node_modules\next\dist\bin\next"
+shell.CurrentDirectory = project
+command = """" & node & """ """ & nextBin & """ start -H 127.0.0.1 -p 3000"
+WScript.Quit shell.Run(command, 0, True)
+'@ | Set-Content "$dir\app.vbs"
+
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('//B "' + "$dir\app.vbs" + '"') -WorkingDirectory $project
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 Register-ScheduledTask -TaskName 'Instagram Analytics Dev Server' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
 ```
 
-The task runs `next start`, not `next dev`, and restarts up to three times, one minute
-apart, if the server exits. Make sure port 3000 is free before registering it. Check
-or start it manually with:
+The task runs `next start` through the hidden `wscript.exe` launcher, so the
+`Running next.config.ts took ...` console window never appears when the watchdog
+restarts it. It uses `next start`, not `next dev`, and restarts up to three times,
+one minute apart, if the server exits. Make sure port 3000 is free before
+registering it. Check or start it manually with:
 
 ```powershell
 Get-ScheduledTask -TaskName 'Instagram Analytics Dev Server'
