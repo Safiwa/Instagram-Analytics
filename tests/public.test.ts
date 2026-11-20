@@ -477,6 +477,22 @@ describe("public Instagram reader", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("reports a marker-less proxy 404 as a bridge outage, not a missing profile", async () => {
+    vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
+    vi.stubEnv("PROXY_SECRET", "test-secret");
+    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 404 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const resolution = await resolveProfile("offline.bridge");
+
+    expect(resolution.status).toBe("error");
+    if (resolution.status !== "error") {
+      throw new Error("expected error");
+    }
+    expect(resolution.message).toContain("lookup bridge is offline");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to a direct fetch when the local proxy fails", async () => {
     vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
     vi.stubEnv("PROXY_SECRET", "test-secret");
@@ -597,7 +613,10 @@ describe("public Instagram reader", () => {
       if (target === "https://www.instagram.com/retry.404/") {
         calls += 1;
         if (calls === 1) {
-          return new Response("", { status: 404 });
+          return new Response("", {
+            status: 404,
+            headers: { "X-Instagram-Proxy": "ok" },
+          });
         }
         return htmlResponse(profileHtml({ username: "retry.404", media: [] }));
       }

@@ -2,6 +2,9 @@ import { log } from "../../../core/logging/logger";
 
 export const maxDuration = 30;
 
+const PROXY_MARKER = "X-Instagram-Proxy";
+const PROXY_MARKER_VALUE = "ok";
+
 const ALLOWED_HOSTS = new Set(["www.instagram.com", "i.instagram.com"]);
 const WEB_PROFILE_PATH = "/api/v1/users/web_profile_info/";
 const EMBED_PATTERN = /^\/p\/[A-Za-z0-9_-]+\/embed\/captioned\/$/;
@@ -20,6 +23,13 @@ const WEB_PROFILE_HEADERS = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
   "x-ig-app-id": "936619743392459",
 };
+
+function proxyJson(body: unknown, status: number): Response {
+  return Response.json(body, {
+    status,
+    headers: { [PROXY_MARKER]: PROXY_MARKER_VALUE },
+  });
+}
 
 function isAllowedTarget(target: string): boolean {
   let url: URL;
@@ -46,18 +56,16 @@ function isAllowedTarget(target: string): boolean {
 export async function GET(request: Request) {
   const secret = process.env.PROXY_SECRET?.trim();
   if (!secret) {
-    return Response.json({ error: "Instagram proxy is not configured." }, { status: 503 });
+    return proxyJson({ error: "Instagram proxy is not configured." }, 503);
   }
 
   if (request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return Response.json({ error: "Unauthorized." }, { status: 401 });
+    return proxyJson({ error: "Unauthorized." }, 401);
   }
 
   const target = new URL(request.url).searchParams.get("url") ?? "";
   if (!isAllowedTarget(target)) {
-    return Response.json({ error: "Only public Instagram profile and embed URLs are allowed." }, {
-      status: 400,
-    });
+    return proxyJson({ error: "Only public Instagram profile and embed URLs are allowed." }, 400);
   }
 
   const parsed = new URL(target);
@@ -78,6 +86,7 @@ export async function GET(request: Request) {
       headers: {
         "Content-Type": response.headers.get("content-type") ?? "text/html; charset=utf-8",
         "Cache-Control": "no-store",
+        [PROXY_MARKER]: PROXY_MARKER_VALUE,
       },
     });
   } catch (error) {
@@ -85,6 +94,6 @@ export async function GET(request: Request) {
       target,
       message: error instanceof Error ? error.message : "network",
     });
-    return Response.json({ error: "Could not reach Instagram." }, { status: 502 });
+    return proxyJson({ error: "Could not reach Instagram." }, 502);
   }
 }

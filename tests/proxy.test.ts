@@ -23,12 +23,14 @@ describe("local Instagram proxy route", () => {
     const response = await GET(proxyRequest("https://www.instagram.com/natgeo/"));
 
     expect(response.status).toBe(503);
+    expect(response.headers.get("x-instagram-proxy")).toBe("ok");
   });
 
   it("rejects requests without the shared secret", async () => {
     const response = await GET(proxyRequest("https://www.instagram.com/natgeo/", "wrong"));
 
     expect(response.status).toBe(401);
+    expect(response.headers.get("x-instagram-proxy")).toBe("ok");
   });
 
   it("rejects non-Instagram targets", async () => {
@@ -60,6 +62,7 @@ describe("local Instagram proxy route", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
+    expect(response.headers.get("x-instagram-proxy")).toBe("ok");
     expect(await response.text()).toBe("<html>profile</html>");
   });
 

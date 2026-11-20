@@ -199,7 +199,9 @@ endpoint returns a clear configuration error instead of pretending to send.
    receives server-rendered HTML. On Vercel, when `INSTAGRAM_PROXY_URL` is set, the
    request goes to the authenticated local proxy endpoint and is fetched from your
    home IP; direct fetch is the fallback. A transient 404, 429, or metadata-free page
-   is retried once before a handle is reported as missing.
+   is retried once before a handle is reported as missing. Every real proxy response
+   carries `X-Instagram-Proxy: ok`; a marker-less 404 comes from the tunnel/CDN with
+   no connected origin and is reported as “Profile unavailable”, not “Profile not found”.
 2. Parse the embedded JSON payload for name, bio, verification, privacy, follower
    count, following count, and up to 12 recent media nodes.
 3. If Instagram serves no preloaded posts, try the public `web_profile_info`
@@ -339,7 +341,8 @@ See `PROJECT_MAP.md` for architecture decisions, limitations, and the verificati
 | Symptom | Cause | Fix |
 |---|---|---|
 | “No public Instagram profile found” | Handle is misspelled, deleted, or not public | Check the spelling; private accounts show counts only |
-| “Instagram is temporarily limiting public lookups” | Instagram refused the server IP, or the local proxy bridge is offline | Check that your PC, local server, and Cloudflare Tunnel are running; verify `INSTAGRAM_PROXY_URL` and `PROXY_SECRET` in Vercel |
+| “The public lookup bridge is offline” | Cloudflare Tunnel is connected but no app is listening on `localhost:3000` | Check that the local app task/service is running; verify `INSTAGRAM_PROXY_URL` and `PROXY_SECRET` in Vercel |
+| “Instagram is temporarily limiting public lookups” | Instagram refused the server IP | Retry later; check the source IP reputation if it persists |
 | “Instagram returned a page that could not be read” | Page shape changed or a login wall appeared | Retry; if it persists, the public page markup changed |
 | “Instagram did not expose this account's posts” | Logged-out pages hid every post and the fallback endpoint was blocked | Retry in a few minutes; followers/following/post counts are still public |
 | Some public cells show `N/A` or `—` | Expected public-data limitation | Saves, audience, and measured history are unavailable; fake followers, authenticity, and growth appear as estimates only when posts are visible |

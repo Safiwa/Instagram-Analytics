@@ -43,49 +43,6 @@ export function isProxyConfigured(): boolean {
   return proxyEndpoint().length > 0;
 }
 
-async function fetchInstagram(
-  targetUrl: string,
-  headers: Record<string, string>,
-  timeoutMs: number,
-): Promise<Response> {
-  const endpoint = proxyEndpoint();
-
-  if (endpoint) {
-    try {
-      const url = new URL(endpoint);
-      url.searchParams.set("url", targetUrl);
-      const response = await fetch(url.toString(), {
-        headers: {
-          Authorization: `Bearer ${process.env.PROXY_SECRET?.trim() ?? ""}`,
-          Accept: "text/html,application/xhtml+xml,application/json",
-        },
-        cache: "no-store",
-        signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
-      });
-      log.info("instagram fetched through local proxy", {
-        target: targetUrl,
-        status: response.status,
-      });
-      if (response.status < 500 && ![401, 402, 403].includes(response.status)) {
-        return response;
-      }
-      log.warn("instagram local proxy rejected", { target: targetUrl, status: response.status });
-    } catch (error) {
-      log.warn("instagram local proxy failed", {
-        target: targetUrl,
-        message: error instanceof Error ? error.message : "network",
-      });
-      // Fall back to a direct fetch for local development without a tunnel.
-    }
-  }
-
-  return fetch(targetUrl, {
-    headers,
-    cache: "no-store",
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-}
-
 export type PublicErrorKind = "not_found" | "rate_limit" | "network" | "unreadable";
 
 export class PublicProfileError extends Error {
@@ -96,6 +53,70 @@ export class PublicProfileError extends Error {
     this.name = "PublicProfileError";
     this.kind = kind;
   }
+}
+
+const PROXY_MARKER = "x-instagram-proxy";
+
+async function fetchInstagram(
+  targetUrl: string,
+  headers: Record<string, string>,
+  timeoutMs: number,
+): Promise<Response> {
+  const endpoint = proxyEndpoint();
+
+  if (endpoint) {
+    let proxied: Response | null = null;
+    try {
+      const url = new URL(endpoint);
+      url.searchParams.set("url", targetUrl);
+      proxied = await fetch(url.toString(), {
+        headers: {
+          Authorization: `Bearer ${process.env.PROXY_SECRET?.trim() ?? ""}`,
+          Accept: "text/html,application/xhtml+xml,application/json",
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
+      });
+      log.info("instagram fetched through local proxy", {
+        target: targetUrl,
+        status: proxied.status,
+      });
+    } catch (error) {
+      log.warn("instagram local proxy failed", {
+        target: targetUrl,
+        message: error instanceof Error ? error.message : "network",
+      });
+      // Fall back to a direct fetch for local development without a tunnel.
+    }
+
+    if (proxied) {
+      // The proxy stamps every real response. A marker-less 404 comes from the
+      // tunnel/CDN when no origin is connected, not from Instagram.
+      if (proxied.status === 404 && proxied.headers.get(PROXY_MARKER) !== "ok") {
+        log.warn("instagram proxy bridge unavailable", {
+          target: targetUrl,
+          status: proxied.status,
+        });
+        throw new PublicProfileError(
+          "network",
+          "The public lookup bridge is offline. Try again shortly.",
+        );
+      }
+      if (proxied.status < 500 && ![401, 402, 403].includes(proxied.status)) {
+        return proxied;
+      }
+      log.warn("instagram local proxy rejected", {
+        target: targetUrl,
+        status: proxied.status,
+      });
+    }
+  }
+
+  return fetch(targetUrl, {
+    headers,
+    cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
+  });
 }
 
 type CaptionNode = { text?: string };
@@ -668,6 +689,9 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     try {
       return await fetchInstagram(profileUrl, HEADERS, REQUEST_TIMEOUT_MS);
     } catch (error) {
+      if (error instanceof PublicProfileError) {
+        throw error;
+      }
       log.error("instagram public fetch failed", {
         username: key,
         message: error instanceof Error ? error.message : "network",
