@@ -10,12 +10,25 @@ export type DigestSubscription = {
   trialEndsAt: string;
   status: "trial";
   lastSentAt?: string;
+  lastFollowers?: number;
+  lastEngagementRate?: number;
+};
+
+export type DigestSendUpdate = {
+  sentAt: string;
+  followers: number;
+  engagementRate: number;
 };
 
 type KvConfig = {
   accountId: string;
   namespaceId: string;
   token: string;
+};
+
+type WorkerConfig = {
+  url: string;
+  secret: string;
 };
 
 type SaveResult = "created" | "existing";
@@ -36,9 +49,30 @@ function kvConfig(): KvConfig | null {
   return { accountId, namespaceId, token };
 }
 
+function workerConfig(): WorkerConfig | null {
+  const url = process.env.DIGEST_WORKER_URL?.trim().replace(/\/$/, "");
+  const secret = process.env.DIGEST_WORKER_SECRET?.trim();
+  return url && secret ? { url, secret } : null;
+}
+
+function hasRemoteStore(): boolean {
+  return Boolean(workerConfig() || kvConfig());
+}
+
+export function isSubscriptionStoreConfigured(): boolean {
+  return hasRemoteStore() || process.env.VERCEL !== "1";
+}
+
 function keyFor(email: string, handle: string): string {
   const hash = createHash("sha256").update(`${email}:${handle}`).digest("hex");
   return `${KEY_PREFIX}${hash}`;
+}
+
+function workerHeaders(secret: string): HeadersInit {
+  return {
+    Authorization: `Bearer ${secret}`,
+    "Content-Type": "application/json",
+  };
 }
 
 async function kvRequest(config: KvConfig, resource: string, init: RequestInit = {}): Promise<Response> {
@@ -54,6 +88,10 @@ async function kvRequest(config: KvConfig, resource: string, init: RequestInit =
   });
 }
 
+function isSubscription(value: Partial<DigestSubscription>): value is DigestSubscription {
+  return Boolean(value.email && value.handle && value.trialEndsAt);
+}
+
 async function kvGet(config: KvConfig, key: string): Promise<DigestSubscription | null> {
   const response = await kvRequest(config, `/values/${encodeURIComponent(key)}`);
   if (response.status === 404) {
@@ -64,10 +102,7 @@ async function kvGet(config: KvConfig, key: string): Promise<DigestSubscription 
   }
 
   const value = (await response.json()) as Partial<DigestSubscription>;
-  if (!value.email || !value.handle || !value.trialEndsAt) {
-    return null;
-  }
-  return value as DigestSubscription;
+  return isSubscription(value) ? value : null;
 }
 
 async function kvPut(config: KvConfig, key: string, value: DigestSubscription): Promise<void> {
@@ -79,6 +114,119 @@ async function kvPut(config: KvConfig, key: string, value: DigestSubscription): 
   if (!response.ok) {
     throw new Error(`KV write failed with ${response.status}`);
   }
+}
+
+async function kvDelete(config: KvConfig, key: string): Promise<void> {
+  const response = await kvRequest(config, `/values/${encodeURIComponent(key)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`KV delete failed with ${response.status}`);
+  }
+}
+
+async function remoteGet(key: string): Promise<DigestSubscription | null> {
+  const worker = workerConfig();
+  if (worker) {
+    const url = new URL(worker.url);
+    url.searchParams.set("key", key);
+    const response = await fetch(url, {
+      headers: workerHeaders(worker.secret),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Digest store read failed with ${response.status}`);
+    }
+    const value = (await response.json()) as Partial<DigestSubscription>;
+    return isSubscription(value) ? value : null;
+  }
+
+  const config = kvConfig();
+  if (!config) {
+    throw new Error("No digest store configured.");
+  }
+  return kvGet(config, key);
+}
+
+async function remotePut(key: string, value: DigestSubscription): Promise<void> {
+  const worker = workerConfig();
+  if (worker) {
+    const url = new URL(worker.url);
+    url.searchParams.set("key", key);
+    const response = await fetch(url, {
+      method: "PUT",
+      headers: workerHeaders(worker.secret),
+      body: JSON.stringify(value),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      throw new Error(`Digest store write failed with ${response.status}`);
+    }
+    return;
+  }
+
+  const config = kvConfig();
+  if (!config) {
+    throw new Error("No digest store configured.");
+  }
+  await kvPut(config, key, value);
+}
+
+async function remoteDelete(key: string): Promise<void> {
+  const worker = workerConfig();
+  if (worker) {
+    const url = new URL(worker.url);
+    url.searchParams.set("key", key);
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: workerHeaders(worker.secret),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      throw new Error(`Digest store delete failed with ${response.status}`);
+    }
+    return;
+  }
+
+  const config = kvConfig();
+  if (!config) {
+    throw new Error("No digest store configured.");
+  }
+  await kvDelete(config, key);
+}
+
+async function remoteListKeys(): Promise<string[]> {
+  const worker = workerConfig();
+  if (worker) {
+    const url = new URL(`${worker.url}/list`);
+    const response = await fetch(url, {
+      headers: workerHeaders(worker.secret),
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!response.ok) {
+      throw new Error(`Digest store list failed with ${response.status}`);
+    }
+    const payload = (await response.json()) as { keys?: string[] };
+    return (payload.keys ?? []).filter((key) => key.startsWith(KEY_PREFIX));
+  }
+
+  const config = kvConfig();
+  if (!config) {
+    throw new Error("No digest store configured.");
+  }
+  const response = await kvRequest(config, `/keys?prefix=${encodeURIComponent(KEY_PREFIX)}&limit=1000`);
+  if (!response.ok) {
+    throw new Error(`KV list failed with ${response.status}`);
+  }
+  const payload = (await response.json()) as { result?: { name: string }[] };
+  return payload.result?.map((item) => item.name) ?? [];
 }
 
 function localPath(): string {
@@ -110,8 +258,8 @@ function withLocalLock<T>(operation: () => Promise<T>): Promise<T> {
   return result;
 }
 
-function isDue(subscription: DigestSubscription, now: Date): boolean {
-  if (subscription.status !== "trial") {
+export function isSubscriptionDue(subscription: DigestSubscription, now: Date): boolean {
+  if (subscription.status && subscription.status !== "trial") {
     return false;
   }
   if (new Date(subscription.trialEndsAt).getTime() <= now.getTime()) {
@@ -125,15 +273,14 @@ function isDue(subscription: DigestSubscription, now: Date): boolean {
 
 export async function saveSubscription(subscription: DigestSubscription): Promise<SaveResult> {
   const key = keyFor(subscription.email, subscription.handle);
-  const config = kvConfig();
 
-  if (config) {
-    const existing = await kvGet(config, key);
+  if (hasRemoteStore()) {
+    const existing = await remoteGet(key);
     if (existing) {
       return "existing";
     }
-    await kvPut(config, key, subscription);
-    log.info("weekly digest subscription stored", { handle: subscription.handle, store: "kv", result: "created" });
+    await remotePut(key, subscription);
+    log.info("weekly digest subscription stored", { handle: subscription.handle, store: "remote", result: "created" });
     return "created";
   }
 
@@ -149,33 +296,41 @@ export async function saveSubscription(subscription: DigestSubscription): Promis
 }
 
 export async function listDueSubscriptions(now = new Date()): Promise<DigestSubscription[]> {
-  const config = kvConfig();
+  let values: DigestSubscription[];
 
-  if (config) {
-    const response = await kvRequest(config, `/keys?prefix=${encodeURIComponent(KEY_PREFIX)}&limit=1000`);
-    if (!response.ok) {
-      throw new Error(`KV list failed with ${response.status}`);
-    }
-    const payload = (await response.json()) as { result?: { name: string }[] };
-    const keys = payload.result?.map((item) => item.name) ?? [];
-    const values = await Promise.all(keys.map((key) => kvGet(config, key)));
-    return values
-      .filter((item): item is DigestSubscription => Boolean(item))
-      .filter((item) => isDue(item, now))
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (hasRemoteStore()) {
+    const keys = await remoteListKeys();
+    const loaded = await Promise.all(keys.map((key) => remoteGet(key)));
+    values = loaded.filter((item): item is DigestSubscription => Boolean(item));
+  } else {
+    values = await readLocal();
   }
 
-  const values = await readLocal();
-  return values.filter((item) => isDue(item, now)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return values
+    .filter((item) => isSubscriptionDue(item, now))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-export async function markSent(subscription: DigestSubscription, sentAt: string): Promise<void> {
-  const updated: DigestSubscription = { ...subscription, lastSentAt: sentAt };
+export async function markSent(subscription: DigestSubscription, update: DigestSendUpdate): Promise<void> {
   const key = keyFor(subscription.email, subscription.handle);
-  const config = kvConfig();
+  let source = subscription;
 
-  if (config) {
-    await kvPut(config, key, updated);
+  if (hasRemoteStore()) {
+    const current = await remoteGet(key);
+    if (current) {
+      source = current;
+    }
+  }
+
+  const updated: DigestSubscription = {
+    ...source,
+    lastSentAt: update.sentAt,
+    lastFollowers: update.followers,
+    lastEngagementRate: update.engagementRate,
+  };
+
+  if (hasRemoteStore()) {
+    await remotePut(key, updated);
     return;
   }
 
@@ -184,6 +339,21 @@ export async function markSent(subscription: DigestSubscription, sentAt: string)
     const next = values.map((item) =>
       item.email === subscription.email && item.handle === subscription.handle ? updated : item,
     );
+    await writeLocal(next);
+  });
+}
+
+export async function deleteSubscription(email: string, handle: string): Promise<void> {
+  const key = keyFor(email, handle);
+
+  if (hasRemoteStore()) {
+    await remoteDelete(key);
+    return;
+  }
+
+  await withLocalLock(async () => {
+    const values = await readLocal();
+    const next = values.filter((item) => !(item.email === email && item.handle === handle));
     await writeLocal(next);
   });
 }

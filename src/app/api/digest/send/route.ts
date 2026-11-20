@@ -1,8 +1,13 @@
 import { computeMetrics } from "../../../../core/analytics/metrics";
 import { resolveProfile } from "../../../../core/data/adapter";
-import { buildDigestEmail } from "../../../../core/digest/email";
-import { listDueSubscriptions, markSent } from "../../../../core/digest/subscriptions";
+import { buildDigestEmail, SITE_URL } from "../../../../core/digest/email";
 import { isSmtpConfigured, sendDigestEmail } from "../../../../core/digest/smtp";
+import {
+  isSubscriptionStoreConfigured,
+  listDueSubscriptions,
+  markSent,
+} from "../../../../core/digest/subscriptions";
+import { createUnsubscribeToken } from "../../../../core/digest/tokens";
 import { log } from "../../../../core/logging/logger";
 
 export const runtime = "nodejs";
@@ -18,6 +23,9 @@ export async function GET(request: Request) {
   }
   if (!isSmtpConfigured()) {
     return Response.json({ error: "SMTP is not configured." }, { status: 503 });
+  }
+  if (!isSubscriptionStoreConfigured()) {
+    return Response.json({ error: "Subscription storage is not configured." }, { status: 503 });
   }
 
   const now = new Date();
@@ -53,16 +61,31 @@ export async function GET(request: Request) {
       }
 
       const metrics = computeMetrics(resolved.profile);
+      const unsubscribe = new URL("/api/digest/unsubscribe", SITE_URL);
+      unsubscribe.searchParams.set(
+        "token",
+        createUnsubscribeToken(subscription.email, subscription.handle, cronSecret),
+      );
+
       const content = buildDigestEmail({
         handle: subscription.handle,
         displayName: resolved.profile.displayName,
         followers: resolved.profile.followers,
         metrics,
         sentAt: now,
+        previous: {
+          followers: subscription.lastFollowers,
+          engagementRate: subscription.lastEngagementRate,
+        },
+        unsubscribeUrl: unsubscribe.toString(),
       });
 
       await sendDigestEmail(subscription.email, content.subject, content.text, content.html);
-      await markSent(subscription, now.toISOString());
+      await markSent(subscription, {
+        sentAt: now.toISOString(),
+        followers: resolved.profile.followers,
+        engagementRate: metrics.engagementRate,
+      });
       sent += 1;
     } catch (error) {
       failed += 1;

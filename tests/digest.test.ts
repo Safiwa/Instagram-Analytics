@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ProfileMetrics } from "../src/core/analytics/metrics";
 import { buildDigestEmail } from "../src/core/digest/email";
+import { isSubscriptionDue, type DigestSubscription } from "../src/core/digest/subscriptions";
+import { createUnsubscribeToken, readUnsubscribeToken } from "../src/core/digest/tokens";
 import { trialEndsAt, validateSignup } from "../src/core/digest/validation";
 
 const metrics = {
@@ -19,6 +21,8 @@ const metrics = {
   estimateSignals: [],
   estimateMethodology: "Public signals",
 } as ProfileMetrics;
+
+const unsubscribeUrl = "https://www.instagram-analytics.com/api/digest/unsubscribe?token=abc.def";
 
 describe("weekly digest signup validation", () => {
   it("normalizes a valid signup", () => {
@@ -64,13 +68,69 @@ describe("weekly digest email", () => {
       followers: 268000000,
       metrics,
       sentAt: new Date("2026-11-23T08:00:00.000Z"),
+      unsubscribeUrl,
     });
 
     expect(email.subject).toContain("@natgeo");
     expect(email.text).toContain("Engagement rate: 1.23%");
     expect(email.text).toContain("12-month follower growth: 4.56% (Est.)");
     expect(email.text).toContain("https://www.instagram-analytics.com/profile/natgeo");
+    expect(email.text).toContain(unsubscribeUrl);
     expect(email.html).toContain("National &lt;Geographic&gt;");
     expect(email.html).toContain("4.56% (Est.)");
+    expect(email.html).toContain("First report - comparison starts next week");
+  });
+
+  it("shows follower decrease and engagement change since the previous report", () => {
+    const email = buildDigestEmail({
+      handle: "natgeo",
+      displayName: "National Geographic",
+      followers: 268000000,
+      metrics,
+      sentAt: new Date("2026-11-30T08:00:00.000Z"),
+      previous: { followers: 268100000, engagementRate: 1.5 },
+      unsubscribeUrl,
+    });
+
+    expect(email.text).toContain("Followers vs last week: -100K (-0.04%)");
+    expect(email.text).toContain("Engagement rate vs last week: -0.27 pp");
+    expect(email.html).toContain("Followers vs last week");
+    expect(email.html).toContain("-100K (-0.04%)");
+    expect(email.html).toContain("-0.27 pp");
+  });
+});
+
+describe("weekly digest schedule", () => {
+  const subscription: DigestSubscription = {
+    email: "user@example.com",
+    handle: "natgeo",
+    createdAt: "2026-11-01T00:00:00.000Z",
+    trialEndsAt: "2026-12-01T00:00:00.000Z",
+    status: "trial",
+  };
+
+  it("stops sending after the 30-day trial", () => {
+    expect(isSubscriptionDue(subscription, new Date("2027-01-01T00:00:00.000Z"))).toBe(false);
+  });
+
+  it("keeps the six-day guard between sends", () => {
+    const recent: DigestSubscription = {
+      ...subscription,
+      lastSentAt: "2026-11-19T00:00:00.000Z",
+    };
+    expect(isSubscriptionDue(recent, new Date("2026-11-20T00:00:00.000Z"))).toBe(false);
+    expect(isSubscriptionDue(recent, new Date("2026-11-26T00:00:00.000Z"))).toBe(true);
+  });
+});
+
+describe("weekly digest unsubscribe token", () => {
+  it("round-trips an identity and rejects a wrong secret", () => {
+    const token = createUnsubscribeToken("user@example.com", "natgeo", "test-secret");
+    expect(readUnsubscribeToken(token, "test-secret")).toEqual({
+      email: "user@example.com",
+      handle: "natgeo",
+    });
+    expect(readUnsubscribeToken(token, "wrong-secret")).toBeNull();
+    expect(readUnsubscribeToken("not-a-token", "test-secret")).toBeNull();
   });
 });
