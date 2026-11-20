@@ -46,7 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             </nav>
 
             <div className="mt-auto rounded-xl border border-white/10 bg-white/5 p-4 text-xs leading-relaxed text-slate-400">
-              {liveConfigured ? "Public web + official API" : "Public web workspace"}
+              {liveConfigured ? "Analytics + official API" : "Analytics workspace"}
               <br />
               Username-only lookup
               <br />
@@ -64,11 +64,6 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <p className="hidden text-sm font-medium text-slate-500 lg:block">
                 Instagram intelligence workspace
               </p>
-              <span
-                className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700"
-              >
-                {liveConfigured ? "Public + API" : "Public web"}
-              </span>
             </header>
 
             <div className="mx-auto max-w-7xl px-6 py-8">{children}</div>

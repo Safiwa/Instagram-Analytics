@@ -1,8 +1,8 @@
 # PROJECT_MAP.md — Instagram Analytics (v1.5)
 
-> Snapshot: **2026-11-19** (system date confirmed via `shell`)  
-> Phase: **COMPLETE for v1.5** — public reader, free local proxy bridge for cloud hosts, optional official API, demo fixtures, and disclosed public-signal estimates.  
-> Locked user decisions: **no Meta keys required** · **public Instagram handle lookup** · **analysis + comparison + PDF report** · **English / LTR** · **no paid scraping credits** · **Vercel + authenticated local proxy through a free Cloudflare Tunnel**.  
+> Snapshot: **2026-11-20** (system date confirmed via `shell`)  
+> Phase: **COMPLETE for v1.5** — public reader, free local proxy bridge for cloud hosts, optional official API, demo fixtures, disclosed public-signal estimates, and the free 30-day weekly digest.  
+> Locked user decisions: **no Meta keys required** · **public Instagram handle lookup** · **analysis + comparison + PDF report** · **English / LTR** · **no paid scraping credits** · **Vercel + authenticated local proxy through a free Cloudflare Tunnel** · **weekly digest via generic SMTP**.  
 > Reference positioning: Not Just Analytics = functional core; Modash + Collabstr = visual/dashboard inspiration only.
 
 ---
@@ -21,6 +21,7 @@ All versions read from official registries on 2026-11-18: `registry.npmjs.org`, 
 | CSS processing | `postcss` | `8.5.33` | npm latest | no |
 | Charts | `recharts` | `3.11.0` | npm + GitHub `v3.11.0`, 2026-11-17 | no |
 | PDF | `pdf-lib` | `1.17.1` | npm + GitHub `v1.17.1` (last stable, still supported) | no |
+| Email | `nodemailer` + `@types/nodemailer` | `10.6.0` + `8.0.2` | npm latest | no |
 | Icons | `lucide-react` | `1.75.0` | npm + GitHub `1.75.0`, 2026-11-18 | no |
 | Tests | `vitest` | `5.1.1` | npm + GitHub `v5.1.1`, 2026-11-17 | no |
 | Lint | `eslint` + `eslint-config-next` | `10.15.0` + `16.4.6` | npm latest | no |
@@ -111,8 +112,9 @@ Fixture anchor `nora.style`: `followers=10000`, `fakeFollowers=350`, followers `
 | **G11** | Disclosed public-signal estimates | Fake followers, authenticity, and 12-month growth appear for any public/official profile with visible posts; `Est.` badge, confidence, methodology, and signals are disclosed; demo fixtures keep exact values; private/no-post accounts return `null`/`—`. | `tests/estimates.test.ts`, updated adapter/metrics/report tests, route smoke |
 | **G12** | Resilient public fetch | When crawler HTML has no posts, try `web_profile_info` and use inline engagement; show an explicit no-posts notice with `—` instead of zeros when neither source exposes posts. | `tests/public.test.ts` fallback + gated-account cases, route smoke |
 | **G13** | Free cloud-host proxy bridge | When `INSTAGRAM_PROXY_URL` is set, all profile/embed/web-profile requests go to the authenticated `/api/instagram-proxy` endpoint through a Cloudflare Tunnel; `PROXY_SECRET` is required in both environments; the endpoint allowlists only public Instagram profile/`web_profile_info`/embed URLs; 401/402/403/5xx and network failures fall back to direct fetch; transient 404/429/empty-shell responses retry once; no secret in logs; no credits or paid keys. | `tests/proxy.test.ts`, `tests/public.test.ts` proxy routing/fallback/retry cases, `npm run build` |
+| **G14** | Weekly digest + 30-day trial | Home page email/handle section with consent and honeypot; 30-day trial stored per email+handle; cron-only Monday sender reuses one profile resolution per handle; email includes engagement rate and follower growth with `Est.` label; SMTP and KV settings keep secrets server-side; top header no longer shows the “Public web” badge. | `tests/digest.test.ts`, route list from `npm run build`, `npx eslint .` |
 
-Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12 → G13**. No step is marked done until its verification passes.
+Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12 → G13 → G14**. No step is marked done until its verification passes.
 
 ---
 
@@ -128,11 +130,14 @@ src/
 │  ├─ profile/[username]/page.tsx        # async params → resolveProfile → ProfileDashboard
 │  ├─ compare/page.tsx                   # async searchParams → resolveProfile → ComparisonTable
 │  ├─ api/report/route.ts                # GET → resolveProfile → reportDocument → PDF Response
-│  └─ api/instagram-proxy/route.ts       # authenticated, allowlisted fetch from the local home IP
+│  ├─ api/instagram-proxy/route.ts       # authenticated, allowlisted fetch from the local home IP
+│  ├─ api/digest/subscribe/route.ts      # POST → validate → store 30-day trial signup
+│  └─ api/digest/send/route.ts           # CRON_SECRET-only Monday sender
 ├─ features/
 │  ├─ discovery/HandleLookup.tsx         # "use client" — validated username → /profile/[username]
 │  ├─ profile/ProfileDashboard.tsx       # ONE file: header + KPIs + estimate panel + charts + posts
 │  ├─ comparison/ComparisonTable.tsx     # ONE file: table + notices + estimate-basis row
+│  ├─ digest/WeeklyDigestSignup.tsx      # "use client" — email + handle + consent → /api/digest/subscribe
 │  └─ report/reportDocument.ts           # pdf-lib builder, ASCII-safe, estimate notes
 ├─ core/
 │  ├─ data/types.ts                      # CreatorProfile, Post, Audience, MonthlyPoint
@@ -142,6 +147,10 @@ src/
 │  ├─ data/live.ts                       # optional Business Discovery fetch, mapping, cache, error kinds
 │  ├─ analytics/estimates.ts             # public-signal models + confidence/signals/methodology
 │  ├─ analytics/metrics.ts               # measured metrics + disclosed estimate fallback
+│  ├─ digest/validation.ts               # signup validation, normalization, 30-day trial end
+│  ├─ digest/subscriptions.ts            # local JSON or Cloudflare KV REST signup store
+│  ├─ digest/email.ts                    # digest subject/text/html builder
+│  ├─ digest/smtp.ts                     # nodemailer transport from env, no secret logging
 │  ├─ format.ts                          # nullable-aware compact numbers, percentages, dates
 │  └─ logging/logger.ts                  # bounded async queue, levels info/warn/error
 ├─ components/
@@ -155,13 +164,15 @@ src/
    ├─ logger.test.ts
    ├─ live.test.ts
    ├─ public.test.ts
-   └─ proxy.test.ts
+   ├─ proxy.test.ts
+   └─ digest.test.ts
 ```
 
 **Rules**
 - Demo handles are served from local fixtures with no network calls.
 - Public mode performs one profile request plus up to 12 embed requests per uncached handle, four at a time. When the crawler page has no posts, one `web_profile_info` request is attempted; its inline likes/comments/views replace embed requests when available. On Vercel, all three request types go through the authenticated local proxy first; there is no embed cap because the bridge has no per-request cost.
 - The local proxy requires `PROXY_SECRET` and allows only `https://www.instagram.com/{username}/`, `/p/{shortcode}/embed/captioned/`, and `/api/v1/users/web_profile_info/` targets. It sends the crawler user agent for HTML and `x-ig-app-id` for the JSON endpoint. Unauthorized, malformed, or non-Instagram targets are rejected before any outbound fetch.
+- Weekly digest signups are keyed by a SHA-256 hash of email + handle; raw emails are never logged. The sender resolves each distinct handle once per run and skips subscriptions whose 30-day trial has ended or whose last send is younger than six days. SMTP credentials and `CRON_SECRET` stay server-side.
 - The optional official API performs exactly one outbound `GET` to `graph.facebook.com` per uncached handle; failure falls back to the public reader.
 - The access token and `PROXY_SECRET` travel in `Authorization: Bearer` headers, never the query string, and are never logged.
 - `"use client"` limited to `ProfileDashboard` (charts) and `HandleLookup` (navigation + validation). Data loading stays in server components/route handlers.
@@ -189,12 +200,18 @@ src/
 | `IG_ACCESS_TOKEN` | optional | Long-lived Facebook user token enabling the official API path |
 | `IG_BUSINESS_ACCOUNT_ID` | optional | Instagram Business Account ID performing the query |
 | `IG_GRAPH_VERSION` | optional | Graph API version, default `v27.0` |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` | required for digest delivery | SMTP account used by `/api/digest/send`; `SMTP_FROM` defaults to `SMTP_USER` |
+| `SMTP_SECURE` | optional | Force implicit TLS; port `465` enables it automatically |
+| `CRON_SECRET` | required for digest delivery | Vercel Cron sends `Authorization: Bearer $CRON_SECRET` to `/api/digest/send` |
+| `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` / `DIGEST_KV_NAMESPACE_ID` | required on Vercel | Cloudflare KV REST access for durable signup storage |
 
 Local direct lookup needs no environment variables. The public Vercel deployment needs
 `INSTAGRAM_PROXY_URL` and `PROXY_SECRET`; the local server needs `PROXY_SECRET` to
-answer the proxy route. `.env.example` documents the contract; `.env.local` is never
-committed. The secret is read server-side only and is never logged. `README.md` contains
-the Cloudflare Tunnel setup, permanent hostname, Vercel variables, and smoke-test steps.
+answer the proxy route. Weekly digest delivery additionally needs the SMTP, cron, and
+KV variables. `.env.example` documents the contract; `.env.local` is never committed.
+Secrets are read server-side only and are never logged. `README.md` contains the
+Cloudflare Tunnel setup, permanent hostname, Vercel variables, digest setup, and
+smoke-test steps.
 
 ---
 
@@ -205,20 +222,23 @@ the Cloudflare Tunnel setup, permanent hostname, Vercel variables, and smoke-tes
   `PROXY_SECRET` in local `.env.local` and Vercel, set `INSTAGRAM_PROXY_URL` in Vercel,
   delete any stale `SCRAPINGBEE_API_KEY`, and smoke-test the public URL. This cannot be
   completed from the repository alone because it requires the user's domain and secret.
+- `[P14]` **Deployment operator step:** add SMTP, `CRON_SECRET`, and Cloudflare KV variables
+  to Vercel to activate the weekly digest sender. The form and signup storage work
+  without them, but no email is sent until delivery is configured.
 - `[P10]` **Optional:** a real-credential official-API smoke test. Public lookup and all
   mocked API paths are verified. The official path remains structurally tested but does
   not gate v1.2, because the product no longer requires Meta credentials.
 
 ---
 
-## Verification log — 2026-11-19
+## Verification log — 2026-11-20
 
 | Gate | Command / probe | Result |
 |---|---|---|
-| Unit + integration tests | `npm test` | **8 files, 48 tests passed** |
+| Unit + integration tests | `npm test` | **9 files, 55 tests passed** |
 | Static types | `npm run typecheck` | **exit 0** |
 | Lint | `npx eslint .` | **exit 0, zero warnings** |
-| Production build | `npm run build` | **exit 0**, routes `/`, `/profile/[username]`, `/compare`, `/api/report`, `/api/instagram-proxy` |
+| Production build | `npm run build` | **exit 0**, routes `/`, `/profile/[username]`, `/compare`, `/api/report`, `/api/instagram-proxy`, `/api/digest/subscribe`, `/api/digest/send` |
 | Home analysis dashboard | `GET /` | **200**, `analysis-dashboard` + `pipeline` + `metric-engine` + `source-panel` + `confidence-legend`; no “Demo profiles” grid or filter |
 | Public profile (real) | `GET /profile/trending.vibz.uae` | **200**, 59.1K followers, 453 posts, verified, 11 recent posts, ER **1.33%**, fake followers **5.9K (10%)**, authenticity **90.00% est.**, growth **-3.47% est.**, “Public web” badge and “High confidence” disclosure panel |
 | Public home copy | `GET /` | **200**, “Public web” badge, “No API keys” lookup copy |
@@ -231,6 +251,8 @@ the Cloudflare Tunnel setup, permanent hostname, Vercel variables, and smoke-tes
 | Public reader units | mocked profile + embed HTML | mapping, pk helpers, cache, pinned skip, partial embed, private, 404, 200 shell, 429, API fallback, `web_profile_info` fallback with inline engagement, gated no-post profile |
 | Proxy bridge units | `tests/public.test.ts` with mocked `fetch` | all three request types routed through `INSTAGRAM_PROXY_URL` with `Bearer` secret; direct fallback on proxy 5xx; empty-shell/404 retry; no secret in logs |
 | Proxy endpoint units | `tests/proxy.test.ts` | 503 without secret, 401 on wrong secret, 400 on non-Instagram or unexpected paths, crawler user agent, `x-ig-app-id` for `web_profile_info` |
+| Weekly digest units | `tests/digest.test.ts` | email/handle normalization, invalid values, consent, honeypot, 30-day trial end, estimated-growth label, HTML escaping, profile URL |
+| Weekly digest config guards | code review | `/api/digest/send` returns 503 without `CRON_SECRET` or SMTP config; signup route stores only after validation and never logs email addresses |
 | Vercel rate-limit diagnosis | `GET /profile/natgeo` on `https://www.instagram-analytics.com` | **200 HTML** with “Instagram is temporarily limiting public lookups”; datacenter egress gets 429 while local home IP works |
 | Gated public handle (real) | `GET /profile/the.matis` | **200**, 1M followers / 1,314 following / 1,546 posts from Open Graph; `no-posts-notice` shown, engagement `—`, no false `0.00%` |
 | Official API adapter | mocked `fetch` | URL, bearer header, mapping, `190`, `100`, public fallback all pass |

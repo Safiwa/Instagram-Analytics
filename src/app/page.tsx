@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { HandleLookup } from "../features/discovery/HandleLookup";
+import { WeeklyDigestSignup } from "../features/digest/WeeklyDigestSignup";
 
 type PipelineStep = {
   icon: LucideIcon;
@@ -271,6 +272,8 @@ export default function Home() {
           ))}
         </div>
       </section>
+
+      <WeeklyDigestSignup />
 
       <section className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <Link

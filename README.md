@@ -12,7 +12,8 @@ matches `localhost`. The home page is an analysis dashboard that explains the pi
 metric engine, data sources, and confidence levels. Eight demo profiles remain
 available by direct URL for offline testing. Public accounts with visible posts also
 get clearly labeled fake-follower, authenticity, and 12-month-growth estimates derived
-from public signals.
+from public signals. The home page also offers a free 30-day weekly digest: subscribers
+get a Monday email with the current engagement rate and follower growth for one handle.
 
 ## Quick start
 
@@ -84,8 +85,12 @@ Run and install it as a Windows service so it starts automatically:
 
 ```powershell
 cloudflared tunnel --config C:\Users\<YOU>\.cloudflared\config.yml run trending-analytics-proxy
-cloudflared --config C:\Users\<YOU>\.cloudflared\config.yml service install
+cloudflared service install
 ```
+
+On Windows the service runs as `LocalSystem` and looks for its config under
+`C:\Windows\System32\config\systemprofile\.cloudflared`. Copy `config.yml` and the
+tunnel JSON credential there if the service does not register a connection.
 
 ### 4. Configure Vercel
 
@@ -112,6 +117,31 @@ request plus a few embed requests.
 | `/profile/[username]` | KPIs, estimate disclosure, interactions, recent posts, and public-data notices |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison, maximum four accounts |
 | `/api/report?handles=a,b` | Downloadable PDF report |
+| `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
+| `/api/digest/send` | Cron-only weekly digest sender |
+
+## Weekly digest (free 30-day trial)
+
+The home page has a signup form for a Monday email containing the current engagement
+rate and 12-month follower growth for one Instagram handle. Signups are idempotent per
+email + handle pair, require explicit consent, and include a honeypot field. The trial
+ends 30 days after signup.
+
+For local development, signups are stored in `.data/digest-subscriptions.json`. On
+Vercel, set these variables:
+
+| Variable | Purpose |
+|---|---|
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | SMTP account used to send the digest. `SMTP_FROM` defaults to `SMTP_USER`. |
+| `SMTP_SECURE` | Set `true` for implicit TLS; port `465` enables it automatically. |
+| `CRON_SECRET` | Shared secret for the Vercel Cron request to `/api/digest/send`. |
+| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `DIGEST_KV_NAMESPACE_ID` | Cloudflare KV REST access for durable signup storage. |
+
+`vercel.json` schedules `/api/digest/send` at 08:00 UTC every Monday. The sender reads
+due subscriptions, reuses one profile resolution per handle, sends via SMTP, and marks
+each subscription as sent. Follower growth is labeled `Est.` when it is modeled. No
+email is sent if SMTP or `CRON_SECRET` is missing, and the endpoint returns a clear
+configuration error instead of pretending to send.
 
 ## How public lookup works
 
