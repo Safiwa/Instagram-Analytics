@@ -92,6 +92,10 @@ On Windows the service runs as `LocalSystem` and looks for its config under
 `C:\Windows\System32\config\systemprofile\.cloudflared`. Copy `config.yml` and the
 tunnel JSON credential there if the service does not register a connection.
 
+Also make sure no Worker route such as `analytics-proxy.instagram-analytics.com/*`
+still exists in Cloudflare. A Worker route takes precedence over the tunnel and can
+send Instagram requests from Cloudflare egress, which Instagram rejects with HTTP 429.
+
 ### 4. Configure Vercel
 
 In **Project → Settings → Environment Variables**, add:

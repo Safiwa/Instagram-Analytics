@@ -244,6 +244,8 @@ smoke-test steps.
 | Production build | `npm run build` | **exit 0**, routes `/`, `/profile/[username]`, `/compare`, `/api/report`, `/api/instagram-proxy`, `/api/digest/subscribe`, `/api/digest/send`, `/api/digest/unsubscribe` |
 | Home analysis dashboard | `GET /` | **200**, `analysis-dashboard` + `pipeline` + `metric-engine` + `source-panel` + `confidence-legend`; no “Demo profiles” grid or filter |
 | Public profile (real) | `GET /profile/trending.vibz.uae` | **200**, 59.1K followers, 453 posts, verified, 11 recent posts, ER **1.33%**, fake followers **5.9K (10%)**, authenticity **90.00% est.**, growth **-3.47% est.**, “Public web” badge and “High confidence” disclosure panel |
+| Public profile (real) | `GET /profile/natgeo` | **200**, real National Geographic public data; no “temporarily limiting” notice after removing the stale Worker route and restoring the tunnel connection |
+| Public proxy bridge | `GET https://analytics-proxy.instagram-analytics.com/api/instagram-proxy?url=...` with `PROXY_SECRET` | **200**, Instagram HTML returned from the home IP through the tunnel; stale Worker route removed after it caused HTTP 429 |
 | Public home copy | `GET /` | **200**, no header source badge, weekly digest signup visible, “No API keys” lookup copy |
 | Public comparison with estimates | `GET /compare?handles=trending.vibz.uae,nora.style` | **200**, public + demo rows, `5.9K est.`, `-3.47% est.`, `90.00% est.`, `High confidence`, `Demo fixture`, `Estimate basis` |
 | Public PDF with estimates | `GET /api/report?handles=trending.vibz.uae,nora.style` | **200**, `application/pdf`, **2,431 bytes**, expected filename; builder emits per-profile confidence and footer disclaimer |
