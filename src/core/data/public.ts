@@ -90,9 +90,9 @@ async function fetchInstagram(
     }
 
     if (proxied) {
-      // The proxy stamps every real response. A marker-less 404 comes from the
-      // tunnel/CDN when no origin is connected, not from Instagram.
-      if (proxied.status === 404 && proxied.headers.get(PROXY_MARKER) !== "ok") {
+      // The proxy stamps every real response. A marker-less response comes from
+      // the tunnel/CDN when no origin is connected, not from Instagram.
+      if (proxied.headers.get(PROXY_MARKER) !== "ok") {
         log.warn("instagram proxy bridge unavailable", {
           target: targetUrl,
           status: proxied.status,

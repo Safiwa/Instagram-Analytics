@@ -200,8 +200,8 @@ endpoint returns a clear configuration error instead of pretending to send.
    request goes to the authenticated local proxy endpoint and is fetched from your
    home IP; direct fetch is the fallback. A transient 404, 429, or metadata-free page
    is retried once before a handle is reported as missing. Every real proxy response
-   carries `X-Instagram-Proxy: ok`; a marker-less 404 comes from the tunnel/CDN with
-   no connected origin and is reported as “Profile unavailable”, not “Profile not found”.
+   carries `X-Instagram-Proxy: ok`; any marker-less response comes from the tunnel/CDN
+   with no connected origin and is reported as “Profile unavailable”, not “Profile not found”.
 2. Parse the embedded JSON payload for name, bio, verification, privacy, follower
    count, following count, and up to 12 recent media nodes.
 3. If Instagram serves no preloaded posts, try the public `web_profile_info`

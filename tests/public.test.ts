@@ -118,7 +118,10 @@ function embedHtml(likes: number, comments: number, views?: number): string {
 }
 
 function htmlResponse(body: string): Response {
-  return new Response(body, { status: 200, headers: { "Content-Type": "text/html" } });
+  return new Response(body, {
+    status: 200,
+    headers: { "Content-Type": "text/html", "X-Instagram-Proxy": "ok" },
+  });
 }
 
 function webProfileJson(fixture: ProfileFixture): Response {
@@ -154,7 +157,10 @@ function webProfileJson(fixture: ProfileFixture): Response {
         },
       },
     }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json", "X-Instagram-Proxy": "ok" },
+    },
   );
 }
 
@@ -477,21 +483,24 @@ describe("public Instagram reader", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("reports a marker-less proxy 404 as a bridge outage, not a missing profile", async () => {
-    vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
-    vi.stubEnv("PROXY_SECRET", "test-secret");
-    const fetchMock = vi.fn().mockResolvedValue(new Response("", { status: 404 }));
-    vi.stubGlobal("fetch", fetchMock);
+  it.each([404, 502])(
+    "reports a marker-less proxy %i as a bridge outage, not a missing profile",
+    async (status) => {
+      vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
+      vi.stubEnv("PROXY_SECRET", "test-secret");
+      const fetchMock = vi.fn().mockResolvedValue(new Response("", { status }));
+      vi.stubGlobal("fetch", fetchMock);
 
-    const resolution = await resolveProfile("offline.bridge");
+      const resolution = await resolveProfile("offline.bridge");
 
-    expect(resolution.status).toBe("error");
-    if (resolution.status !== "error") {
-      throw new Error("expected error");
-    }
-    expect(resolution.message).toContain("lookup bridge is offline");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+      expect(resolution.status).toBe("error");
+      if (resolution.status !== "error") {
+        throw new Error("expected error");
+      }
+      expect(resolution.message).toContain("lookup bridge is offline");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("falls back to a direct fetch when the local proxy fails", async () => {
     vi.stubEnv("INSTAGRAM_PROXY_URL", "https://analytics.example.com/api/instagram-proxy");
@@ -501,7 +510,10 @@ describe("public Instagram reader", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
       if (url.hostname === "analytics.example.com") {
-        return new Response("service unavailable", { status: 500 });
+        return new Response("service unavailable", {
+          status: 500,
+          headers: { "X-Instagram-Proxy": "ok" },
+        });
       }
       if (url.href === "https://www.instagram.com/direct.fallback/") {
         return htmlResponse(profileHtml({ username: "direct.fallback", media: [media] }));
