@@ -103,7 +103,16 @@ if (-not (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction Silent
 }
 '@ | Set-Content "$dir\watchdog.ps1"
 
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$dir\watchdog.ps1`""
+@'
+Option Explicit
+Dim shell, script, command
+Set shell = CreateObject("WScript.Shell")
+script = shell.ExpandEnvironmentStrings("%LOCALAPPDATA%") & "\InstagramAnalytics\watchdog.ps1"
+command = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & script & """"
+shell.Run command, 0, False
+'@ | Set-Content "$dir\watchdog.vbs"
+
+$action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('//B "' + "$dir\watchdog.vbs" + '"')
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(10) -RepetitionInterval (New-TimeSpan -Minutes 1)
 $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -DontStopOnIdleEnd -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable
@@ -111,8 +120,9 @@ Register-ScheduledTask -TaskName 'Instagram Analytics Watchdog' -Action $action 
 ```
 
 Do not create this task with `schtasks /Create`; its defaults add battery and idle
-restrictions that make the watchdog skip runs. This keeps recovery under one minute
-even if the main task exits unexpectedly.
+restrictions that make the watchdog skip runs. The `wscript.exe //B` + `shell.Run ..., 0`
+wrapper keeps PowerShell fully hidden, so no command window flashes every minute.
+This keeps recovery under one minute even if the main task exits unexpectedly.
 
 ### 3. Create the Cloudflare Tunnel
 
