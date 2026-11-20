@@ -8,13 +8,19 @@ export type DigestSubscription = {
   handle: string;
   createdAt: string;
   trialEndsAt: string;
-  status: "trial";
   lastSentAt?: string;
+  lastFollowers?: number;
+  lastEngagementRate?: number;
 };
 
-type KvConfig = {
-  accountId: string;
-  namespaceId: string;
+export type DigestSnapshot = {
+  sentAt: string;
+  followers: number;
+  engagementRate: number;
+};
+
+type RedisConfig = {
+  url: string;
   token: string;
 };
 
@@ -24,16 +30,14 @@ const KEY_PREFIX = "digest:sub:";
 const WEEKLY_INTERVAL_MS = 6 * 24 * 60 * 60 * 1000;
 let localWriteQueue: Promise<unknown> = Promise.resolve();
 
-function kvConfig(): KvConfig | null {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
-  const namespaceId = process.env.DIGEST_KV_NAMESPACE_ID?.trim();
-  const token = process.env.CLOUDFLARE_API_TOKEN?.trim();
+function redisConfig(): RedisConfig | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim().replace(/\/+$/, "");
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+  return url && token ? { url, token } : null;
+}
 
-  if (!accountId || !namespaceId || !token) {
-    return null;
-  }
-
-  return { accountId, namespaceId, token };
+export function isSubscriptionStoreConfigured(): boolean {
+  return redisConfig() !== null || !process.env.VERCEL;
 }
 
 function keyFor(email: string, handle: string): string {
@@ -41,55 +45,55 @@ function keyFor(email: string, handle: string): string {
   return `${KEY_PREFIX}${hash}`;
 }
 
-async function kvRequest(config: KvConfig, resource: string, init: RequestInit = {}): Promise<Response> {
-  const base = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/storage/kv/namespaces/${config.namespaceId}`;
-  const headers = new Headers(init.headers);
-  headers.set("Authorization", `Bearer ${config.token}`);
-
-  return fetch(`${base}${resource}`, {
-    ...init,
-    headers,
+async function redisCommand(config: RedisConfig, command: (string | number)[]): Promise<unknown> {
+  const response = await fetch(config.url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(command),
     cache: "no-store",
     signal: AbortSignal.timeout(15_000),
   });
+
+  if (!response.ok) {
+    throw new Error(`Upstash command failed with ${response.status}`);
+  }
+
+  const payload = (await response.json()) as { result?: unknown; error?: string };
+  if (payload.error) {
+    throw new Error(payload.error);
+  }
+  return payload.result;
 }
 
-async function kvGet(config: KvConfig, key: string): Promise<DigestSubscription | null> {
-  const response = await kvRequest(config, `/values/${encodeURIComponent(key)}`);
-  if (response.status === 404) {
+function parseSubscription(value: unknown): DigestSubscription | null {
+  if (!value || typeof value !== "object") {
     return null;
   }
-  if (!response.ok) {
-    throw new Error(`KV read failed with ${response.status}`);
-  }
-
-  const value = (await response.json()) as Partial<DigestSubscription>;
-  if (!value.email || !value.handle || !value.trialEndsAt) {
+  const item = value as Partial<DigestSubscription>;
+  if (!item.email || !item.handle || !item.createdAt) {
     return null;
   }
-  return value as DigestSubscription;
-}
-
-async function kvPut(config: KvConfig, key: string, value: DigestSubscription): Promise<void> {
-  const response = await kvRequest(config, `/values/${encodeURIComponent(key)}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(value),
-  });
-  if (!response.ok) {
-    throw new Error(`KV write failed with ${response.status}`);
-  }
+  return item as DigestSubscription;
 }
 
 function localPath(): string {
-  return process.env.DIGEST_STORE_PATH?.trim() || path.join(process.cwd(), ".data", "digest-subscriptions.json");
+  return (
+    process.env.DIGEST_STORE_PATH?.trim() ||
+    path.join(process.cwd(), ".data", "digest-subscriptions.json")
+  );
 }
 
 async function readLocal(): Promise<DigestSubscription[]> {
   try {
     const raw = await readFile(/*turbopackIgnore: true*/ localPath(), "utf8");
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as DigestSubscription[]) : [];
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map(parseSubscription).filter((item): item is DigestSubscription => Boolean(item));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return [];
@@ -110,13 +114,7 @@ function withLocalLock<T>(operation: () => Promise<T>): Promise<T> {
   return result;
 }
 
-function isDue(subscription: DigestSubscription, now: Date): boolean {
-  if (subscription.status !== "trial") {
-    return false;
-  }
-  if (new Date(subscription.trialEndsAt).getTime() <= now.getTime()) {
-    return false;
-  }
+export function isSubscriptionDue(subscription: DigestSubscription, now: Date): boolean {
   if (!subscription.lastSentAt) {
     return true;
   }
@@ -125,57 +123,81 @@ function isDue(subscription: DigestSubscription, now: Date): boolean {
 
 export async function saveSubscription(subscription: DigestSubscription): Promise<SaveResult> {
   const key = keyFor(subscription.email, subscription.handle);
-  const config = kvConfig();
+  const config = redisConfig();
 
   if (config) {
-    const existing = await kvGet(config, key);
-    if (existing) {
-      return "existing";
-    }
-    await kvPut(config, key, subscription);
-    log.info("weekly digest subscription stored", { handle: subscription.handle, store: "kv", result: "created" });
-    return "created";
+    const result = await redisCommand(config, ["SET", key, JSON.stringify(subscription), "NX"]);
+    const created = result === "OK";
+    log.info("weekly digest subscription stored", {
+      handle: subscription.handle,
+      store: "upstash",
+      result: created ? "created" : "existing",
+    });
+    return created ? "created" : "existing";
   }
 
   return withLocalLock(async () => {
     const values = await readLocal();
-    if (values.some((item) => item.email === subscription.email && item.handle === subscription.handle)) {
+    if (
+      values.some(
+        (item) => item.email === subscription.email && item.handle === subscription.handle,
+      )
+    ) {
       return "existing";
     }
     await writeLocal([...values, subscription]);
-    log.info("weekly digest subscription stored", { handle: subscription.handle, store: "local", result: "created" });
+    log.info("weekly digest subscription stored", {
+      handle: subscription.handle,
+      store: "local",
+      result: "created",
+    });
     return "created";
   });
 }
 
 export async function listDueSubscriptions(now = new Date()): Promise<DigestSubscription[]> {
-  const config = kvConfig();
+  const config = redisConfig();
 
   if (config) {
-    const response = await kvRequest(config, `/keys?prefix=${encodeURIComponent(KEY_PREFIX)}&limit=1000`);
-    if (!response.ok) {
-      throw new Error(`KV list failed with ${response.status}`);
+    const result = await redisCommand(config, ["KEYS", `${KEY_PREFIX}*`]);
+    const keys = Array.isArray(result)
+      ? result.filter((key): key is string => typeof key === "string")
+      : [];
+    if (keys.length === 0) {
+      return [];
     }
-    const payload = (await response.json()) as { result?: { name: string }[] };
-    const keys = payload.result?.map((item) => item.name) ?? [];
-    const values = await Promise.all(keys.map((key) => kvGet(config, key)));
+    const values = await Promise.all(
+      keys
+        .slice(0, 1000)
+        .map(async (key) => parseSubscription(await redisCommand(config, ["GET", key]))),
+    );
     return values
       .filter((item): item is DigestSubscription => Boolean(item))
-      .filter((item) => isDue(item, now))
+      .filter((item) => isSubscriptionDue(item, now))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   const values = await readLocal();
-  return values.filter((item) => isDue(item, now)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return values
+    .filter((item) => isSubscriptionDue(item, now))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 }
 
-export async function markSent(subscription: DigestSubscription, sentAt: string): Promise<void> {
-  const updated: DigestSubscription = { ...subscription, lastSentAt: sentAt };
+export async function markSent(
+  subscription: DigestSubscription,
+  snapshot: DigestSnapshot,
+): Promise<void> {
+  const updated: DigestSubscription = {
+    ...subscription,
+    lastSentAt: snapshot.sentAt,
+    lastFollowers: snapshot.followers,
+    lastEngagementRate: snapshot.engagementRate,
+  };
   const key = keyFor(subscription.email, subscription.handle);
-  const config = kvConfig();
+  const config = redisConfig();
 
   if (config) {
-    await kvPut(config, key, updated);
+    await redisCommand(config, ["SET", key, JSON.stringify(updated)]);
     return;
   }
 
@@ -185,5 +207,20 @@ export async function markSent(subscription: DigestSubscription, sentAt: string)
       item.email === subscription.email && item.handle === subscription.handle ? updated : item,
     );
     await writeLocal(next);
+  });
+}
+
+export async function deleteSubscription(email: string, handle: string): Promise<void> {
+  const key = keyFor(email, handle);
+  const config = redisConfig();
+
+  if (config) {
+    await redisCommand(config, ["DEL", key]);
+    return;
+  }
+
+  await withLocalLock(async () => {
+    const values = await readLocal();
+    await writeLocal(values.filter((item) => item.email !== email || item.handle !== handle));
   });
 }

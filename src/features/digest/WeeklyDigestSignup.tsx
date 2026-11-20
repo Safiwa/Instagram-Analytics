@@ -64,8 +64,8 @@ export function WeeklyDigestSignup() {
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
             Enter your email and an Instagram handle. Every Monday we send the current engagement
-            rate and 12-month follower growth, so you can spot changes without running another
-            analysis.
+            rate, the week-over-week follower change, and 12-month follower growth, so you can
+            spot changes without running another analysis.
           </p>
           <ul className="mt-4 space-y-2 text-sm text-slate-700">
             <li className="flex items-center gap-2">
@@ -74,11 +74,11 @@ export function WeeklyDigestSignup() {
             </li>
             <li className="flex items-center gap-2">
               <CircleCheck className="h-4 w-4 text-indigo-600" aria-hidden="true" />
-              Follower growth labeled Est. when it is modeled
+              Follower change reported week over week
             </li>
             <li className="flex items-center gap-2">
               <CircleCheck className="h-4 w-4 text-indigo-600" aria-hidden="true" />
-              No card required. 30 days free, then you can cancel anytime
+              No card required. Free for 30 days
             </li>
           </ul>
         </div>

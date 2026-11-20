@@ -1,4 +1,4 @@
-import { saveSubscription } from "../../../../core/digest/subscriptions";
+import { isSubscriptionStoreConfigured, saveSubscription } from "../../../../core/digest/subscriptions";
 import { trialEndsAt, validateSignup } from "../../../../core/digest/validation";
 import { log } from "../../../../core/logging/logger";
 
@@ -21,6 +21,10 @@ export async function POST(request: Request) {
     return Response.json({ error: validated.message }, { status: 400 });
   }
 
+  if (!isSubscriptionStoreConfigured()) {
+    return Response.json({ error: "Subscriptions are not configured." }, { status: 503 });
+  }
+
   const now = new Date();
   try {
     const result = await saveSubscription({
@@ -28,7 +32,6 @@ export async function POST(request: Request) {
       handle: validated.value.handle,
       createdAt: now.toISOString(),
       trialEndsAt: trialEndsAt(now),
-      status: "trial",
     });
 
     log.info("weekly digest signup", {

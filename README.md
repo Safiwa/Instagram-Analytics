@@ -119,29 +119,33 @@ request plus a few embed requests.
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
 | `/api/digest/send` | Cron-only weekly digest sender |
+| `/api/digest/unsubscribe` | Signed one-click unsubscribe link |
 
 ## Weekly digest (free 30-day trial)
 
 The home page has a signup form for a Monday email containing the current engagement
-rate and 12-month follower growth for one Instagram handle. Signups are idempotent per
-email + handle pair, require explicit consent, and include a honeypot field. The trial
-ends 30 days after signup.
+rate, any follower decrease since the previous report, and 12-month follower growth
+for one Instagram handle. Signups are idempotent per email + handle pair, require
+explicit consent, and include a honeypot field. The 30-day trial is shown in the UI;
+it is not automatically enforced.
 
 For local development, signups are stored in `.data/digest-subscriptions.json`. On
 Vercel, set these variables:
 
 | Variable | Purpose |
 |---|---|
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | SMTP account used to send the digest. `SMTP_FROM` defaults to `SMTP_USER`. |
-| `SMTP_SECURE` | Set `true` for implicit TLS; port `465` enables it automatically. |
-| `CRON_SECRET` | Shared secret for the Vercel Cron request to `/api/digest/send`. |
-| `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `DIGEST_KV_NAMESPACE_ID` | Cloudflare KV REST access for durable signup storage. |
+| `RESEND_API_KEY` | Resend API key used to send the digest. |
+| `DIGEST_FROM_EMAIL` | Verified Resend sender, e.g. `Instagram Analytics <updates@yourdomain.com>`. |
+| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST endpoint for durable signup storage. |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash REST token with write access. |
+| `CRON_SECRET` | Shared secret for the Vercel Cron request and for signing unsubscribe links. |
 
 `vercel.json` schedules `/api/digest/send` at 08:00 UTC every Monday. The sender reads
-due subscriptions, reuses one profile resolution per handle, sends via SMTP, and marks
-each subscription as sent. Follower growth is labeled `Est.` when it is modeled. No
-email is sent if SMTP or `CRON_SECRET` is missing, and the endpoint returns a clear
-configuration error instead of pretending to send.
+due subscriptions, reuses one profile resolution per handle, sends through Resend, and
+stores the current follower count and engagement rate for next week's comparison.
+Follower growth is labeled `Est.` when it is modeled. Each email includes a signed
+unsubscribe link. No email is sent if Resend, Upstash, or `CRON_SECRET` is missing; the
+endpoint returns a clear configuration error instead of pretending to send.
 
 ## How public lookup works
 
