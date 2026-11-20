@@ -59,6 +59,34 @@ npm run start
 
 Keep it running on `http://localhost:3000`.
 
+### 2b. Auto-start the local app at logon
+
+The tunnel forwards to `http://localhost:3000`, so the Next.js server must also be
+running after a reboot. Register a per-user Task Scheduler task to start it at logon:
+
+```powershell
+$project = (Get-Location).Path
+$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$command = '$listener = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue; if (-not $listener) { & ''C:\Program Files\nodejs\npm.cmd'' run dev }'
+$action = New-ScheduledTaskAction -Execute 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -Argument ('-NoProfile -WindowStyle Hidden -Command "' + $command + '"') -WorkingDirectory $project
+$trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
+$principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew -StartWhenAvailable
+Register-ScheduledTask -TaskName 'Instagram Analytics Dev Server' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force
+```
+
+The task skips startup if port 3000 is already listening, so it will not create a
+duplicate server. Check or start it manually with:
+
+```powershell
+Get-ScheduledTask -TaskName 'Instagram Analytics Dev Server'
+Start-ScheduledTask -TaskName 'Instagram Analytics Dev Server'
+```
+
+This starts the app only after you log in. The `cloudflared` service itself starts
+before login, so a full recovery after reboot is: log in → app task starts → tunnel
+service forwards to `localhost:3000`.
+
 ### 3. Create the Cloudflare Tunnel
 
 You need a domain added to Cloudflare. Install `cloudflared`, then run:
