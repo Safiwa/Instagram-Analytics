@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeMetrics } from "../src/core/analytics/metrics";
-import { findClosestPeer } from "../src/core/analytics/peer";
+import { buildPeerRanking, findClosestPeer } from "../src/core/analytics/peer";
 import type { CreatorProfile, Post } from "../src/core/data/types";
 
 function post(likes: number): Post {
@@ -49,5 +49,35 @@ describe("closest public peer", () => {
 
     expect(findClosestPeer(target, computeMetrics(target), [])).toBeNull();
     expect(findClosestPeer(target, computeMetrics(target), [target])).toBeNull();
+  });
+});
+
+describe("peer ranking for the searched profile", () => {
+  it("includes the searched profile and ranks the group by engagement rate", () => {
+    const target = profile("searched", 60_000, "Fashion and skincare boutique", 2_000);
+    const low = profile("low.peer", 62_000, "Fashion and beauty", 500);
+    const high = profile("high.peer", 58_000, "Fashion and style", 8_000);
+    const pool = [target, low, high];
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), pool);
+
+    expect(ranking).not.toBeNull();
+    expect(ranking!.rows.map((row) => row.profile.username)).toEqual([
+      "high.peer",
+      "searched",
+      "low.peer",
+    ]);
+    expect(ranking!.targetRank).toBe(2);
+    expect(ranking!.total).toBe(3);
+    expect(ranking!.outperformedPercent).toBe(50);
+    expect(ranking!.rows.find((row) => row.isTarget)?.matchScore).toBeNull();
+    expect(ranking!.rows.filter((row) => !row.isTarget).every((row) => row.matchScore !== null)).toBe(
+      true,
+    );
+  });
+
+  it("returns null when no comparable peer is available", () => {
+    const target = profile("solo", 20_000, "Food blogger", 800);
+    expect(buildPeerRanking(target, computeMetrics(target), [])).toBeNull();
   });
 });

@@ -47,11 +47,11 @@ export type PeerMatch = {
   reasons: string[];
 };
 
-export function findClosestPeer(
+function scorePeers(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
-): PeerMatch | null {
+): PeerMatch[] {
   const candidates = pool.filter(
     (candidate) =>
       candidate.username !== target.username &&
@@ -60,7 +60,7 @@ export function findClosestPeer(
   );
 
   if (candidates.length === 0) {
-    return null;
+    return [];
   }
 
   const targetTopics = topicsOf(target);
@@ -95,8 +95,77 @@ export function findClosestPeer(
   });
 
   scored.sort(
-    (left, right) => right.score - left.score || left.profile.username.localeCompare(right.profile.username),
+    (left, right) =>
+      right.score - left.score || left.profile.username.localeCompare(right.profile.username),
   );
 
-  return scored[0];
+  return scored;
+}
+
+export function findClosestPeer(
+  target: CreatorProfile,
+  metrics: ProfileMetrics,
+  pool: CreatorProfile[],
+): PeerMatch | null {
+  return scorePeers(target, metrics, pool)[0] ?? null;
+}
+
+export type PeerRankingRow = {
+  profile: CreatorProfile;
+  engagementRate: number;
+  matchScore: number | null;
+  isTarget: boolean;
+};
+
+export type PeerRanking = {
+  rows: PeerRankingRow[];
+  targetRank: number;
+  total: number;
+  outperformedPercent: number | null;
+};
+
+// Builds a small leaderboard from the searched profile plus its closest comparable
+// peers, so the searched profile can see its rank rather than a single reference point.
+export function buildPeerRanking(
+  target: CreatorProfile,
+  metrics: ProfileMetrics,
+  pool: CreatorProfile[],
+  limit = 5,
+): PeerRanking | null {
+  const peers = scorePeers(target, metrics, pool).slice(0, limit);
+  if (peers.length === 0) {
+    return null;
+  }
+
+  const rows: PeerRankingRow[] = [
+    {
+      profile: target,
+      engagementRate: metrics.engagementRate,
+      matchScore: null,
+      isTarget: true,
+    },
+    ...peers.map((peer) => ({
+      profile: peer.profile,
+      engagementRate: peer.metrics.engagementRate,
+      matchScore: peer.score,
+      isTarget: false,
+    })),
+  ];
+
+  rows.sort(
+    (left, right) =>
+      right.engagementRate - left.engagementRate ||
+      right.profile.followers - left.profile.followers,
+  );
+
+  const beaten = peers.filter(
+    (peer) => peer.metrics.engagementRate < metrics.engagementRate,
+  ).length;
+
+  return {
+    rows,
+    targetRank: rows.findIndex((row) => row.isTarget) + 1,
+    total: rows.length,
+    outperformedPercent: Math.round((beaten / peers.length) * 100),
+  };
 }

@@ -302,8 +302,11 @@ Every profile page now includes two extra sections below the demographics:
   by audience-size proximity (log-scaled), shared business/topic keywords from the name, category
   and bio, and engagement-rate similarity. It shows the peer's followers, engagement and estimated
   authenticity, why it matched, and how this profile compares, with a link to a side-by-side
-  comparison. If no tracked profile is available (for example, without API credentials) the panel
-  shows an empty state.
+  comparison. The same matched set powers a small ranking table (`peer-ranking`) that includes the
+  searched profile, orders it and its closest peers by engagement rate, and shows the searched
+  profile's rank (for example, "Rank #2 of 6") plus the share of peers it outperforms — so a
+  looked-up account can see where it stands against comparable profiles. If no tracked profile is
+  available (for example, without API credentials) the panel shows an empty state.
 
 Both are computed on the server in `src/app/profile/[username]/page.tsx`. The tracked-pool fetch is
 guarded by `isLiveConfigured()` so local development without Meta keys does not make pointless API

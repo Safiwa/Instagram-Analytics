@@ -28,7 +28,7 @@ import { modashBenchmark, MODASH_SOURCE_LABEL } from "../../core/analytics/bench
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
 import type { GrowthAnalysis } from "../../core/analytics/growth";
 import { round2, type ProfileMetrics } from "../../core/analytics/metrics";
-import type { PeerMatch } from "../../core/analytics/peer";
+import type { PeerMatch, PeerRanking } from "../../core/analytics/peer";
 import type { AudienceSlice, CreatorProfile } from "../../core/data/types";
 import { formatCompact, formatDate, formatPercent } from "../../core/format";
 
@@ -49,6 +49,7 @@ type ProfileDashboardProps = {
   metrics: ProfileMetrics;
   growth: GrowthAnalysis;
   peer: PeerMatch | null;
+  ranking: PeerRanking | null;
 };
 
 function Stat({
@@ -98,7 +99,7 @@ function AudienceBars({ title, slices }: { title: string; slices: AudienceSlice[
   );
 }
 
-export function ProfileDashboard({ profile, metrics, growth, peer }: ProfileDashboardProps) {
+export function ProfileDashboard({ profile, metrics, growth, peer, ranking }: ProfileDashboardProps) {
   const interactions = profile.recentPosts.map((post) => ({
     label: formatDate(post.postedAt, false),
     likes: post.likes,
@@ -575,11 +576,13 @@ export function ProfileDashboard({ profile, metrics, growth, peer }: ProfileDash
               Peer benchmark
             </p>
             <h3 className="mt-1 text-base font-semibold text-slate-950">
-              Closest public profile to benchmark against
+              Closest business peers and where this profile ranks
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              Selected from the real public profiles we track, matched on audience size, business
-              themes, and engagement. It is a reference point, not an exhaustive niche search.
+              We match this profile to the closest real public accounts by audience size, business
+              themes, and engagement, then rank the group by engagement rate so you can see how it
+              performs against comparable profiles. This is a curated reference set, not an
+              exhaustive niche search.
             </p>
           </div>
         </div>
@@ -636,6 +639,73 @@ export function ProfileDashboard({ profile, metrics, growth, peer }: ProfileDash
               <TrendingUp className="h-4 w-4" aria-hidden="true" />
               Compare side by side
             </Link>
+          </div>
+        ) : null}
+
+        {ranking ? (
+          <div data-testid="peer-ranking" className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-950">
+                  Rank #{ranking.targetRank} of {ranking.total} among comparable profiles
+                </p>
+                <p className="text-xs text-slate-500">
+                  Ordered by engagement rate from up to 12 recent public posts
+                </p>
+              </div>
+              {ranking.outperformedPercent !== null ? (
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                  Ahead of {ranking.outperformedPercent}% of these peers
+                </span>
+              ) : null}
+            </div>
+            <ol className="divide-y divide-slate-100">
+              {ranking.rows.map((row, index) => (
+                <li
+                  key={row.profile.username}
+                  className={`flex items-center gap-3 px-4 py-3 ${
+                    row.isTarget ? "bg-indigo-50/70" : ""
+                  }`}
+                >
+                  <span
+                    className={`w-6 shrink-0 text-sm font-semibold ${
+                      row.isTarget ? "text-indigo-700" : "text-slate-400"
+                    }`}
+                  >
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/profile/${row.profile.username}`}
+                      className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-indigo-600"
+                    >
+                      <span className="truncate">{row.profile.displayName}</span>
+                      <ArrowUpRight
+                        className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-indigo-600"
+                        aria-hidden="true"
+                      />
+                      {row.isTarget ? (
+                        <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-indigo-700">
+                          This profile
+                        </span>
+                      ) : null}
+                    </Link>
+                    <p className="truncate text-xs text-slate-500">
+                      @{row.profile.username} · {formatCompact(row.profile.followers)} followers
+                      {row.matchScore !== null ? ` · ${row.matchScore.toFixed(0)}% match` : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold text-slate-950">
+                      {formatPercent(row.engagementRate)}
+                    </p>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                      Engagement
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </div>
         ) : (
           <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">

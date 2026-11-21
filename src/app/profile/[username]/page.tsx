@@ -1,7 +1,7 @@
 import { EmptyState } from "../../../components/EmptyState";
 import { analyzeGrowth } from "../../../core/analytics/growth";
 import { computeMetrics } from "../../../core/analytics/metrics";
-import { findClosestPeer } from "../../../core/analytics/peer";
+import { buildPeerRanking, findClosestPeer } from "../../../core/analytics/peer";
 import { resolveProfile } from "../../../core/data/adapter";
 import { getTrackedProfiles } from "../../../core/data/leaderboard";
 import { ProfileDashboard } from "../../../features/profile/ProfileDashboard";
@@ -28,7 +28,9 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
 
   const metrics = computeMetrics(resolution.profile);
   const growth = analyzeGrowth(resolution.profile);
-  const peer = findClosestPeer(resolution.profile, metrics, await getTrackedProfiles());
+  const tracked = await getTrackedProfiles();
+  const peer = findClosestPeer(resolution.profile, metrics, tracked);
+  const ranking = buildPeerRanking(resolution.profile, metrics, tracked);
 
   return (
     <ProfileDashboard
@@ -36,6 +38,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       metrics={metrics}
       growth={growth}
       peer={peer}
+      ranking={ranking}
     />
   );
 }
