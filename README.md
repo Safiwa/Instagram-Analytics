@@ -194,10 +194,17 @@ The tunnel keeps lookups working while this PC is on, but it is not always-on. B
 moving the proxy to a VPS, prove that the VPS IP can read public Instagram data.
 Instagram pre-flags datacenter ranges, so this test is a hard gate, not a formality.
 
-On a fresh Ubuntu VPS (only TCP `22` open — do **not** open port `3000`):
+On a fresh Ubuntu VPS (only TCP `22` open — do **not** open port `3000`), copy
+`scripts/egress-test.sh` from this repo with `scp` (the repository is private, so a
+`raw.githubusercontent.com` URL returns 404):
+
+```powershell
+scp "C:\Users\safiw\Downloads\Default Project\scripts\egress-test.sh" root@YOUR_VPS_IP:~/egress-test.sh
+```
+
+Then run it over SSH:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Safiwa/Instagram-Analytics/main/scripts/egress-test.sh -o egress-test.sh
 chmod +x egress-test.sh
 ./egress-test.sh
 ```

@@ -6,8 +6,8 @@
 # It makes only two requests, using the exact headers the app uses in
 # src/core/data/public.ts, so a PASS here means the app will work here.
 #
-# Usage:
-#   curl -fsSL <raw-url>/egress-test.sh -o egress-test.sh
+# Usage (repo is private — use scp, not a raw.githubusercontent.com URL):
+#   scp scripts/egress-test.sh root@YOUR_VPS_IP:~/egress-test.sh
 #   chmod +x egress-test.sh
 #   ./egress-test.sh              # defaults to natgeo
 #   ./egress-test.sh cristiano    # or any public handle
