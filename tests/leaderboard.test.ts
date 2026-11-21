@@ -4,6 +4,8 @@ import {
   isIncompletePool,
   rankProfiles,
   rankScore,
+  REFRESH_BATCH,
+  refreshBatch,
   TRENDING_WINDOW_DAYS,
 } from "../src/core/data/leaderboard";
 import { REGION_BOARDS, regionForHandle } from "../src/core/data/regions";
@@ -117,12 +119,22 @@ describe("four-factor leaderboard ranking", () => {
 });
 
 describe("incomplete tracked pool detection", () => {
-  it("shortens the cache TTL when a meaningful share of handles fail", () => {
+  it("backs off when a meaningful share of handles fail", () => {
     expect(isIncompletePool(55, 0)).toBe(false);
     expect(isIncompletePool(55, 5)).toBe(false);
     expect(isIncompletePool(55, 11)).toBe(true);
     expect(isIncompletePool(25, 25)).toBe(true);
     expect(isIncompletePool(0, 0)).toBe(false);
+  });
+
+  it("refreshes only small batches that rotate over every handle", () => {
+    const handles = Array.from({ length: 55 }, (_, index) => `h${index}`);
+    const batches = [0, 1, 2, 3, 4, 5].map((bucket) =>
+      refreshBatch(handles, bucket * 15 * 60 * 1000),
+    );
+
+    expect(batches.every((batch) => batch.length <= REFRESH_BATCH)).toBe(true);
+    expect(new Set(batches.flat()).size).toBe(handles.length);
   });
 });
 

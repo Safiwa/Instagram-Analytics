@@ -6,7 +6,9 @@ import type { CreatorProfile } from "./types";
 // homepage leaderboard refresh writes the snapshot; profile pages read it.
 const SNAPSHOT_KEY = "analytics:tracked-pool";
 const SIGNATURE_KEY = "analytics:tracked-pool:handles";
-export const TRACKED_SNAPSHOT_TTL_SECONDS = 30 * 60;
+// The pool is refreshed incrementally (see REFRESH_BATCH in leaderboard.ts), so
+// the snapshot only needs to survive long enough to avoid a costly cold rebuild.
+export const TRACKED_SNAPSHOT_TTL_SECONDS = 6 * 60 * 60;
 
 type RedisConfig = { url: string; token: string };
 

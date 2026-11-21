@@ -306,19 +306,21 @@ dynamic so that a deployment without API credentials shows an empty-state messag
 data. The same pool is shared with profile pages for peer benchmarking
 (`getTrackedProfiles()`).
 
-To avoid firing 55 Meta API calls on every profile load, the pool is stored as a 30-minute snapshot
-in Upstash (`src/core/data/tracked-store.ts`): the homepage refresh writes it and profile pages read
-it. If the snapshot is missing (cold start without Upstash, or local development without Meta keys)
-it is rebuilt live once and cached. Empty pools are never written, so a transient API rate limit
-cannot wipe a good snapshot. Two guards make refreshes resilient to Meta `code 4` rate limits:
+To avoid firing 55 Meta API calls on every profile load, the pool is stored in Upstash
+(`src/core/data/tracked-store.ts`) and shared between the homepage and profile pages. Empty pools
+are never written, so a transient API rate limit cannot wipe a good snapshot. Meta throttles large
+bursts of Business Discovery calls (`code 4`), so refreshes are deliberately paced:
 
-- The snapshot carries a handle-list signature (`analytics:tracked-pool:handles`); changing
-  `LEADERBOARD_HANDLES` or the rebuild logic invalidates stale snapshots immediately.
-- A rebuild reuses profiles from any previous snapshot and fetches **only the missing handles**, so
-  a signature bump or partial refresh stays well below the call limit. If ≥20% of the attempted
-  handles fail, the pool is considered incomplete: it is still served (so the boards are not blank),
-  but its Upstash **and** in-memory TTLs are shortened from 30/15 minutes to 60 seconds and a
-  warning is logged, so the next request retries a clean rebuild instead of caching a partial board.
+- **Incremental refresh** — each 15-minute refresh updates at most `REFRESH_BATCH` (10) handles.
+  Missing handles are filled first, then the rest rotate in small batches, so a partial pool
+  self-heals over a few cycles and no single refresh exceeds 10 Meta calls.
+- **Accumulating snapshot** — every batch is merged into the persisted snapshot, which has a 6-hour
+  TTL. An API outage therefore cannot erase profiles already collected.
+- **Backoff** — if ≥20% of the attempted handles fail, the in-memory cache is shortened from
+  15 minutes to 10 minutes and a warning is logged, so retries pause instead of hammering Meta.
+- **Signature** — the snapshot carries a handle-list signature (`analytics:tracked-pool:handles`);
+  changing `LEADERBOARD_HANDLES` or the rebuild logic bumps it, and any profile no longer in the
+  curated list is filtered out on the next merge.
 
 The benchmark panel uses published Modash ranges by follower tier (Nano 5-10%, Micro 3-7%, Macro
 1-3%, Mega 0.5-2%) with a link to the source. Modash calculates median likes divided by followers

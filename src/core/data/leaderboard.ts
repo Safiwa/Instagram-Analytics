@@ -4,7 +4,6 @@ import { log } from "../logging/logger";
 import { fetchLiveProfile, isLiveConfigured } from "./live";
 import { REGION_BOARDS, regionForHandle, type Region } from "./regions";
 import {
-  readTrackedSnapshot,
   readTrackedSnapshotAny,
   TRACKED_SNAPSHOT_TTL_SECONDS,
   writeTrackedSnapshot,
@@ -271,14 +270,19 @@ function emptyLeaderboard(): Leaderboard {
 
 // Bump the prefix whenever the tracked-pool rebuild logic changes so a snapshot
 // written by the previous version is not reused with the new expectations.
-const TRACKED_SIGNATURE = `v3:${LEADERBOARD_HANDLES.join(",")}`;
+const TRACKED_SIGNATURE = `v4:${LEADERBOARD_HANDLES.join(",")}`;
 
-// If this many of the handles we just tried fail (typically a Meta code 4 rate
-// limit), the pool is incomplete. Keep serving it, but expire it quickly so the
-// next request retries a clean rebuild instead of caching a partial board for 30
-// minutes.
+// Meta rate-limits large bursts of Business Discovery calls. Instead of
+// rebuilding all 55 profiles at once, each refresh updates a small rotating
+// batch and merges it into the persisted snapshot. Missing handles are filled
+// first, so a partial pool self-heals over a few refresh cycles.
+export const REFRESH_BATCH = 10;
+
+// If this many of the attempted handles fail (typically a Meta code 4 rate
+// limit), back off for longer before retrying so we do not keep hammering the
+// API while it is throttling us.
 export const INCOMPLETE_SKIP_RATE = 0.2;
-export const INCOMPLETE_TTL_SECONDS = 60;
+export const INCOMPLETE_TTL_SECONDS = 10 * 60;
 const INCOMPLETE_TTL_MS = INCOMPLETE_TTL_SECONDS * 1000;
 
 export function isIncompletePool(attempted: number, skipped: number): boolean {
@@ -312,15 +316,15 @@ export async function getTrackedProfiles(): Promise<CreatorProfile[]> {
   return (await getTrackedResult()).profiles;
 }
 
-async function loadTrackedProfiles(): Promise<TrackedResult> {
-  const snapshot = await readTrackedSnapshot(TRACKED_SIGNATURE);
-  if (snapshot) {
-    return { profiles: snapshot, incomplete: false };
-  }
+export function refreshBatch(handles: readonly string[], now: number): string[] {
+  const batchCount = Math.max(1, Math.ceil(handles.length / REFRESH_BATCH));
+  const bucket = Math.floor(now / CACHE_TTL_MS) % batchCount;
+  return [...handles].slice(bucket * REFRESH_BATCH, (bucket + 1) * REFRESH_BATCH);
+}
 
-  // Reuse profiles from an older/rate-limited snapshot so a rebuild only fetches
-  // the handles we are actually missing. This keeps signature bumps and partial
-  // refreshes well below Meta's call limit.
+async function loadTrackedProfiles(): Promise<TrackedResult> {
+  // Read any prior snapshot (even one written for an older handle list) so we
+  // keep the profiles we already have and only spend Meta calls on the rest.
   const allowed = new Set(LEADERBOARD_HANDLES.map((handle) => handle.toLowerCase()));
   const previous = ((await readTrackedSnapshotAny()) ?? []).filter((profile) =>
     allowed.has(profile.username.toLowerCase()),
@@ -328,20 +332,28 @@ async function loadTrackedProfiles(): Promise<TrackedResult> {
   const known = new Set(previous.map((profile) => profile.username.toLowerCase()));
   const missing = LEADERBOARD_HANDLES.filter((handle) => !known.has(handle.toLowerCase()));
 
-  const { profiles: fresh, attempted, skipped } = await fetchTrackedProfiles(missing);
+  const targets =
+    missing.length > 0
+      ? missing.slice(0, REFRESH_BATCH)
+      : refreshBatch(LEADERBOARD_HANDLES, Date.now());
+  const { profiles: fresh, attempted, skipped } = await fetchTrackedProfiles(targets);
   const incomplete = isIncompletePool(attempted, skipped);
-  const profiles = [...previous, ...fresh];
+
+  // Failed targets keep their previous copy; successful ones replace it.
+  const byUsername = new Map(previous.map((profile) => [profile.username.toLowerCase(), profile]));
+  for (const profile of fresh) {
+    byUsername.set(profile.username.toLowerCase(), profile);
+  }
+  const profiles = [...byUsername.values()];
   if (profiles.length === 0) {
-    return { profiles, incomplete };
+    return { profiles, incomplete: true };
   }
 
-  await writeTrackedSnapshot(
-    profiles,
-    TRACKED_SIGNATURE,
-    incomplete ? INCOMPLETE_TTL_SECONDS : TRACKED_SNAPSHOT_TTL_SECONDS,
-  );
+  // Always keep accumulated profiles for the full snapshot TTL; only the
+  // in-memory retry is backed off, so a longer API outage cannot erase the pool.
+  await writeTrackedSnapshot(profiles, TRACKED_SIGNATURE, TRACKED_SNAPSHOT_TTL_SECONDS);
   if (incomplete) {
-    log.warn("tracked pool incomplete; shortening snapshot TTL", {
+    log.warn("tracked pool refresh had skips; backing off", {
       attempted,
       skipped,
       profiles: profiles.length,
