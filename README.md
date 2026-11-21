@@ -251,7 +251,7 @@ request plus a few embed requests.
 | Route | Purpose |
 |---|---|
 | `/` | Analysis dashboard: lookup, global pulse leaderboards, pipeline, metric engine, Modash benchmark, sources, confidence |
-| `/profile/[username]` | KPIs, estimate disclosure, interactions, recent posts, and public-data notices |
+| `/profile/[username]` | KPIs, 30-day growth analysis, closest-peer benchmark, estimate disclosure, interactions, recent posts, and public-data notices |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison, maximum four accounts |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
@@ -267,17 +267,43 @@ Graph API path:
   in the last 15 days.
 - **High engagement** ranks the same pool by engagement rate across up to 12 recent public posts.
 
-The pool is 21 curated, real worldwide Creator/Business accounts listed in
+The pool is 25 curated, real worldwide Creator/Business accounts listed in
 `src/core/data/leaderboard.ts`. It is not an exhaustive global index, and accounts the API cannot
 resolve are skipped. Results are cached for 15 minutes in the data layer, and the home page is
 dynamic so that a deployment without API credentials shows an empty-state message instead of stale
-data.
+data. The same cached pool is shared with profile pages for peer benchmarking
+(`getTrackedProfiles()`).
 
 The benchmark panel uses published Modash ranges by follower tier (Nano 5-10%, Micro 3-7%, Macro
 1-3%, Mega 0.5-2%) with a link to the source. Modash calculates median likes divided by followers
 over roughly three months; this app uses average likes and comments divided by followers over up
 to 12 recent posts, so the comparison is directional, not exact. The matching tier also appears as
 a hint on each profile's engagement card.
+
+The homepage hero also carries the positioning line "Leading Instagram analytics platform in the
+UAE — performance-driven tools and a practical growth plan".
+
+## 30-day growth analysis and peer benchmark
+
+Every profile page now includes two extra sections below the demographics:
+
+- **30-day growth analysis** (`src/core/analytics/growth.ts`) reports estimated follower change
+  over 30 days, the median interaction trend across recent vs older posts, posting cadence, and the
+  number of public posts in the last 30 days, plus a momentum label (accelerating / steady /
+  cooling). For demo fixtures the follower change is measured from the latest two monthly history
+  points and never modeled. For real public/live accounts Instagram does not publish 30-day
+  follower history, so the change is modeled from the same public signals as 12-month growth and is
+  clearly labelled **Est.**
+- **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest tracked real public profile
+  by audience-size proximity (log-scaled), shared business/topic keywords from the name, category
+  and bio, and engagement-rate similarity. It shows the peer's followers, engagement and estimated
+  authenticity, why it matched, and how this profile compares, with a link to a side-by-side
+  comparison. If no tracked profile is available (for example, without API credentials) the panel
+  shows an empty state.
+
+Both are computed on the server in `src/app/profile/[username]/page.tsx`. The tracked-pool fetch is
+guarded by `isLiveConfigured()` so local development without Meta keys does not make pointless API
+calls.
 
 ## Weekly digest (free 30-day trial)
 

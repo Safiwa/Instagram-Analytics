@@ -29,6 +29,10 @@ export const LEADERBOARD_HANDLES = [
   "charlidamelio",
   "jlo",
   "leonardodicaprio",
+  "natgeo",
+  "the.matis",
+  "trending.vibz.uae",
+  "ola.alqodmani",
 ] as const;
 
 export type LeaderboardEntry = {
@@ -130,6 +134,43 @@ function emptyLeaderboard(): Leaderboard {
   return rankProfiles([], new Date());
 }
 
+let trackedCache: { expiresAt: number; value: Promise<CreatorProfile[]> } | null = null;
+
+export function getTrackedProfiles(): Promise<CreatorProfile[]> {
+  if (trackedCache && trackedCache.expiresAt > Date.now()) {
+    return trackedCache.value;
+  }
+
+  const value = fetchTrackedProfiles();
+  trackedCache = { expiresAt: Date.now() + CACHE_TTL_MS, value };
+  return value;
+}
+
+async function fetchTrackedProfiles(): Promise<CreatorProfile[]> {
+  if (!isLiveConfigured()) {
+    return [];
+  }
+
+  const profiles: CreatorProfile[] = [];
+
+  for (let index = 0; index < LEADERBOARD_HANDLES.length; index += FETCH_CHUNK) {
+    const chunk = LEADERBOARD_HANDLES.slice(index, index + FETCH_CHUNK);
+    const results = await Promise.allSettled(chunk.map((handle) => fetchLiveProfile(handle)));
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        profiles.push(result.value);
+      } else {
+        log.warn("tracked profile skipped", {
+          message: result.reason instanceof Error ? result.reason.message : "unknown",
+        });
+      }
+    }
+  }
+
+  return profiles;
+}
+
 async function buildLeaderboard(): Promise<Leaderboard> {
   if (!isLiveConfigured()) {
     log.warn("global leaderboard skipped: live API not configured");
@@ -137,23 +178,7 @@ async function buildLeaderboard(): Promise<Leaderboard> {
   }
 
   try {
-    const profiles: CreatorProfile[] = [];
-
-    for (let index = 0; index < LEADERBOARD_HANDLES.length; index += FETCH_CHUNK) {
-      const chunk = LEADERBOARD_HANDLES.slice(index, index + FETCH_CHUNK);
-      const results = await Promise.allSettled(chunk.map((handle) => fetchLiveProfile(handle)));
-
-      for (const result of results) {
-        if (result.status === "fulfilled") {
-          profiles.push(result.value);
-        } else {
-          log.warn("leaderboard profile skipped", {
-            message: result.reason instanceof Error ? result.reason.message : "unknown",
-          });
-        }
-      }
-    }
-
+    const profiles = await getTrackedProfiles();
     const board = rankProfiles(profiles);
     log.info("global leaderboard refreshed", {
       tracked: board.tracked,

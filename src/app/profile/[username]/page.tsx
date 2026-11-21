@@ -1,6 +1,9 @@
 import { EmptyState } from "../../../components/EmptyState";
+import { analyzeGrowth } from "../../../core/analytics/growth";
 import { computeMetrics } from "../../../core/analytics/metrics";
+import { findClosestPeer } from "../../../core/analytics/peer";
 import { resolveProfile } from "../../../core/data/adapter";
+import { getTrackedProfiles } from "../../../core/data/leaderboard";
 import { ProfileDashboard } from "../../../features/profile/ProfileDashboard";
 
 export const maxDuration = 60;
@@ -23,7 +26,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     );
   }
 
+  const metrics = computeMetrics(resolution.profile);
+  const growth = analyzeGrowth(resolution.profile);
+  const peer = findClosestPeer(resolution.profile, metrics, await getTrackedProfiles());
+
   return (
-    <ProfileDashboard profile={resolution.profile} metrics={computeMetrics(resolution.profile)} />
+    <ProfileDashboard
+      profile={resolution.profile}
+      metrics={metrics}
+      growth={growth}
+      peer={peer}
+    />
   );
 }

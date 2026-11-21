@@ -84,7 +84,7 @@ function benchmarkEngagementRate(followers: number): number {
   return 0.8;
 }
 
-function engagementTrend(posts: Post[]): number | null {
+export function engagementTrend(posts: Post[]): number | null {
   const dated = posts
     .map((post) => ({
       at: new Date(post.postedAt).getTime(),
@@ -108,7 +108,7 @@ function engagementTrend(posts: Post[]): number | null {
   return ((recent - older) / older) * 100;
 }
 
-function postsPerWeek(posts: Post[]): number | null {
+export function postsPerWeek(posts: Post[]): number | null {
   const times = posts
     .map((post) => new Date(post.postedAt).getTime())
     .filter((time) => Number.isFinite(time))

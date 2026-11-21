@@ -1,0 +1,70 @@
+import { describe, expect, it } from "vitest";
+import { analyzeGrowth } from "../src/core/analytics/growth";
+import type { CreatorProfile, MonthlyPoint, Post } from "../src/core/data/types";
+
+const NOW = new Date("2026-11-21T12:00:00.000Z");
+
+function post(daysAgo: number, likes: number): Post {
+  return {
+    id: `p-${daysAgo}`,
+    type: "Reel",
+    caption: "",
+    postedAt: new Date(NOW.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString(),
+    likes,
+    comments: 100,
+    hashtags: [],
+  };
+}
+
+function profile(overrides: Partial<CreatorProfile> = {}): CreatorProfile {
+  return {
+    username: "test.profile",
+    displayName: "Test Profile",
+    category: "Instagram Professional",
+    bio: "",
+    followers: 50_000,
+    following: 200,
+    postsCount: 40,
+    isVerified: false,
+    source: "live",
+    followerHistory: [],
+    recentPosts: [post(2, 3_000), post(6, 2_500), post(10, 2_200), post(14, 2_000)],
+    ...overrides,
+  };
+}
+
+describe("30-day growth analysis", () => {
+  it("uses measured history for demo fixtures without modeling", () => {
+    const history: MonthlyPoint[] = [
+      { month: "Sep", followers: 100_000 },
+      { month: "Oct", followers: 110_000 },
+      { month: "Nov", followers: 125_000 },
+    ];
+    const result = analyzeGrowth(profile({ source: "demo", followerHistory: history }), NOW);
+
+    expect(result.monthGrowthPct).toBe(13.64);
+    expect(result.monthGrowthFollowers).toBe(15_000);
+    expect(result.growthEstimated).toBe(false);
+  });
+
+  it("labels a live profile's 30-day follower change as an estimate", () => {
+    const result = analyzeGrowth(profile(), NOW);
+
+    expect(result.growthEstimated).toBe(true);
+    expect(result.monthGrowthPct).not.toBeNull();
+    expect(result.monthGrowthPct!).toBeGreaterThanOrEqual(-8);
+    expect(result.monthGrowthPct!).toBeLessThanOrEqual(12);
+    expect(result.postsLast30Days).toBe(4);
+    expect(result.postsPerWeek).not.toBeNull();
+    expect(result.engagementTrendPct).not.toBeNull();
+  });
+
+  it("returns null metrics for private or postless profiles", () => {
+    const result = analyzeGrowth(profile({ isPrivate: true, recentPosts: [] }), NOW);
+
+    expect(result.monthGrowthPct).toBeNull();
+    expect(result.monthGrowthFollowers).toBeNull();
+    expect(result.momentum).toBe("unknown");
+    expect(result.postsLast30Days).toBe(0);
+  });
+});
