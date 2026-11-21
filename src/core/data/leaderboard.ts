@@ -1,6 +1,7 @@
 import { computeMetrics } from "../analytics/metrics";
 import { log } from "../logging/logger";
 import { fetchLiveProfile, isLiveConfigured } from "./live";
+import { readTrackedSnapshot, writeTrackedSnapshot } from "./tracked-store";
 import type { CreatorProfile, Post } from "./types";
 
 export const TRENDING_WINDOW_DAYS = 15;
@@ -141,9 +142,20 @@ export function getTrackedProfiles(): Promise<CreatorProfile[]> {
     return trackedCache.value;
   }
 
-  const value = fetchTrackedProfiles();
+  const value = loadTrackedProfiles();
   trackedCache = { expiresAt: Date.now() + CACHE_TTL_MS, value };
   return value;
+}
+
+async function loadTrackedProfiles(): Promise<CreatorProfile[]> {
+  const snapshot = await readTrackedSnapshot();
+  if (snapshot) {
+    return snapshot;
+  }
+
+  const profiles = await fetchTrackedProfiles();
+  await writeTrackedSnapshot(profiles);
+  return profiles;
 }
 
 async function fetchTrackedProfiles(): Promise<CreatorProfile[]> {

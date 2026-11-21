@@ -271,8 +271,12 @@ The pool is 25 curated, real worldwide Creator/Business accounts listed in
 `src/core/data/leaderboard.ts`. It is not an exhaustive global index, and accounts the API cannot
 resolve are skipped. Results are cached for 15 minutes in the data layer, and the home page is
 dynamic so that a deployment without API credentials shows an empty-state message instead of stale
-data. The same cached pool is shared with profile pages for peer benchmarking
-(`getTrackedProfiles()`).
+data. The same pool is shared with profile pages for peer benchmarking
+(`getTrackedProfiles()`). To avoid firing 25 Meta API calls on every profile load, the pool is
+stored as a 30-minute snapshot in Upstash (`src/core/data/tracked-store.ts`): the homepage refresh
+writes it and profile pages read it. If the snapshot is missing (cold start without Upstash, or
+local development without Meta keys) it is rebuilt live once and cached. Empty pools are never
+written, so a transient API rate limit cannot wipe a good snapshot.
 
 The benchmark panel uses published Modash ranges by follower tier (Nano 5-10%, Micro 3-7%, Macro
 1-3%, Mega 0.5-2%) with a link to the source. Modash calculates median likes divided by followers
@@ -303,7 +307,7 @@ Every profile page now includes two extra sections below the demographics:
 
 Both are computed on the server in `src/app/profile/[username]/page.tsx`. The tracked-pool fetch is
 guarded by `isLiveConfigured()` so local development without Meta keys does not make pointless API
-calls.
+calls, and profile pages read the shared Upstash snapshot instead of calling Meta directly.
 
 ## Weekly digest (free 30-day trial)
 
