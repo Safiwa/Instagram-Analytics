@@ -317,8 +317,8 @@ cannot wipe a good snapshot. Two guards make refreshes resilient to Meta `code 4
 - A rebuild reuses profiles from any previous snapshot and fetches **only the missing handles**, so
   a signature bump or partial refresh stays well below the call limit. If ≥20% of the attempted
   handles fail, the pool is considered incomplete: it is still served (so the boards are not blank),
-  but its snapshot TTL is shortened from 30 minutes to 60 seconds and a warning is logged, so the
-  next request retries a clean rebuild instead of caching a partial board.
+  but its Upstash **and** in-memory TTLs are shortened from 30/15 minutes to 60 seconds and a
+  warning is logged, so the next request retries a clean rebuild instead of caching a partial board.
 
 The benchmark panel uses published Modash ranges by follower tier (Nano 5-10%, Micro 3-7%, Macro
 1-3%, Mega 0.5-2%) with a link to the source. Modash calculates median likes divided by followers

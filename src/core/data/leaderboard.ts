@@ -269,21 +269,9 @@ function emptyLeaderboard(): Leaderboard {
   return rankProfiles([], new Date());
 }
 
-let trackedCache: { expiresAt: number; value: Promise<CreatorProfile[]> } | null = null;
-
-export function getTrackedProfiles(): Promise<CreatorProfile[]> {
-  if (trackedCache && trackedCache.expiresAt > Date.now()) {
-    return trackedCache.value;
-  }
-
-  const value = loadTrackedProfiles();
-  trackedCache = { expiresAt: Date.now() + CACHE_TTL_MS, value };
-  return value;
-}
-
 // Bump the prefix whenever the tracked-pool rebuild logic changes so a snapshot
 // written by the previous version is not reused with the new expectations.
-const TRACKED_SIGNATURE = `v2:${LEADERBOARD_HANDLES.join(",")}`;
+const TRACKED_SIGNATURE = `v3:${LEADERBOARD_HANDLES.join(",")}`;
 
 // If this many of the handles we just tried fail (typically a Meta code 4 rate
 // limit), the pool is incomplete. Keep serving it, but expire it quickly so the
@@ -291,15 +279,43 @@ const TRACKED_SIGNATURE = `v2:${LEADERBOARD_HANDLES.join(",")}`;
 // minutes.
 export const INCOMPLETE_SKIP_RATE = 0.2;
 export const INCOMPLETE_TTL_SECONDS = 60;
+const INCOMPLETE_TTL_MS = INCOMPLETE_TTL_SECONDS * 1000;
 
 export function isIncompletePool(attempted: number, skipped: number): boolean {
   return attempted > 0 && skipped / attempted >= INCOMPLETE_SKIP_RATE;
 }
 
-async function loadTrackedProfiles(): Promise<CreatorProfile[]> {
+type TrackedResult = { profiles: CreatorProfile[]; incomplete: boolean };
+
+let trackedCache: { expiresAt: number; value: Promise<TrackedResult> } | null = null;
+
+function getTrackedResult(): Promise<TrackedResult> {
+  if (trackedCache && trackedCache.expiresAt > Date.now()) {
+    return trackedCache.value;
+  }
+
+  const entry: { expiresAt: number; value: Promise<TrackedResult> } = {
+    expiresAt: Date.now() + CACHE_TTL_MS,
+    value: Promise.resolve({ profiles: [], incomplete: false }),
+  };
+  entry.value = loadTrackedProfiles().then((result) => {
+    if (result.incomplete) {
+      entry.expiresAt = Date.now() + INCOMPLETE_TTL_MS;
+    }
+    return result;
+  });
+  trackedCache = entry;
+  return entry.value;
+}
+
+export async function getTrackedProfiles(): Promise<CreatorProfile[]> {
+  return (await getTrackedResult()).profiles;
+}
+
+async function loadTrackedProfiles(): Promise<TrackedResult> {
   const snapshot = await readTrackedSnapshot(TRACKED_SIGNATURE);
   if (snapshot) {
-    return snapshot;
+    return { profiles: snapshot, incomplete: false };
   }
 
   // Reuse profiles from an older/rate-limited snapshot so a rebuild only fetches
@@ -313,12 +329,12 @@ async function loadTrackedProfiles(): Promise<CreatorProfile[]> {
   const missing = LEADERBOARD_HANDLES.filter((handle) => !known.has(handle.toLowerCase()));
 
   const { profiles: fresh, attempted, skipped } = await fetchTrackedProfiles(missing);
+  const incomplete = isIncompletePool(attempted, skipped);
   const profiles = [...previous, ...fresh];
   if (profiles.length === 0) {
-    return profiles;
+    return { profiles, incomplete };
   }
 
-  const incomplete = isIncompletePool(attempted, skipped);
   await writeTrackedSnapshot(
     profiles,
     TRACKED_SIGNATURE,
@@ -332,7 +348,7 @@ async function loadTrackedProfiles(): Promise<CreatorProfile[]> {
       ttlSeconds: INCOMPLETE_TTL_SECONDS,
     });
   }
-  return profiles;
+  return { profiles, incomplete };
 }
 
 async function fetchTrackedProfiles(
@@ -364,26 +380,27 @@ async function fetchTrackedProfiles(
   return { profiles, attempted: handles.length, skipped };
 }
 
-async function buildLeaderboard(): Promise<Leaderboard> {
+async function buildLeaderboard(): Promise<{ board: Leaderboard; incomplete: boolean }> {
   if (!isLiveConfigured()) {
     log.warn("global leaderboard skipped: live API not configured");
-    return emptyLeaderboard();
+    return { board: emptyLeaderboard(), incomplete: false };
   }
 
   try {
-    const profiles = await getTrackedProfiles();
+    const { profiles, incomplete } = await getTrackedResult();
     const board = rankProfiles(profiles);
     log.info("global leaderboard refreshed", {
       tracked: board.tracked,
       trending: board.trending.length,
       engaged: board.engaged.length,
+      incomplete: incomplete ? "true" : "false",
     });
-    return board;
+    return { board, incomplete };
   } catch (error) {
     log.error("global leaderboard refresh failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
-    return emptyLeaderboard();
+    return { board: emptyLeaderboard(), incomplete: true };
   }
 }
 
@@ -394,7 +411,16 @@ export function getLeaderboard(): Promise<Leaderboard> {
     return cached.value;
   }
 
-  const value = buildLeaderboard();
-  cached = { expiresAt: Date.now() + CACHE_TTL_MS, value };
-  return value;
+  const entry: { expiresAt: number; value: Promise<Leaderboard> } = {
+    expiresAt: Date.now() + CACHE_TTL_MS,
+    value: Promise.resolve(emptyLeaderboard()),
+  };
+  entry.value = buildLeaderboard().then(({ board, incomplete }) => {
+    if (incomplete) {
+      entry.expiresAt = Date.now() + INCOMPLETE_TTL_MS;
+    }
+    return board;
+  });
+  cached = entry;
+  return entry.value;
 }
