@@ -361,16 +361,19 @@ Other limits:
   shows an explicit “posts not exposed” notice and `—` instead of misleading zeros.
   Retry in a few minutes.
 - Datacenter IPs (including Vercel functions) are refused by Instagram with HTTP 429.
-  Configure the local proxy bridge described above for the public deployment; local
-  lookups need no proxy.
+  The official Graph API path below is primary on the public deployment, so normal
+  lookups no longer depend on the local bridge. The bridge remains as a fallback for
+  profiles the API cannot resolve; local lookups need no proxy.
 - Embedded collab posts are counted on every profile where they appear.
 - This is an unofficial reader of public pages, not the official Instagram API.
 
-## Optional official API
+## Official Meta Graph API (active in production)
 
-If both variables below exist, the app tries Instagram Business Discovery first and
-falls back to the public reader when that request fails. No credentials are needed
-for normal use.
+When both variables below exist, the app tries Instagram Business Discovery first and
+falls back to the public reader only when that request fails. They are currently set in
+Vercel **Production** (`IG_ACCESS_TOKEN` as a Secret, `IG_BUSINESS_ACCOUNT_ID` as
+Config); the values are never committed or printed. They are optional for a local
+checkout, where the public reader works on its own.
 
 | Variable | Meaning |
 |---|---|
@@ -397,6 +400,24 @@ Authorization: Bearer {IG_ACCESS_TOKEN}
 The token is sent as a header, never in the URL. Business Discovery still requires a
 Professional target account and a Meta app with the relevant permissions; it is not
 needed for the public reader.
+
+Operational limits:
+
+- **Coverage:** only public Business/Creator accounts resolve through `business_discovery`.
+  Personal accounts reject the lookup and fall back to the public reader, which still
+  needs the local bridge. "Any username" is therefore not fully PC-independent.
+- **Token lifetime:** long-lived Facebook user tokens expire after roughly 60 days.
+  Refresh `IG_ACCESS_TOKEN` in Vercel Production before then; an expired token makes
+  every lookup fall back to the bridge.
+- **Metrics:** the API returns current follower/media counts only. It cannot supply
+  12-month history, so growth, fake-follower, and authenticity figures remain clearly
+  labelled estimates for non-demo profiles.
+
+Verified 2026-11-21: with the local tunnel stopped, production lookups for `natgeo`,
+`the.matis`, `ola.alqodmani`, and `trending.vibz.uae` all returned HTTP 200 with live
+follower counts, and Vercel logs recorded `instagram live profile loaded` for each
+request with **no** `instagram fetched through local proxy` entries. The bridge was
+not involved in any of those requests.
 
 ## Scripts
 
