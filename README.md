@@ -222,6 +222,13 @@ billing, no commitment). It is too small to build the Next.js app, but it is eno
 to run this test. If it passes, production needs a 4 GB plan such as CX23 or CPX22,
 or the proxy logic must be extracted into a standalone Node service.
 
+Observed on 2026-11-21: Hostinger KVM 1 (Brazil) failed this test on both its IPv6
+address and its dedicated IPv4 — HTTP `429` with a final URL of
+`https://www.instagram.com/accounts/login/`. That is Instagram's datacenter-IP
+rejection, not a network fault. It confirms that swapping cloud providers does not
+solve the egress problem; an always-on residential/mobile connection is required
+for PC-independent lookups.
+
 ### 4. Configure Vercel
 
 In **Project → Settings → Environment Variables**, add:
