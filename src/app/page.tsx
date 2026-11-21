@@ -141,13 +141,13 @@ export default function Home() {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">
             Profile intelligence
           </p>
-          <p className="mt-3 inline-flex rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-200">
+          <h1 className="mt-3 max-w-3xl text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
             Leading Instagram analytics platform in the UAE — performance-driven tools and a
             practical growth plan
-          </p>
-          <h1 className="mt-3 max-w-xl text-3xl font-semibold tracking-tight">
-            Analyze any public Instagram account.
           </h1>
+          <p className="mt-3 text-base font-medium text-indigo-200">
+            Analyze any public Instagram account.
+          </p>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">
             Enter a username to see how public signals become engagement and audience-quality
             metrics. No API keys or Meta app needed.

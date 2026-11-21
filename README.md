@@ -328,8 +328,10 @@ over roughly three months; this app uses average likes and comments divided by f
 to 12 recent posts, so the comparison is directional, not exact. The matching tier also appears as
 a hint on each profile's engagement card.
 
-The homepage hero also carries the positioning line "Leading Instagram analytics platform in the
-UAE — performance-driven tools and a practical growth plan".
+The homepage hero leads with the large headline "Leading Instagram analytics platform in the UAE —
+performance-driven tools and a practical growth plan", followed by the lookup prompt. The browser
+tab icon is an original indigo ascending-bars mark defined in `src/app/icon.svg` (Next.js `icon`
+file convention), so no external icon asset is required.
 
 ## Verification badge, 30-day growth, peer and UAE/GCC benchmark
 
