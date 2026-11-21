@@ -284,6 +284,13 @@ Follower growth is labeled `Est.` when it is modeled. Each email includes a sign
 unsubscribe link. No email is sent if Resend, Upstash, or `CRON_SECRET` is missing; the
 endpoint returns a clear configuration error instead of pretending to send.
 
+Verified on 2026-11-21: `updates.instagram-analytics.com` shows **Verified** in the
+Resend dashboard, and a real test send through the production endpoint returned
+`{"ok":true,"due":1,"sent":1,"failed":0}` with the email marked **Delivered** in
+Resend. This caught a bug where Upstash `GET` returns a JSON *string* and the
+subscription parser accepted only objects, making the hosted path silently see zero
+due subscribers; `parseSubscription()` now accepts both strings and objects.
+
 ## How public lookup works
 
 1. `GET https://www.instagram.com/{username}/` with a crawler user agent that
