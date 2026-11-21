@@ -3,7 +3,12 @@ import { computeMetrics } from "../analytics/metrics";
 import { log } from "../logging/logger";
 import { fetchLiveProfile, isLiveConfigured } from "./live";
 import { REGION_BOARDS, regionForHandle, type Region } from "./regions";
-import { readTrackedSnapshot, writeTrackedSnapshot } from "./tracked-store";
+import {
+  readTrackedSnapshot,
+  readTrackedSnapshotAny,
+  TRACKED_SNAPSHOT_TTL_SECONDS,
+  writeTrackedSnapshot,
+} from "./tracked-store";
 import type { CreatorProfile, Post } from "./types";
 
 export const TRENDING_WINDOW_DAYS = 15;
@@ -276,7 +281,20 @@ export function getTrackedProfiles(): Promise<CreatorProfile[]> {
   return value;
 }
 
-const TRACKED_SIGNATURE = LEADERBOARD_HANDLES.join(",");
+// Bump the prefix whenever the tracked-pool rebuild logic changes so a snapshot
+// written by the previous version is not reused with the new expectations.
+const TRACKED_SIGNATURE = `v2:${LEADERBOARD_HANDLES.join(",")}`;
+
+// If this many of the handles we just tried fail (typically a Meta code 4 rate
+// limit), the pool is incomplete. Keep serving it, but expire it quickly so the
+// next request retries a clean rebuild instead of caching a partial board for 30
+// minutes.
+export const INCOMPLETE_SKIP_RATE = 0.2;
+export const INCOMPLETE_TTL_SECONDS = 60;
+
+export function isIncompletePool(attempted: number, skipped: number): boolean {
+  return attempted > 0 && skipped / attempted >= INCOMPLETE_SKIP_RATE;
+}
 
 async function loadTrackedProfiles(): Promise<CreatorProfile[]> {
   const snapshot = await readTrackedSnapshot(TRACKED_SIGNATURE);
@@ -284,26 +302,58 @@ async function loadTrackedProfiles(): Promise<CreatorProfile[]> {
     return snapshot;
   }
 
-  const profiles = await fetchTrackedProfiles();
-  await writeTrackedSnapshot(profiles, TRACKED_SIGNATURE);
+  // Reuse profiles from an older/rate-limited snapshot so a rebuild only fetches
+  // the handles we are actually missing. This keeps signature bumps and partial
+  // refreshes well below Meta's call limit.
+  const allowed = new Set(LEADERBOARD_HANDLES.map((handle) => handle.toLowerCase()));
+  const previous = ((await readTrackedSnapshotAny()) ?? []).filter((profile) =>
+    allowed.has(profile.username.toLowerCase()),
+  );
+  const known = new Set(previous.map((profile) => profile.username.toLowerCase()));
+  const missing = LEADERBOARD_HANDLES.filter((handle) => !known.has(handle.toLowerCase()));
+
+  const { profiles: fresh, attempted, skipped } = await fetchTrackedProfiles(missing);
+  const profiles = [...previous, ...fresh];
+  if (profiles.length === 0) {
+    return profiles;
+  }
+
+  const incomplete = isIncompletePool(attempted, skipped);
+  await writeTrackedSnapshot(
+    profiles,
+    TRACKED_SIGNATURE,
+    incomplete ? INCOMPLETE_TTL_SECONDS : TRACKED_SNAPSHOT_TTL_SECONDS,
+  );
+  if (incomplete) {
+    log.warn("tracked pool incomplete; shortening snapshot TTL", {
+      attempted,
+      skipped,
+      profiles: profiles.length,
+      ttlSeconds: INCOMPLETE_TTL_SECONDS,
+    });
+  }
   return profiles;
 }
 
-async function fetchTrackedProfiles(): Promise<CreatorProfile[]> {
-  if (!isLiveConfigured()) {
-    return [];
+async function fetchTrackedProfiles(
+  handles: readonly string[],
+): Promise<{ profiles: CreatorProfile[]; attempted: number; skipped: number }> {
+  if (!isLiveConfigured() || handles.length === 0) {
+    return { profiles: [], attempted: 0, skipped: 0 };
   }
 
   const profiles: CreatorProfile[] = [];
+  let skipped = 0;
 
-  for (let index = 0; index < LEADERBOARD_HANDLES.length; index += FETCH_CHUNK) {
-    const chunk = LEADERBOARD_HANDLES.slice(index, index + FETCH_CHUNK);
+  for (let index = 0; index < handles.length; index += FETCH_CHUNK) {
+    const chunk = handles.slice(index, index + FETCH_CHUNK);
     const results = await Promise.allSettled(chunk.map((handle) => fetchLiveProfile(handle)));
 
     for (const result of results) {
       if (result.status === "fulfilled") {
         profiles.push(result.value);
       } else {
+        skipped += 1;
         log.warn("tracked profile skipped", {
           message: result.reason instanceof Error ? result.reason.message : "unknown",
         });
@@ -311,7 +361,7 @@ async function fetchTrackedProfiles(): Promise<CreatorProfile[]> {
     }
   }
 
-  return profiles;
+  return { profiles, attempted: handles.length, skipped };
 }
 
 async function buildLeaderboard(): Promise<Leaderboard> {

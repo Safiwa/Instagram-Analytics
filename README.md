@@ -250,7 +250,7 @@ request plus a few embed requests.
 
 | Route | Purpose |
 |---|---|
-| `/` | Analysis dashboard: lookup, global pulse leaderboards, pipeline, metric engine, Modash benchmark, sources, confidence |
+| `/` | Analysis dashboard: lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, Modash benchmark, sources, confidence |
 | `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and UAE/GCC benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison, maximum four accounts |
 | `/api/report?handles=a,b` | Downloadable PDF report |
@@ -260,23 +260,65 @@ request plus a few embed requests.
 
 ## Global pulse leaderboards and benchmark
 
-The home page renders two live leaderboards built from real public data returned by the official
-Graph API path:
+The home page renders six live leaderboards built from real public data returned by the official
+Graph API path. Each entry links to a full profile analysis.
 
-- **Trending · last 15 days** ranks the tracked pool by engagement rate on public posts published
-  in the last 15 days.
-- **High engagement** ranks the same pool by engagement rate across up to 12 recent public posts.
+**Worldwide**
 
-The pool is 25 curated, real worldwide Creator/Business accounts listed in
-`src/core/data/leaderboard.ts`. It is not an exhaustive global index, and accounts the API cannot
+- **Trending · last 15 days** — accounts with a public post in the last 15 days.
+- **High engagement** — ranked by engagement rate across up to 12 recent public posts (this card is
+  deliberately engagement-rate-only because that is what it is named).
+
+**By country** (top 10 each, added alongside the worldwide cards)
+
+- **USA · top 10**, **Europe · top 10**, **Middle East · top 10** (outside the UAE), and
+  **UAE · top 10** (listed separately from the rest of the Middle East).
+
+### Four-factor ranking
+
+"Trending" and the four country boards no longer rank by engagement rate alone — that promoted
+small accounts with one viral post above million-follower accounts. They now use a weighted rank
+score (`rankScore()` in `src/core/data/leaderboard.ts`) built from four signals, in priority order:
+
+1. **Followers** — 55%
+2. **Engagement rate** — 20%
+3. **Average interactions** — 15%
+4. **30-day follower change** — 10%
+
+Each signal is normalised to 0–100 against fixed anchors (followers: 200M ceiling; engagement: 5%
+cap; average interactions: 2M ceiling; follower change: −5% to +15%) so scores stay stable across
+refreshes. Followers carry the most weight, so a large account is not outranked by a small one with
+exceptional engagement. Follower change is an estimate for real accounts and is labelled `est.` in
+the UI.
+
+Country is **curated, not inferred from Instagram**: Instagram does not publish an account's
+country, so `src/core/data/regions.ts` maps each tracked handle to exactly one board from its public
+identity. This is editorial metadata, not an audience-demographic claim, and the homepage discloses
+it. Accounts based in the UAE appear only on the UAE board.
+
+### Tracked pool and caching
+
+The pool is 55 curated, real worldwide Creator/Business accounts listed in
+`src/core/data/leaderboard.ts` (expanded from 25 with verified European and Middle Eastern handles
+so every country board can fill). It is not an exhaustive global index, and accounts the API cannot
 resolve are skipped. Results are cached for 15 minutes in the data layer, and the home page is
 dynamic so that a deployment without API credentials shows an empty-state message instead of stale
 data. The same pool is shared with profile pages for peer benchmarking
-(`getTrackedProfiles()`). To avoid firing 25 Meta API calls on every profile load, the pool is
-stored as a 30-minute snapshot in Upstash (`src/core/data/tracked-store.ts`): the homepage refresh
-writes it and profile pages read it. If the snapshot is missing (cold start without Upstash, or
-local development without Meta keys) it is rebuilt live once and cached. Empty pools are never
-written, so a transient API rate limit cannot wipe a good snapshot.
+(`getTrackedProfiles()`).
+
+To avoid firing 55 Meta API calls on every profile load, the pool is stored as a 30-minute snapshot
+in Upstash (`src/core/data/tracked-store.ts`): the homepage refresh writes it and profile pages read
+it. If the snapshot is missing (cold start without Upstash, or local development without Meta keys)
+it is rebuilt live once and cached. Empty pools are never written, so a transient API rate limit
+cannot wipe a good snapshot. Two guards make refreshes resilient to Meta `code 4` rate limits:
+
+- The snapshot carries a handle-list signature (`analytics:tracked-pool:handles`); changing
+  `LEADERBOARD_HANDLES` or the rebuild logic invalidates stale snapshots immediately.
+- A rebuild reuses profiles from any previous snapshot and fetches **only the missing handles**, so
+  a signature bump or partial refresh stays well below the call limit. If ≥20% of the attempted
+  handles fail, the pool is considered incomplete: it is still served (so the boards are not blank),
+  but its snapshot TTL is shortened from 30 minutes to 60 seconds and a warning is logged, so the
+  next request retries a clean rebuild instead of caching a partial board.
 
 The benchmark panel uses published Modash ranges by follower tier (Nano 5-10%, Micro 3-7%, Macro
 1-3%, Mega 0.5-2%) with a link to the source. Modash calculates median likes divided by followers

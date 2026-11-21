@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { modashBenchmark } from "../src/core/analytics/benchmark";
 import {
+  isIncompletePool,
   rankProfiles,
   rankScore,
   TRENDING_WINDOW_DAYS,
@@ -112,6 +113,16 @@ describe("four-factor leaderboard ranking", () => {
     expect(entry.avgInteractions).toBe(10_000);
     expect(entry.followerChangeEstimated).toBe(true);
     expect(entry.rankScore).toBeGreaterThan(0);
+  });
+});
+
+describe("incomplete tracked pool detection", () => {
+  it("shortens the cache TTL when a meaningful share of handles fail", () => {
+    expect(isIncompletePool(55, 0)).toBe(false);
+    expect(isIncompletePool(55, 5)).toBe(false);
+    expect(isIncompletePool(55, 11)).toBe(true);
+    expect(isIncompletePool(25, 25)).toBe(true);
+    expect(isIncompletePool(0, 0)).toBe(false);
   });
 });
 

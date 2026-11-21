@@ -51,23 +51,13 @@ function isProfile(value: unknown): value is CreatorProfile {
   );
 }
 
-export async function readTrackedSnapshot(signature?: string): Promise<CreatorProfile[] | null> {
+async function loadSnapshot(): Promise<CreatorProfile[] | null> {
   const config = redisConfig();
   if (!config) {
     return null;
   }
 
   try {
-    // A snapshot taken for an older handle list must not be reused after the
-    // tracked pool changes; otherwise new region boards would stay empty for the
-    // rest of the TTL. Older snapshots have no signature and are rebuilt once.
-    if (signature) {
-      const storedSignature = await redisCommand(config, ["GET", SIGNATURE_KEY]);
-      if (storedSignature !== signature) {
-        return null;
-      }
-    }
-
     const raw = await redisCommand(config, ["GET", SNAPSHOT_KEY]);
     if (typeof raw !== "string") {
       return null;
@@ -86,9 +76,42 @@ export async function readTrackedSnapshot(signature?: string): Promise<CreatorPr
   }
 }
 
+export async function readTrackedSnapshot(signature?: string): Promise<CreatorProfile[] | null> {
+  const config = redisConfig();
+  if (!config) {
+    return null;
+  }
+
+  // A snapshot taken for an older handle list must not be reused after the
+  // tracked pool changes; otherwise new region boards would stay empty for the
+  // rest of the TTL. Older snapshots have no signature and are rebuilt once.
+  if (signature) {
+    try {
+      const storedSignature = await redisCommand(config, ["GET", SIGNATURE_KEY]);
+      if (storedSignature !== signature) {
+        return null;
+      }
+    } catch (error) {
+      log.warn("tracked snapshot signature read failed", {
+        message: error instanceof Error ? error.message : "unknown",
+      });
+      return null;
+    }
+  }
+
+  return loadSnapshot();
+}
+
+// Used when rebuilding a changed or rate-limited pool: profiles already in the
+// snapshot are kept so only the missing handles need a fresh Meta API call.
+export async function readTrackedSnapshotAny(): Promise<CreatorProfile[] | null> {
+  return loadSnapshot();
+}
+
 export async function writeTrackedSnapshot(
   profiles: CreatorProfile[],
   signature?: string,
+  ttlSeconds = TRACKED_SNAPSHOT_TTL_SECONDS,
 ): Promise<void> {
   if (profiles.length === 0) {
     return;
@@ -100,23 +123,11 @@ export async function writeTrackedSnapshot(
   }
 
   try {
-    await redisCommand(config, [
-      "SET",
-      SNAPSHOT_KEY,
-      JSON.stringify(profiles),
-      "EX",
-      TRACKED_SNAPSHOT_TTL_SECONDS,
-    ]);
+    await redisCommand(config, ["SET", SNAPSHOT_KEY, JSON.stringify(profiles), "EX", ttlSeconds]);
     if (signature) {
-      await redisCommand(config, [
-        "SET",
-        SIGNATURE_KEY,
-        signature,
-        "EX",
-        TRACKED_SNAPSHOT_TTL_SECONDS,
-      ]);
+      await redisCommand(config, ["SET", SIGNATURE_KEY, signature, "EX", ttlSeconds]);
     }
-    log.info("tracked snapshot stored", { profiles: profiles.length });
+    log.info("tracked snapshot stored", { profiles: profiles.length, ttlSeconds });
   } catch (error) {
     log.warn("tracked snapshot write failed", {
       message: error instanceof Error ? error.message : "unknown",
