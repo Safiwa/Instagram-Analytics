@@ -50,14 +50,14 @@ function isProfile(value: unknown): value is CreatorProfile {
   );
 }
 
-export async function readSnapshot(key: string): Promise<CreatorProfile[] | null> {
+export async function readTrackedSnapshot(): Promise<CreatorProfile[] | null> {
   const config = redisConfig();
   if (!config) {
     return null;
   }
 
   try {
-    const raw = await redisCommand(config, ["GET", key]);
+    const raw = await redisCommand(config, ["GET", SNAPSHOT_KEY]);
     if (typeof raw !== "string") {
       return null;
     }
@@ -68,19 +68,14 @@ export async function readSnapshot(key: string): Promise<CreatorProfile[] | null
     const profiles = parsed.filter(isProfile);
     return profiles.length > 0 ? profiles : null;
   } catch (error) {
-    log.warn("snapshot read failed", {
-      key,
+    log.warn("tracked snapshot read failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
     return null;
   }
 }
 
-export async function writeSnapshot(
-  key: string,
-  profiles: CreatorProfile[],
-  ttlSeconds = TRACKED_SNAPSHOT_TTL_SECONDS,
-): Promise<void> {
+export async function writeTrackedSnapshot(profiles: CreatorProfile[]): Promise<void> {
   if (profiles.length === 0) {
     return;
   }
@@ -91,20 +86,17 @@ export async function writeSnapshot(
   }
 
   try {
-    await redisCommand(config, ["SET", key, JSON.stringify(profiles), "EX", ttlSeconds]);
-    log.info("snapshot stored", { key, profiles: profiles.length });
+    await redisCommand(config, [
+      "SET",
+      SNAPSHOT_KEY,
+      JSON.stringify(profiles),
+      "EX",
+      TRACKED_SNAPSHOT_TTL_SECONDS,
+    ]);
+    log.info("tracked snapshot stored", { profiles: profiles.length });
   } catch (error) {
-    log.warn("snapshot write failed", {
-      key,
+    log.warn("tracked snapshot write failed", {
       message: error instanceof Error ? error.message : "unknown",
     });
   }
-}
-
-export function readTrackedSnapshot(): Promise<CreatorProfile[] | null> {
-  return readSnapshot(SNAPSHOT_KEY);
-}
-
-export function writeTrackedSnapshot(profiles: CreatorProfile[]): Promise<void> {
-  return writeSnapshot(SNAPSHOT_KEY, profiles);
 }
