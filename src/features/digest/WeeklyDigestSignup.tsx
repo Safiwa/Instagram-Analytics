@@ -60,21 +60,21 @@ export function WeeklyDigestSignup() {
             Free 30-day trial
           </div>
           <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
-            Get the weekly profile digest
+            Prove Instagram performance with real data
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
-            Enter your email and an Instagram handle. Every Monday we send the current engagement
-            rate, the week-over-week follower change, and 12-month follower growth, so you can
-            spot changes without running another analysis.
+            Need to back up your numbers? Start a FREE 30-day trial and use Instagram analytics to
+            benchmark, compare, and report with confidence. Add your email and a public handle, and
+            we&apos;ll send a weekly digest of your profile&apos;s performance every Monday.
           </p>
           <ul className="mt-4 space-y-2 text-sm text-slate-700">
             <li className="flex items-center gap-2">
               <CircleCheck className="h-4 w-4 text-indigo-600" aria-hidden="true" />
-              Engagement rate measured from public post interactions
+              Weekly digest emails with engagement and follower changes
             </li>
             <li className="flex items-center gap-2">
               <CircleCheck className="h-4 w-4 text-indigo-600" aria-hidden="true" />
-              Follower change reported week over week
+              Benchmark public profiles and compare before you report
             </li>
             <li className="flex items-center gap-2">
               <CircleCheck className="h-4 w-4 text-indigo-600" aria-hidden="true" />

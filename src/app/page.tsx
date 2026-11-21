@@ -16,6 +16,11 @@ import {
 } from "lucide-react";
 import { HandleLookup } from "../features/discovery/HandleLookup";
 import { WeeklyDigestSignup } from "../features/digest/WeeklyDigestSignup";
+import { BenchmarkPanel } from "../features/leaderboard/BenchmarkPanel";
+import { GlobalPulse } from "../features/leaderboard/GlobalPulse";
+
+// The live leaderboard is fetched per request and cached in the data layer.
+export const dynamic = "force-dynamic";
 
 type PipelineStep = {
   icon: LucideIcon;
@@ -148,6 +153,8 @@ export default function Home() {
         <HandleLookup />
       </section>
 
+      <GlobalPulse />
+
       <section data-testid="pipeline" className="space-y-5">
         <SectionTitle
           eyebrow="Analysis pipeline"
@@ -218,6 +225,8 @@ export default function Home() {
           })}
         </div>
       </section>
+
+      <BenchmarkPanel />
 
       <section data-testid="source-panel" className="space-y-5">
         <SectionTitle

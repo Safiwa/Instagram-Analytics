@@ -22,12 +22,6 @@ const SOURCE_LABEL: Record<CreatorProfile["source"], string> = {
   live: "Official API",
 };
 
-const SOURCE_BADGE_CLASS: Record<CreatorProfile["source"], string> = {
-  demo: "bg-slate-100 text-slate-600",
-  public: "bg-sky-50 text-sky-700",
-  live: "bg-emerald-50 text-emerald-700",
-};
-
 function withEstimate(value: string, estimated: boolean): string {
   return estimated ? `${value} est.` : value;
 }
@@ -148,13 +142,8 @@ export function ComparisonTable({ rows, truncated, missing }: ComparisonTablePro
                     {row.profile.displayName}
                     <ArrowUpRight className="h-3 w-3 text-slate-400 group-hover:text-indigo-600" aria-hidden="true" />
                   </Link>
-                  <p className="mt-0.5 flex items-center gap-2 text-xs font-normal text-slate-500">
-                    <span>@{row.profile.username}</span>
-                    <span
-                      className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SOURCE_BADGE_CLASS[row.profile.source]}`}
-                    >
-                      {SOURCE_LABEL[row.profile.source]}
-                    </span>
+                  <p className="mt-0.5 text-xs font-normal text-slate-500">
+                    @{row.profile.username}
                   </p>
                 </th>
               ))}

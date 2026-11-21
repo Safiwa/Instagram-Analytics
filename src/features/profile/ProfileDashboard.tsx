@@ -21,6 +21,7 @@ import {
   YAxis,
 } from "recharts";
 import { MetricCard } from "../../components/MetricCard";
+import { modashBenchmark, MODASH_SOURCE_LABEL } from "../../core/analytics/benchmark";
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
 import type { ProfileMetrics } from "../../core/analytics/metrics";
 import type { AudienceSlice, CreatorProfile } from "../../core/data/types";
@@ -30,18 +31,6 @@ const TOOLTIP_STYLE = {
   borderRadius: 12,
   border: "1px solid #e2e8f0",
   fontSize: 12,
-};
-
-const SOURCE_LABEL: Record<CreatorProfile["source"], string> = {
-  demo: "Demo data",
-  public: "Public web",
-  live: "Official API",
-};
-
-const SOURCE_BADGE_CLASS: Record<CreatorProfile["source"], string> = {
-  demo: "bg-slate-100 text-slate-600",
-  public: "bg-sky-50 text-sky-700",
-  live: "bg-emerald-50 text-emerald-700",
 };
 
 const IMPACT_DOT_CLASS: Record<EstimateSignal["impact"], string> = {
@@ -113,6 +102,10 @@ export function ProfileDashboard({ profile, metrics }: ProfileDashboardProps) {
   const hasViews = profile.recentPosts.some((post) => typeof post.viewCount === "number");
   const noPublicPosts =
     profile.source !== "demo" && !profile.isPrivate && profile.recentPosts.length === 0;
+  const tier = modashBenchmark(profile.followers);
+  const benchmarkHint = tier
+    ? ` ${MODASH_SOURCE_LABEL}: ${tier.label} ${tier.followers} typically ${tier.range}.`
+    : "";
 
   const initials =
     profile.displayName
@@ -166,13 +159,8 @@ export function ProfileDashboard({ profile, metrics }: ProfileDashboardProps) {
                 <BadgeCheck className="h-5 w-5 text-indigo-600" aria-label="Verified" />
               ) : null}
             </div>
-            <p className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-              <span>@{profile.username} · {profile.category}</span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SOURCE_BADGE_CLASS[profile.source]}`}
-              >
-                {SOURCE_LABEL[profile.source]}
-              </span>
+            <p className="mt-0.5 text-sm text-slate-500">
+              @{profile.username} · {profile.category}
             </p>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">{profile.bio}</p>
             {profile.website ? (
@@ -233,13 +221,13 @@ export function ProfileDashboard({ profile, metrics }: ProfileDashboardProps) {
         <MetricCard
           label="Engagement rate"
           value={profile.isPrivate || noPublicPosts ? "—" : formatPercent(metrics.engagementRate)}
-          hint={
+          hint={`${
             profile.isPrivate || noPublicPosts
               ? "No public posts available"
               : metrics.engagementBasis === "likes+comments"
                 ? "Public likes + comments / followers"
                 : "Avg interactions / followers"
-          }
+          }${benchmarkHint}`}
         />
         <MetricCard
           label="12-month growth"

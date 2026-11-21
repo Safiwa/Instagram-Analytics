@@ -250,13 +250,34 @@ request plus a few embed requests.
 
 | Route | Purpose |
 |---|---|
-| `/` | Public handle lookup and an analysis dashboard: pipeline, metric engine, sources, confidence |
+| `/` | Analysis dashboard: lookup, global pulse leaderboards, pipeline, metric engine, Modash benchmark, sources, confidence |
 | `/profile/[username]` | KPIs, estimate disclosure, interactions, recent posts, and public-data notices |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison, maximum four accounts |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
 | `/api/digest/send` | Cron-only weekly digest sender |
 | `/api/digest/unsubscribe` | Signed one-click unsubscribe link |
+
+## Global pulse leaderboards and benchmark
+
+The home page renders two live leaderboards built from real public data returned by the official
+Graph API path:
+
+- **Trending · last 15 days** ranks the tracked pool by engagement rate on public posts published
+  in the last 15 days.
+- **High engagement** ranks the same pool by engagement rate across up to 12 recent public posts.
+
+The pool is 21 curated, real worldwide Creator/Business accounts listed in
+`src/core/data/leaderboard.ts`. It is not an exhaustive global index, and accounts the API cannot
+resolve are skipped. Results are cached for 15 minutes in the data layer, and the home page is
+dynamic so that a deployment without API credentials shows an empty-state message instead of stale
+data.
+
+The benchmark panel uses published Modash ranges by follower tier (Nano 5-10%, Micro 3-7%, Macro
+1-3%, Mega 0.5-2%) with a link to the source. Modash calculates median likes divided by followers
+over roughly three months; this app uses average likes and comments divided by followers over up
+to 12 recent posts, so the comparison is directional, not exact. The matching tier also appears as
+a hint on each profile's engagement card.
 
 ## Weekly digest (free 30-day trial)
 
