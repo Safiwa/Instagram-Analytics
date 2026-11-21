@@ -5,6 +5,7 @@ import type { CreatorProfile } from "./types";
 // profile page never has to fire 25 Meta API calls just to find a peer. The
 // homepage leaderboard refresh writes the snapshot; profile pages read it.
 const SNAPSHOT_KEY = "analytics:tracked-pool";
+const SIGNATURE_KEY = "analytics:tracked-pool:handles";
 export const TRACKED_SNAPSHOT_TTL_SECONDS = 30 * 60;
 
 type RedisConfig = { url: string; token: string };
@@ -50,13 +51,23 @@ function isProfile(value: unknown): value is CreatorProfile {
   );
 }
 
-export async function readTrackedSnapshot(): Promise<CreatorProfile[] | null> {
+export async function readTrackedSnapshot(signature?: string): Promise<CreatorProfile[] | null> {
   const config = redisConfig();
   if (!config) {
     return null;
   }
 
   try {
+    // A snapshot taken for an older handle list must not be reused after the
+    // tracked pool changes; otherwise new region boards would stay empty for the
+    // rest of the TTL. Older snapshots have no signature and are rebuilt once.
+    if (signature) {
+      const storedSignature = await redisCommand(config, ["GET", SIGNATURE_KEY]);
+      if (storedSignature !== signature) {
+        return null;
+      }
+    }
+
     const raw = await redisCommand(config, ["GET", SNAPSHOT_KEY]);
     if (typeof raw !== "string") {
       return null;
@@ -75,7 +86,10 @@ export async function readTrackedSnapshot(): Promise<CreatorProfile[] | null> {
   }
 }
 
-export async function writeTrackedSnapshot(profiles: CreatorProfile[]): Promise<void> {
+export async function writeTrackedSnapshot(
+  profiles: CreatorProfile[],
+  signature?: string,
+): Promise<void> {
   if (profiles.length === 0) {
     return;
   }
@@ -93,6 +107,15 @@ export async function writeTrackedSnapshot(profiles: CreatorProfile[]): Promise<
       "EX",
       TRACKED_SNAPSHOT_TTL_SECONDS,
     ]);
+    if (signature) {
+      await redisCommand(config, [
+        "SET",
+        SIGNATURE_KEY,
+        signature,
+        "EX",
+        TRACKED_SNAPSHOT_TTL_SECONDS,
+      ]);
+    }
     log.info("tracked snapshot stored", { profiles: profiles.length });
   } catch (error) {
     log.warn("tracked snapshot write failed", {

@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { modashBenchmark } from "../src/core/analytics/benchmark";
-import { rankProfiles, TRENDING_WINDOW_DAYS } from "../src/core/data/leaderboard";
+import {
+  rankProfiles,
+  rankScore,
+  TRENDING_WINDOW_DAYS,
+} from "../src/core/data/leaderboard";
+import { REGION_BOARDS, regionForHandle } from "../src/core/data/regions";
 import type { CreatorProfile, Post } from "../src/core/data/types";
 
 const NOW = new Date("2026-11-21T12:00:00.000Z");
@@ -71,6 +76,83 @@ describe("global leaderboard ranking", () => {
     expect(board.tracked).toBe(12);
     expect(board.trending).toHaveLength(10);
     expect(board.engaged).toHaveLength(10);
+  });
+});
+
+describe("four-factor leaderboard ranking", () => {
+  it("puts a large account ahead of a small one even with lower engagement", () => {
+    const big = profile("big", 10_000_000, [post("a", 2, 100_000), post("b", 4, 100_000)]);
+    const small = profile("small", 5_000, [post("c", 2, 400), post("d", 4, 400)]);
+
+    const board = rankProfiles([small, big], NOW);
+
+    expect(board.trending.map((entry) => entry.username)).toEqual(["big", "small"]);
+    expect(board.trending[0].rankScore).toBeGreaterThan(board.trending[1].rankScore);
+  });
+
+  it("lets every one of the four signals raise the rank score", () => {
+    const base = {
+      followers: 1_000_000,
+      engagementRate: 1,
+      avgInteractions: 10_000,
+      followerChangePct: 2,
+    };
+    const score = rankScore(base);
+
+    expect(rankScore({ ...base, followers: 10_000_000 })).toBeGreaterThan(score);
+    expect(rankScore({ ...base, engagementRate: 2 })).toBeGreaterThan(score);
+    expect(rankScore({ ...base, avgInteractions: 20_000 })).toBeGreaterThan(score);
+    expect(rankScore({ ...base, followerChangePct: 8 })).toBeGreaterThan(score);
+  });
+
+  it("exposes the measured and estimated signals on each entry", () => {
+    const board = rankProfiles([profile("natgeo", 1_000_000, [post("a", 2, 10_000)])], NOW);
+    const entry = board.trending[0];
+
+    expect(entry.avgInteractions).toBe(10_000);
+    expect(entry.followerChangeEstimated).toBe(true);
+    expect(entry.rankScore).toBeGreaterThan(0);
+  });
+});
+
+describe("country leaderboards", () => {
+  it("maps tracked handles to exactly one of the four country boards", () => {
+    expect(regionForHandle("taylorswift")).toBe("usa");
+    expect(regionForHandle("davidguetta")).toBe("europe");
+    expect(regionForHandle("aljazeera")).toBe("middle-east");
+    expect(regionForHandle("emirates")).toBe("uae");
+    expect(regionForHandle("leomessi")).toBeNull();
+    expect(regionForHandle("UNKNOWN")).toBeNull();
+    expect(REGION_BOARDS.map((board) => board.id)).toEqual([
+      "usa",
+      "europe",
+      "middle-east",
+      "uae",
+    ]);
+  });
+
+  it("builds a separate top-ten board for each region", () => {
+    const board = rankProfiles(
+      [
+        profile("taylorswift", 100_000_000, [post("a", 2, 100_000)]),
+        profile("davidguetta", 12_000_000, [post("b", 2, 50_000)]),
+        profile("aljazeera", 15_000_000, [post("c", 2, 50_000)]),
+        profile("emirates", 9_000_000, [post("d", 2, 20_000)]),
+        profile("leomessi", 500_000_000, [post("e", 2, 100_000)]),
+      ],
+      NOW,
+    );
+
+    expect(board.regional.usa.map((entry) => entry.username)).toEqual(["taylorswift"]);
+    expect(board.regional.europe.map((entry) => entry.username)).toEqual(["davidguetta"]);
+    expect(board.regional["middle-east"].map((entry) => entry.username)).toEqual(["aljazeera"]);
+    expect(board.regional.uae.map((entry) => entry.username)).toEqual(["emirates"]);
+  });
+
+  it("always returns all four boards, even for an empty pool", () => {
+    const board = rankProfiles([], NOW);
+    expect(Object.keys(board.regional)).toEqual(["usa", "europe", "middle-east", "uae"]);
+    expect(board.regional.uae).toEqual([]);
   });
 });
 

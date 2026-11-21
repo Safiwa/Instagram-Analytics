@@ -1,24 +1,42 @@
 import Link from "next/link";
-import { ArrowUpRight, Flame, Gauge, Globe2 } from "lucide-react";
+import { ArrowUpRight, Flame, Gauge, Globe2, MapPin } from "lucide-react";
 import {
   getLeaderboard,
   TRENDING_WINDOW_DAYS,
   type LeaderboardEntry,
 } from "../../core/data/leaderboard";
+import { REGION_BOARDS } from "../../core/data/regions";
 import { formatCompact, formatDate, formatPercent } from "../../core/format";
+
+function followerChange(entry: LeaderboardEntry): string {
+  const sign = entry.followerChangePct > 0 ? "+" : "";
+  return `${sign}${entry.followerChangePct}% follower change${entry.followerChangeEstimated ? " est." : ""}`;
+}
+
+function signalMeta(entry: LeaderboardEntry, window = false): string {
+  const parts = [
+    `${formatPercent(entry.engagementRate)} ER`,
+    `${formatCompact(entry.avgInteractions)} avg interactions`,
+    followerChange(entry),
+  ];
+  if (window) {
+    parts.push(`${entry.postsInWindow} ${entry.postsInWindow === 1 ? "post" : "posts"} in window`);
+  }
+  return parts.join(" · ");
+}
 
 function EntryRow({
   entry,
   rank,
   value,
   label,
-  detail,
+  meta,
 }: {
   entry: LeaderboardEntry;
   rank: number;
   value: string;
   label: string;
-  detail: string;
+  meta: string;
 }) {
   return (
     <li className="flex items-center gap-3 border-t border-slate-100 py-3 first:border-0 first:pt-0">
@@ -37,8 +55,9 @@ function EntryRow({
           />
         </Link>
         <p className="truncate text-xs text-slate-500">
-          @{entry.username} · {formatCompact(entry.followers)} followers · {detail}
+          @{entry.username} · {formatCompact(entry.followers)} followers
         </p>
+        <p className="truncate text-[11px] text-slate-400">{meta}</p>
       </div>
       <div className="shrink-0 text-right">
         <p className="text-sm font-semibold text-slate-950">{value}</p>
@@ -56,7 +75,7 @@ function RankCard({
   emptyMessage,
   valueFor,
   label,
-  detailFor,
+  metaFor,
   testId,
 }: {
   title: string;
@@ -66,7 +85,7 @@ function RankCard({
   emptyMessage: string;
   valueFor: (entry: LeaderboardEntry) => string;
   label: string;
-  detailFor: (entry: LeaderboardEntry) => string;
+  metaFor: (entry: LeaderboardEntry) => string;
   testId: string;
 }) {
   return (
@@ -89,7 +108,7 @@ function RankCard({
               rank={index + 1}
               value={valueFor(entry)}
               label={label}
-              detail={detailFor(entry)}
+              meta={metaFor(entry)}
             />
           ))}
         </ol>
@@ -102,11 +121,14 @@ function RankCard({
   );
 }
 
+const RANK_SUBTITLE =
+  "Ranked by followers (55%), engagement rate (20%), average interactions (15%) and 30-day follower change (10%)";
+
 export async function GlobalPulse() {
   const board = await getLeaderboard();
 
   return (
-    <section data-testid="global-pulse" className="space-y-5">
+    <section data-testid="global-pulse" className="space-y-8">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
           Global pulse
@@ -115,44 +137,78 @@ export async function GlobalPulse() {
           Top public profiles, ranked by real data
         </h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
-          Two live leaderboards from the {board.tracked} public Creator and Business accounts we
-          track worldwide. Rankings refresh every 15 minutes and every number links back to a full
-          analysis.
+          Four-factor leaderboards from the {board.tracked} public Creator and Business accounts we
+          track. Followers come first so million-follower accounts are not pushed down by a small
+          account with one viral post. Rankings refresh every 15 minutes and every number links back
+          to a full analysis.
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <RankCard
-          title={`Trending · last ${TRENDING_WINDOW_DAYS} days`}
-          subtitle="Highest engagement rate on posts published in the last 15 days"
-          icon={Flame}
-          entries={board.trending}
-          emptyMessage="No tracked account has enough posts in this window yet. Check back shortly."
-          valueFor={(entry) => formatPercent(entry.windowRate)}
-          label="15-day ER"
-          detailFor={(entry) =>
-            `${entry.postsInWindow} ${entry.postsInWindow === 1 ? "post" : "posts"} in window`
-          }
-          testId="trending-list"
-        />
-        <RankCard
-          title="High engagement"
-          subtitle="Highest engagement rate across up to 12 recent public posts"
-          icon={Gauge}
-          entries={board.engaged}
-          emptyMessage="Engagement data is not available right now. Check back shortly."
-          valueFor={(entry) => formatPercent(entry.engagementRate)}
-          label="Engagement"
-          detailFor={(entry) => "Up to 12 recent posts"}
-          testId="engagement-list"
-        />
+      <div className="space-y-4">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
+          Worldwide
+        </h3>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <RankCard
+            title={`Trending · last ${TRENDING_WINDOW_DAYS} days`}
+            subtitle={`Accounts with a recent post. ${RANK_SUBTITLE}.`}
+            icon={Flame}
+            entries={board.trending}
+            emptyMessage="No tracked account has enough posts in this window yet. Check back shortly."
+            valueFor={(entry) => entry.rankScore.toFixed(0)}
+            label="Rank score"
+            metaFor={(entry) => signalMeta(entry, true)}
+            testId="trending-list"
+          />
+          <RankCard
+            title="High engagement"
+            subtitle="Highest engagement rate across up to 12 recent public posts"
+            icon={Gauge}
+            entries={board.engaged}
+            emptyMessage="Engagement data is not available right now. Check back shortly."
+            valueFor={(entry) => formatPercent(entry.engagementRate)}
+            label="Engagement"
+            metaFor={(entry) =>
+              `${formatCompact(entry.avgInteractions)} avg interactions · ${followerChange(entry)}`
+            }
+            testId="engagement-list"
+          />
+        </div>
+      </div>
+
+      <div data-testid="region-boards" className="space-y-4">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
+          By country
+        </h3>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {REGION_BOARDS.map((definition) => {
+            const entries = board.regional[definition.id];
+            return (
+              <RankCard
+                key={definition.id}
+                title={definition.label}
+                subtitle={`${definition.description}. ${RANK_SUBTITLE}.`}
+                icon={MapPin}
+                entries={entries}
+                emptyMessage={`No tracked account in ${definition.label.replace(" · top 10", "")} yet. Check back shortly.`}
+                valueFor={(entry) => entry.rankScore.toFixed(0)}
+                label="Rank score"
+                metaFor={(entry) => signalMeta(entry)}
+                testId={`region-${definition.id}-list`}
+              />
+            );
+          })}
+        </div>
       </div>
 
       <p className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <Globe2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-        Ranked among a curated tracked pool, not every account on Instagram. Engagement is
-        measured from public likes and comments; saves are included only when exposed for every
-        post in the window. Updated {formatDate(board.generatedAt)}.
+        Ranked among a curated tracked pool, not every account on Instagram. Country is assigned
+        from our curated account list because Instagram does not publish account location; UAE
+        accounts are listed separately from the rest of the Middle East. Engagement and average
+        interactions are measured from public likes and comments (saves only when exposed for every
+        post). Follower change is an estimate for real accounts. Updated{" "}
+        {formatDate(board.generatedAt)}.
       </p>
     </section>
   );

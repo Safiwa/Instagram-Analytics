@@ -59,6 +59,30 @@ describe("tracked pool snapshot store", () => {
     expect(commands[1]).toEqual(["GET", "analytics:tracked-pool"]);
   });
 
+  it("rejects a snapshot written for a different handle list", async () => {
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "test-token");
+
+    const store = new Map<string, string>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: { body: string }) => {
+        const command = JSON.parse(init.body) as string[];
+        if (command[0] === "SET") {
+          store.set(command[1], command[2]);
+        }
+        return new Response(JSON.stringify({ result: store.get(command[1]) ?? "OK" }), {
+          status: 200,
+        });
+      }),
+    );
+
+    await writeTrackedSnapshot([profile], "handles-v1");
+    expect(await readTrackedSnapshot("handles-v1")).toEqual([profile]);
+    expect(await readTrackedSnapshot("handles-v2")).toBeNull();
+    expect(await readTrackedSnapshot()).toEqual([profile]);
+  });
+
   it("does not overwrite the snapshot with an empty pool", async () => {
     vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
     vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "test-token");
