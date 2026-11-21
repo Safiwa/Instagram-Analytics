@@ -251,7 +251,7 @@ request plus a few embed requests.
 | Route | Purpose |
 |---|---|
 | `/` | Analysis dashboard: lookup, global pulse leaderboards, pipeline, metric engine, Modash benchmark, sources, confidence |
-| `/profile/[username]` | KPIs, 30-day growth analysis, closest-peer benchmark, estimate disclosure, interactions, recent posts, and public-data notices |
+| `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and UAE/GCC benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison, maximum four accounts |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
@@ -303,25 +303,37 @@ Profile pages now surface verification, growth, and regional comparison:
   measured from the latest two monthly history points and never modeled. For real public/live
   accounts Instagram does not publish 30-day follower history, so the change is modeled from the
   same public signals as 12-month growth and is clearly labelled **Est.**
-- **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest tracked real public profile
-  by audience-size proximity (log-scaled), shared business/topic keywords from the name, category
-  and bio, and engagement-rate similarity. It shows the peer's followers, engagement and estimated
+- **Category-only matching** (`src/core/analytics/category.ts`) gates every benchmark. The live
+  Instagram API only returns the generic label `Instagram Professional`, so the category is inferred
+  from each account's public name and biography. A profile is benchmarked only against another in the
+  same or a closely related category. The twelve creator categories — Digital creator, Blogger,
+  Personal blog, Public figure, Reel/Video creator, Content creator, Fashion model / Model, Fitness
+  model, Beauty/cosmetic & personal care, Health/beauty, Travel blogger and Food blogger — are all
+  mutually comparable (group `creator`). Airlines, hotels, malls, news outlets and other business or
+  media accounts stay in their own isolated groups and are never used as peers for a creator. This
+  means searching a beauty creator no longer surfaces an airline, a newspaper or a shopping mall as
+  a "similar" profile.
+- **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest category-compatible tracked
+  real public profile by exact-category priority, audience-size proximity (log-scaled), shared
+  topic keywords from the name and bio, and engagement-rate similarity. Each peer row shows its
+  inferred category badge alongside the match score, followers, engagement and estimated
   authenticity, why it matched, and how this profile compares, with a link to a side-by-side
   comparison. The same matched set powers a small ranking table (`peer-ranking`) that includes the
   searched profile, orders it and its closest peers by engagement rate, and shows the searched
-  profile's rank (for example, "Rank #2 of 6") plus the share of peers it outperforms — so a
-  looked-up account can see where it stands against comparable profiles. If no tracked profile is
-  available (for example, without API credentials) the panel shows an empty state.
+  profile's rank (for example, "Rank #2 of 6") plus the share of peers it outperforms. If no tracked
+  profile in a compatible category is available (for example, without API credentials) the panel
+  shows an empty state rather than unrelated profiles.
 - **UAE/GCC category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
-  `src/core/data/regional.ts`) compares the searched profile with the closest real public UAE/GCC
-  account matched on business category, audience size, and engagement. It always returns an **80%+
-  category match** (a relative fit inside the curated regional pool, scaled 80-99, not an absolute
-  identity claim), shows **four key comparisons** — Followers, Engagement rate, Authenticity
-  (est.), and Verification — in the existing comparison-card design, and ranks the profile among
-  the **top 10 UAE/GCC peers** by engagement rate with the searched profile highlighted and its rank
-  (for example, "Rank #3 of 11"). The regional pool (`UAE_GCC_HANDLES` in `leaderboard.ts`) consists
-  of real public accounts verified through the live Business Discovery path; it is a curated
-  reference set, not a complete directory of every regional account.
+  `src/core/data/regional.ts`) applies the same category gate inside the regional pool: the searched
+  profile is matched only to real public UAE/GCC accounts in the same or a closely related category,
+  prioritising exact category matches. It always returns an **80%+ category match** (a relative fit
+  inside the curated regional pool, scaled 80-99, not an absolute identity claim), shows **four key
+  comparisons** — Followers, Engagement rate, Authenticity (est.), and Verification — in the
+  existing comparison-card design, and ranks the profile among the category-compatible **top 10
+  UAE/GCC peers** by engagement rate with the searched profile highlighted and its rank (for example,
+  "Rank #3 of 11"). Every ranking row shows its category. The regional pool (`UAE_GCC_HANDLES` in
+  `leaderboard.ts`) consists of real public accounts verified through the live Business Discovery
+  path; it is a curated reference set, not a complete directory of every regional account.
 
 All are computed on the server in `src/app/profile/[username]/page.tsx`. The tracked-pool fetch is
 guarded by `isLiveConfigured()` so local development without Meta keys does not make pointless API
