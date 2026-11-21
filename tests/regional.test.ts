@@ -54,14 +54,23 @@ describe("UAE/GCC category peer", () => {
   });
 
   it("always scores a regional match at 80% or higher", () => {
-    const target = profile("small.uae", 1_000, "Local cafe in Abu Dhabi", 100);
-    const huge = profile("burjkhalifa", 2_300_000, "Tourism landmark destination", 50_000);
+    const target = profile("small.uae", 1_000, "Food blogger in Abu Dhabi", 100);
+    const huge = profile("big.food.uae", 2_300_000, "Food blogger and chef in Dubai", 50_000);
 
     const match = findRegionalCategoryPeer(target, computeMetrics(target), [huge]);
 
     expect(match).not.toBeNull();
     expect(match!.matchScore).toBeGreaterThanOrEqual(80);
     expect(match!.matchScore).toBeLessThanOrEqual(99);
+  });
+
+  it("excludes profiles from unrelated categories", () => {
+    const target = profile("cafe.uae", 10_000, "Food blogger and chef in Dubai", 300);
+    const airline = profile("emirates", 9_000_000, "Fly Better airline travel", 5_000_000);
+    const news = profile("gulfnews", 1_400_000, "The no.1 news brand in the UAE", 4_000);
+
+    expect(findRegionalCategoryPeer(target, computeMetrics(target), [airline, news])).toBeNull();
+    expect(buildRegionalRanking(target, computeMetrics(target), [airline, news])).toBeNull();
   });
 
   it("returns null for an empty regional pool", () => {

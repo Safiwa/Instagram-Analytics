@@ -616,13 +616,13 @@ export function ProfileDashboard({
               Peer benchmark
             </p>
             <h3 className="mt-1 text-base font-semibold text-slate-950">
-              Closest business peers and where this profile ranks
+              Closest category peers and where this profile ranks
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              We match this profile to the closest real public accounts by audience size, business
-              themes, and engagement, then rank the group by engagement rate so you can see how it
-              performs against comparable profiles. This is a curated reference set, not an
-              exhaustive niche search.
+              We match this profile only to real public accounts in the same or a closely related
+              category (for example Digital creator, Blogger, Public figure, or Beauty), then rank
+              that group by engagement rate so you can see how it performs against comparable
+              profiles. This is a curated reference set, not an exhaustive niche search.
             </p>
           </div>
         </div>
@@ -643,6 +643,9 @@ export function ProfileDashboard({
                 </Link>
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                   {peer.score.toFixed(0)}% match
+                </span>
+                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                  {peer.category}
                 </span>
               </div>
               <p className="text-xs text-slate-500">@{peer.profile.username}</p>
@@ -731,7 +734,8 @@ export function ProfileDashboard({
                       ) : null}
                     </Link>
                     <p className="truncate text-xs text-slate-500">
-                      @{row.profile.username} · {formatCompact(row.profile.followers)} followers
+                      @{row.profile.username} · {row.category} ·{" "}
+                      {formatCompact(row.profile.followers)} followers
                       {row.matchScore !== null ? ` · ${row.matchScore.toFixed(0)}% match` : ""}
                     </p>
                   </div>
@@ -749,7 +753,7 @@ export function ProfileDashboard({
           </div>
         ) : (
           <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No comparable tracked profile is available right now. Check back shortly.
+            No public account in a similar category is available right now. Check back shortly.
           </p>
         )}
       </section>
@@ -767,13 +771,13 @@ export function ProfileDashboard({
               UAE &amp; GCC category benchmark
             </p>
             <h3 className="mt-1 text-base font-semibold text-slate-950">
-              Closest regional business profile and where this account sits
+              Closest regional category profile and where this account sits
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              We match this profile to the closest real public UAE/GCC account by business category,
-              audience size, and engagement, compare four key metrics, then rank it among the top
-              regional peers in our curated UAE/GCC tracking set. Match scores are relative to this
-              regional pool, not an absolute identity claim.
+              We match this profile only to real public UAE/GCC accounts in the same or a closely
+              related category (for example Digital creator, Blogger, Public figure, or Beauty),
+              compare four key metrics, then rank that group in our curated UAE/GCC tracking set.
+              Match scores are relative to this regional pool, not an absolute identity claim.
             </p>
           </div>
         </div>
@@ -795,6 +799,9 @@ export function ProfileDashboard({
                   </Link>
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                     {regionalPeer.matchScore}% category match
+                  </span>
+                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                    {regionalPeer.category}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">@{regionalPeer.profile.username}</p>
@@ -893,7 +900,8 @@ export function ProfileDashboard({
                       ) : null}
                     </Link>
                     <p className="truncate text-xs text-slate-500">
-                      @{row.profile.username} · {formatCompact(row.profile.followers)} followers
+                      @{row.profile.username} · {row.category} ·{" "}
+                      {formatCompact(row.profile.followers)} followers
                       {row.matchScore !== null ? ` · ${row.matchScore}% category match` : ""}
                     </p>
                   </div>
@@ -911,7 +919,7 @@ export function ProfileDashboard({
           </div>
         ) : (
           <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No UAE/GCC ranking is available right now. Check back shortly.
+            No UAE/GCC account in a similar category is available right now. Check back shortly.
           </p>
         )}
       </section>

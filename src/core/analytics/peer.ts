@@ -1,4 +1,5 @@
 import type { CreatorProfile } from "../data/types";
+import { inferCategory, isSimilarCategory } from "./category";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
 
 const TOPIC_KEYWORDS: Record<string, string[]> = {
@@ -44,6 +45,7 @@ export type PeerMatch = {
   profile: CreatorProfile;
   metrics: ProfileMetrics;
   score: number;
+  category: string;
   reasons: string[];
 };
 
@@ -52,11 +54,13 @@ function scorePeers(
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
 ): PeerMatch[] {
+  const targetCategory = inferCategory(target);
   const candidates = pool.filter(
     (candidate) =>
       candidate.username !== target.username &&
       candidate.followers > 0 &&
-      candidate.recentPosts.length > 0,
+      candidate.recentPosts.length > 0 &&
+      isSimilarCategory(targetCategory, inferCategory(candidate)),
   );
 
   if (candidates.length === 0) {
@@ -67,6 +71,7 @@ function scorePeers(
   const targetMagnitude = Math.log10(Math.max(target.followers, 1));
 
   const scored = candidates.map((candidate) => {
+    const candidateCategory = inferCategory(candidate);
     const candidateMetrics = computeMetrics(candidate);
     const magnitudeGap = Math.abs(targetMagnitude - Math.log10(Math.max(candidate.followers, 1)));
     const sizeScore = clamp(100 - magnitudeGap * 55, 0, 100);
@@ -74,10 +79,14 @@ function scorePeers(
     const topicScore = sharedTopics.length > 0 ? clamp(60 + sharedTopics.length * 20, 0, 100) : 0;
     const engagementGap = Math.abs(metrics.engagementRate - candidateMetrics.engagementRate);
     const engagementScore = clamp(100 - engagementGap * 25, 0, 100);
+    const exactCategory = candidateCategory === targetCategory;
 
-    const score = round2(sizeScore * 0.55 + topicScore * 0.25 + engagementScore * 0.2);
+    const score = round2(
+      sizeScore * 0.45 + topicScore * 0.15 + engagementScore * 0.15 + (exactCategory ? 100 : 70) * 0.25,
+    );
     const reasons: string[] = [];
 
+    reasons.push(exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`);
     if (sizeScore >= 70) {
       reasons.push("similar audience size");
     }
@@ -87,11 +96,8 @@ function scorePeers(
     if (engagementScore >= 70) {
       reasons.push("comparable engagement rate");
     }
-    if (reasons.length === 0) {
-      reasons.push("closest available public profile by audience size and engagement");
-    }
 
-    return { profile: candidate, metrics: candidateMetrics, score, reasons };
+    return { profile: candidate, metrics: candidateMetrics, score, category: candidateCategory, reasons };
   });
 
   scored.sort(
@@ -114,6 +120,7 @@ export type PeerRankingRow = {
   profile: CreatorProfile;
   engagementRate: number;
   matchScore: number | null;
+  category: string;
   isTarget: boolean;
 };
 
@@ -142,12 +149,14 @@ export function buildPeerRanking(
       profile: target,
       engagementRate: metrics.engagementRate,
       matchScore: null,
+      category: inferCategory(target),
       isTarget: true,
     },
     ...peers.map((peer) => ({
       profile: peer.profile,
       engagementRate: peer.metrics.engagementRate,
       matchScore: peer.score,
+      category: peer.category,
       isTarget: false,
     })),
   ];

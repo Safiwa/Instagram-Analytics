@@ -1,5 +1,6 @@
 import { formatCompact, formatPercent } from "../format";
 import type { CreatorProfile } from "../data/types";
+import { inferCategory, isSimilarCategory } from "./category";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
 import { profileTopics } from "./peer";
 
@@ -14,6 +15,7 @@ export type RegionalPeer = {
   profile: CreatorProfile;
   metrics: ProfileMetrics;
   matchScore: number;
+  category: string;
   sharedBusiness: string[];
 };
 
@@ -26,6 +28,7 @@ export type RegionalRankRow = {
   profile: CreatorProfile;
   engagementRate: number;
   matchScore: number | null;
+  category: string;
   isTarget: boolean;
 };
 
@@ -71,26 +74,33 @@ function rankedCandidates(
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
 ): RegionalPeer[] {
+  const targetCategory = inferCategory(target);
   const candidates = pool.filter(
     (candidate) =>
       candidate.username !== target.username &&
       candidate.followers > 0 &&
-      candidate.recentPosts.length > 0,
+      candidate.recentPosts.length > 0 &&
+      isSimilarCategory(targetCategory, inferCategory(candidate)),
   );
 
   return candidates
     .map((candidate) => {
+      const candidateCategory = inferCategory(candidate);
       const candidateMetrics = computeMetrics(candidate);
       const shared = sharedTopics(target, candidate);
+      const exactCategory = candidateCategory === targetCategory;
       return {
         profile: candidate,
         metrics: candidateMetrics,
         matchScore: categoryMatch(target, metrics, candidate, candidateMetrics, shared),
+        category: candidateCategory,
         sharedBusiness: shared,
+        exactCategory,
       };
     })
     .sort(
       (left, right) =>
+        Number(right.exactCategory) - Number(left.exactCategory) ||
         right.sharedBusiness.length - left.sharedBusiness.length ||
         right.matchScore - left.matchScore ||
         right.profile.followers - left.profile.followers,
@@ -182,12 +192,14 @@ export function buildRegionalRanking(
       profile: target,
       engagementRate: metrics.engagementRate,
       matchScore: null,
+      category: inferCategory(target),
       isTarget: true,
     },
     ...peers.map((peer) => ({
       profile: peer.profile,
       engagementRate: peer.metrics.engagementRate,
       matchScore: peer.matchScore,
+      category: peer.category,
       isTarget: false,
     })),
   ];
