@@ -1,7 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ProfileMetrics } from "../src/core/analytics/metrics";
 import { buildDigestEmail } from "../src/core/digest/email";
-import { isSubscriptionDue, type DigestSubscription } from "../src/core/digest/subscriptions";
+import {
+  isSubscriptionDue,
+  listDueSubscriptions,
+  type DigestSubscription,
+} from "../src/core/digest/subscriptions";
 import { createUnsubscribeToken, readUnsubscribeToken } from "../src/core/digest/tokens";
 import { trialEndsAt, validateSignup } from "../src/core/digest/validation";
 
@@ -119,6 +123,41 @@ describe("weekly digest schedule", () => {
     };
     expect(isSubscriptionDue(recent, new Date("2026-11-20T00:00:00.000Z"))).toBe(false);
     expect(isSubscriptionDue(recent, new Date("2026-11-26T00:00:00.000Z"))).toBe(true);
+  });
+});
+
+describe("weekly digest Upstash store", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("reads due subscriptions from JSON strings returned by Upstash GET", async () => {
+    const record: DigestSubscription = {
+      email: "user@example.com",
+      handle: "natgeo",
+      createdAt: "2026-11-01T00:00:00.000Z",
+      trialEndsAt: "2026-12-01T00:00:00.000Z",
+    };
+    const key = "digest:sub:abc123";
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://example.upstash.io");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "test-token");
+
+    const commands: unknown[][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: { body: string }) => {
+        const command = JSON.parse(init.body) as unknown[];
+        commands.push(command);
+        const result =
+          command[0] === "KEYS" ? [key] : command[0] === "GET" ? JSON.stringify(record) : null;
+        return new Response(JSON.stringify({ result }), { status: 200 });
+      }),
+    );
+
+    const due = await listDueSubscriptions(new Date("2026-11-21T00:00:00.000Z"));
+    expect(due).toEqual([record]);
+    expect(commands.map((command) => command[0])).toEqual(["KEYS", "GET"]);
   });
 });
 

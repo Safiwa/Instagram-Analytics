@@ -69,10 +69,20 @@ async function redisCommand(config: RedisConfig, command: (string | number)[]): 
 }
 
 function parseSubscription(value: unknown): DigestSubscription | null {
-  if (!value || typeof value !== "object") {
+  // Upstash GET returns a JSON string, while the local JSON store already
+  // returns parsed objects. Accept both so the hosted subscription path works.
+  let parsed = value;
+  if (typeof parsed === "string") {
+    try {
+      parsed = JSON.parse(parsed);
+    } catch {
+      return null;
+    }
+  }
+  if (!parsed || typeof parsed !== "object") {
     return null;
   }
-  const item = value as Partial<DigestSubscription>;
+  const item = parsed as Partial<DigestSubscription>;
   if (!item.email || !item.handle || !item.createdAt) {
     return null;
   }
