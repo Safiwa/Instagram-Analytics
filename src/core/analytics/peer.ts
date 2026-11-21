@@ -23,7 +23,7 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-function topicsOf(profile: CreatorProfile): Set<string> {
+export function profileTopics(profile: CreatorProfile): Set<string> {
   const text = `${profile.displayName} ${profile.category} ${profile.bio}`.toLowerCase();
   const topics = new Set<string>();
 
@@ -63,14 +63,14 @@ function scorePeers(
     return [];
   }
 
-  const targetTopics = topicsOf(target);
+  const targetTopics = profileTopics(target);
   const targetMagnitude = Math.log10(Math.max(target.followers, 1));
 
   const scored = candidates.map((candidate) => {
     const candidateMetrics = computeMetrics(candidate);
     const magnitudeGap = Math.abs(targetMagnitude - Math.log10(Math.max(candidate.followers, 1)));
     const sizeScore = clamp(100 - magnitudeGap * 55, 0, 100);
-    const sharedTopics = overlap(targetTopics, topicsOf(candidate));
+    const sharedTopics = overlap(targetTopics, profileTopics(candidate));
     const topicScore = sharedTopics.length > 0 ? clamp(60 + sharedTopics.length * 20, 0, 100) : 0;
     const engagementGap = Math.abs(metrics.engagementRate - candidateMetrics.engagementRate);
     const engagementScore = clamp(100 - engagementGap * 25, 0, 100);

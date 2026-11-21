@@ -31,9 +31,44 @@ export const LEADERBOARD_HANDLES = [
   "jlo",
   "leonardodicaprio",
   "natgeo",
+  // Curated real UAE/GCC Creator and Business accounts (see UAE_GCC_HANDLES).
+  "hudabeauty",
   "the.matis",
   "trending.vibz.uae",
   "ola.alqodmani",
+  "emirates",
+  "flydubai",
+  "timeoutdubai",
+  "gulfnews",
+  "khaleejtimes",
+  "arabianbusiness",
+  "jumeirah",
+  "burjkhalifa",
+  "qatarairways",
+  "visitqatar",
+  "dubaimall",
+  "rafflesdubai",
+] as const;
+
+// Real, public UAE/GCC accounts verified through the live Instagram Business Discovery
+// path. Curated reference set, not a complete directory of every regional account.
+export const UAE_GCC_HANDLES = [
+  "hudabeauty",
+  "trending.vibz.uae",
+  "ola.alqodmani",
+  "the.matis",
+  "emirates",
+  "flydubai",
+  "timeoutdubai",
+  "gulfnews",
+  "khaleejtimes",
+  "arabianbusiness",
+  "jumeirah",
+  "burjkhalifa",
+  "qatarairways",
+  "visitqatar",
+  "dubaimall",
+  "rafflesdubai",
 ] as const;
 
 export type LeaderboardEntry = {

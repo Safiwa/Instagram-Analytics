@@ -7,6 +7,7 @@ import {
   Download,
   GitCompareArrows,
   Layers3,
+  MapPin,
   Scale,
   TrendingUp,
   Users,
@@ -29,6 +30,11 @@ import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analy
 import type { GrowthAnalysis } from "../../core/analytics/growth";
 import { round2, type ProfileMetrics } from "../../core/analytics/metrics";
 import type { PeerMatch, PeerRanking } from "../../core/analytics/peer";
+import type {
+  KeyComparison,
+  RegionalPeer,
+  RegionalRanking,
+} from "../../core/analytics/regional";
 import type { AudienceSlice, CreatorProfile } from "../../core/data/types";
 import { formatCompact, formatDate, formatPercent } from "../../core/format";
 
@@ -50,6 +56,9 @@ type ProfileDashboardProps = {
   growth: GrowthAnalysis;
   peer: PeerMatch | null;
   ranking: PeerRanking | null;
+  regionalPeer: RegionalPeer | null;
+  regionalComparison: KeyComparison[];
+  regionalRanking: RegionalRanking | null;
 };
 
 function Stat({
@@ -99,7 +108,16 @@ function AudienceBars({ title, slices }: { title: string; slices: AudienceSlice[
   );
 }
 
-export function ProfileDashboard({ profile, metrics, growth, peer, ranking }: ProfileDashboardProps) {
+export function ProfileDashboard({
+  profile,
+  metrics,
+  growth,
+  peer,
+  ranking,
+  regionalPeer,
+  regionalComparison,
+  regionalRanking,
+}: ProfileDashboardProps) {
   const interactions = profile.recentPosts.map((post) => ({
     label: formatDate(post.postedAt, false),
     likes: post.likes,
@@ -174,9 +192,19 @@ export function ProfileDashboard({ profile, metrics, growth, peer, ranking }: Pr
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-semibold text-slate-950">{profile.displayName}</h2>
-              {profile.isVerified ? (
-                <BadgeCheck className="h-5 w-5 text-indigo-600" aria-label="Verified" />
-              ) : null}
+              <span
+                data-testid="verification-badge"
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                  profile.isVerified
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {profile.isVerified ? (
+                  <BadgeCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                ) : null}
+                {profile.isVerified ? "Verified" : "Not verified"}
+              </span>
             </div>
             <p className="mt-0.5 text-sm text-slate-500">
               @{profile.username} · {profile.category}
@@ -236,7 +264,7 @@ export function ProfileDashboard({ profile, metrics, growth, peer, ranking }: Pr
         </div>
       ) : null}
 
-      <section data-testid="metric-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section data-testid="metric-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <MetricCard
           label="Engagement rate"
           value={profile.isPrivate || noPublicPosts ? "—" : formatPercent(metrics.engagementRate)}
@@ -258,6 +286,18 @@ export function ProfileDashboard({ profile, metrics, growth, peer, ranking }: Pr
               : metrics.followerGrowthPct === null
                 ? "History not available"
                 : "First to last monthly point"
+          }
+        />
+        <MetricCard
+          label="30-day growth"
+          value={formatPercent(growth.monthGrowthPct)}
+          badge={growth.growthEstimated ? "Est." : undefined}
+          hint={
+            growth.growthEstimated
+              ? "Modeled from public signals"
+              : growth.monthGrowthPct === null
+                ? "History not available"
+                : "Last two monthly points"
           }
         />
         <MetricCard
@@ -287,6 +327,70 @@ export function ProfileDashboard({ profile, metrics, growth, peer, ranking }: Pr
                 : "Likes + comments + saves"
           }
         />
+      </section>
+
+      <section
+        data-testid="growth-analysis"
+        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
+              Growth plan
+            </p>
+            <h3 className="mt-1 text-base font-semibold text-slate-950">30-day growth analysis</h3>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">{growth.basis}</p>
+          </div>
+          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+            Momentum: {momentumLabel}
+          </span>
+        </div>
+        <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Follower change · 30d
+            </p>
+            <p className="mt-2 text-xl font-semibold text-slate-950">
+              {formatPercent(growth.monthGrowthPct)}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {growth.monthGrowthFollowers === null
+                ? "Not available"
+                : `${growth.monthGrowthFollowers >= 0 ? "+" : ""}${growth.monthGrowthFollowers.toLocaleString("en-US")} followers ${growth.growthEstimated ? "(Est.)" : ""}`}
+            </p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Interaction trend
+            </p>
+            <p className="mt-2 text-xl font-semibold text-slate-950">
+              {formatPercent(growth.engagementTrendPct)}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">Median recent vs older posts</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Posting cadence
+            </p>
+            <p className="mt-2 text-xl font-semibold text-slate-950">
+              {growth.postsPerWeek === null ? "—" : `${growth.postsPerWeek}/wk`}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">From recent public posts</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Posts in last 30 days
+            </p>
+            <p className="mt-2 text-xl font-semibold text-slate-950">{growth.postsLast30Days}</p>
+            <p className="mt-1 text-xs text-slate-500">Visible public media only</p>
+          </div>
+        </div>
+        {growth.growthEstimated ? (
+          <p className="mt-4 text-xs text-amber-800">
+            Est. — Instagram does not publish 30-day follower history, so the follower change is
+            modeled from public signals.
+          </p>
+        ) : null}
       </section>
 
       {metrics.estimateConfidence ? (
@@ -500,70 +604,6 @@ export function ProfileDashboard({ profile, metrics, growth, peer, ranking }: Pr
       )}
 
       <section
-        data-testid="growth-analysis"
-        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-      >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
-              Growth plan
-            </p>
-            <h3 className="mt-1 text-base font-semibold text-slate-950">30-day growth analysis</h3>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">{growth.basis}</p>
-          </div>
-          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-            Momentum: {momentumLabel}
-          </span>
-        </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Follower change · 30d
-            </p>
-            <p className="mt-2 text-xl font-semibold text-slate-950">
-              {formatPercent(growth.monthGrowthPct)}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">
-              {growth.monthGrowthFollowers === null
-                ? "Not available"
-                : `${growth.monthGrowthFollowers >= 0 ? "+" : ""}${growth.monthGrowthFollowers.toLocaleString("en-US")} followers ${growth.growthEstimated ? "(Est.)" : ""}`}
-            </p>
-          </div>
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Interaction trend
-            </p>
-            <p className="mt-2 text-xl font-semibold text-slate-950">
-              {formatPercent(growth.engagementTrendPct)}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">Median recent vs older posts</p>
-          </div>
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Posting cadence
-            </p>
-            <p className="mt-2 text-xl font-semibold text-slate-950">
-              {growth.postsPerWeek === null ? "—" : `${growth.postsPerWeek}/wk`}
-            </p>
-            <p className="mt-1 text-xs text-slate-500">From recent public posts</p>
-          </div>
-          <div className="rounded-xl bg-slate-50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Posts in last 30 days
-            </p>
-            <p className="mt-2 text-xl font-semibold text-slate-950">{growth.postsLast30Days}</p>
-            <p className="mt-1 text-xs text-slate-500">Visible public media only</p>
-          </div>
-        </div>
-        {growth.growthEstimated ? (
-          <p className="mt-4 text-xs text-amber-800">
-            Est. — Instagram does not publish 30-day follower history, so the follower change is
-            modeled from public signals.
-          </p>
-        ) : null}
-      </section>
-
-      <section
         data-testid="peer-benchmark"
         className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
       >
@@ -710,6 +750,168 @@ export function ProfileDashboard({ profile, metrics, growth, peer, ranking }: Pr
         ) : (
           <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
             No comparable tracked profile is available right now. Check back shortly.
+          </p>
+        )}
+      </section>
+
+      <section
+        data-testid="regional-benchmark"
+        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+      >
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <MapPin className="h-4 w-4" aria-hidden="true" />
+          </span>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
+              UAE &amp; GCC category benchmark
+            </p>
+            <h3 className="mt-1 text-base font-semibold text-slate-950">
+              Closest regional business profile and where this account sits
+            </h3>
+            <p className="mt-1 max-w-2xl text-sm text-slate-500">
+              We match this profile to the closest real public UAE/GCC account by business category,
+              audience size, and engagement, compare four key metrics, then rank it among the top
+              regional peers in our curated UAE/GCC tracking set. Match scores are relative to this
+              regional pool, not an absolute identity claim.
+            </p>
+          </div>
+        </div>
+
+        {regionalPeer ? (
+          <>
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={`/profile/${regionalPeer.profile.username}`}
+                    className="group inline-flex items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
+                  >
+                    {regionalPeer.profile.displayName}
+                    <ArrowUpRight
+                      className="h-3 w-3 text-slate-400 group-hover:text-emerald-600"
+                      aria-hidden="true"
+                    />
+                  </Link>
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                    {regionalPeer.matchScore}% category match
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500">@{regionalPeer.profile.username}</p>
+                {regionalPeer.sharedBusiness.length > 0 ? (
+                  <p className="text-xs text-slate-500">
+                    Shared business themes: {regionalPeer.sharedBusiness.join(", ")}
+                  </p>
+                ) : null}
+              </div>
+              <Link
+                href={`/compare?handles=${profile.username},${regionalPeer.profile.username}`}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+              >
+                <TrendingUp className="h-4 w-4" aria-hidden="true" />
+                Compare side by side
+              </Link>
+            </div>
+
+            <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+              <div className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                <span>Key comparison</span>
+                <span>This profile</span>
+                <span>{regionalPeer.profile.displayName}</span>
+                <span>Insight</span>
+              </div>
+              {regionalComparison.map((comparison) => (
+                <div
+                  key={comparison.label}
+                  className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 px-4 py-3 text-xs last:border-0"
+                >
+                  <span className="font-medium text-slate-700">{comparison.label}</span>
+                  <span className="font-semibold text-slate-950">{comparison.target}</span>
+                  <span className="font-semibold text-slate-950">{comparison.peer}</span>
+                  <span className="text-slate-500">{comparison.insight}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">
+              Verification reflects the account&apos;s public Instagram badge. Authenticity is an
+              estimate for public accounts; see the estimates panel below for details.
+            </p>
+          </>
+        ) : (
+          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
+            No comparable UAE/GCC profile is available right now. Check back shortly.
+          </p>
+        )}
+
+        {regionalRanking ? (
+          <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-950">
+                  Rank #{regionalRanking.targetRank} of {regionalRanking.total} among top UAE/GCC
+                  peers
+                </p>
+                <p className="text-xs text-slate-500">
+                  Ordered by engagement rate from up to 12 recent public posts
+                </p>
+              </div>
+              {regionalRanking.outperformedPercent !== null ? (
+                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                  Ahead of {regionalRanking.outperformedPercent}% of these peers
+                </span>
+              ) : null}
+            </div>
+            <ol className="divide-y divide-slate-100">
+              {regionalRanking.rows.map((row, index) => (
+                <li
+                  key={row.profile.username}
+                  className={`flex items-center gap-3 px-4 py-3 ${
+                    row.isTarget ? "bg-emerald-50/70" : ""
+                  }`}
+                >
+                  <span
+                    className={`w-6 shrink-0 text-sm font-semibold ${
+                      row.isTarget ? "text-emerald-700" : "text-slate-400"
+                    }`}
+                  >
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={`/profile/${row.profile.username}`}
+                      className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
+                    >
+                      <span className="truncate">{row.profile.displayName}</span>
+                      <ArrowUpRight
+                        className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-emerald-600"
+                        aria-hidden="true"
+                      />
+                      {row.isTarget ? (
+                        <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-emerald-700">
+                          This profile
+                        </span>
+                      ) : null}
+                    </Link>
+                    <p className="truncate text-xs text-slate-500">
+                      @{row.profile.username} · {formatCompact(row.profile.followers)} followers
+                      {row.matchScore !== null ? ` · ${row.matchScore}% category match` : ""}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold text-slate-950">
+                      {formatPercent(row.engagementRate)}
+                    </p>
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                      Engagement
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
+            No UAE/GCC ranking is available right now. Check back shortly.
           </p>
         )}
       </section>

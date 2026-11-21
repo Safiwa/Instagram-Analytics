@@ -2,8 +2,14 @@ import { EmptyState } from "../../../components/EmptyState";
 import { analyzeGrowth } from "../../../core/analytics/growth";
 import { computeMetrics } from "../../../core/analytics/metrics";
 import { buildPeerRanking, findClosestPeer } from "../../../core/analytics/peer";
+import {
+  buildKeyComparisons,
+  buildRegionalRanking,
+  findRegionalCategoryPeer,
+} from "../../../core/analytics/regional";
 import { resolveProfile } from "../../../core/data/adapter";
 import { getTrackedProfiles } from "../../../core/data/leaderboard";
+import { getRegionalProfiles } from "../../../core/data/regional";
 import { ProfileDashboard } from "../../../features/profile/ProfileDashboard";
 
 export const maxDuration = 60;
@@ -31,6 +37,12 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   const tracked = await getTrackedProfiles();
   const peer = findClosestPeer(resolution.profile, metrics, tracked);
   const ranking = buildPeerRanking(resolution.profile, metrics, tracked);
+  const regionalPool = await getRegionalProfiles();
+  const regionalPeer = findRegionalCategoryPeer(resolution.profile, metrics, regionalPool);
+  const regionalComparison = regionalPeer
+    ? buildKeyComparisons(resolution.profile, metrics, regionalPeer)
+    : [];
+  const regionalRanking = buildRegionalRanking(resolution.profile, metrics, regionalPool);
 
   return (
     <ProfileDashboard
@@ -39,6 +51,9 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       growth={growth}
       peer={peer}
       ranking={ranking}
+      regionalPeer={regionalPeer}
+      regionalComparison={regionalComparison}
+      regionalRanking={regionalRanking}
     />
   );
 }

@@ -287,17 +287,22 @@ a hint on each profile's engagement card.
 The homepage hero also carries the positioning line "Leading Instagram analytics platform in the
 UAE — performance-driven tools and a practical growth plan".
 
-## 30-day growth analysis and peer benchmark
+## Verification badge, 30-day growth, peer and UAE/GCC benchmark
 
-Every profile page now includes two extra sections below the demographics:
+Profile pages now surface verification, growth, and regional comparison:
 
-- **30-day growth analysis** (`src/core/analytics/growth.ts`) reports estimated follower change
-  over 30 days, the median interaction trend across recent vs older posts, posting cadence, and the
-  number of public posts in the last 30 days, plus a momentum label (accelerating / steady /
-  cooling). For demo fixtures the follower change is measured from the latest two monthly history
-  points and never modeled. For real public/live accounts Instagram does not publish 30-day
-  follower history, so the change is modeled from the same public signals as 12-month growth and is
-  clearly labelled **Est.**
+- **Verification badge** (`verification-badge`) sits beside the profile name in the header and shows
+  **Verified** or **Not verified** from the account's public Instagram badge. Verification is also
+  one of the four key comparisons in the UAE/GCC panel and is called out in the analysis note there.
+- **30-day growth card** was moved up into the main metric grid (`metric-grid`), right beside the
+  12-month growth card, with an **Est.** badge and the same disclosure as the growth analysis below.
+  The full **30-day growth analysis** (`growth-analysis`) section was also moved directly beneath
+  the metric grid. It reports estimated follower change over 30 days, the median interaction trend
+  across recent vs older posts, posting cadence, and the number of public posts in the last 30 days,
+  plus a momentum label (accelerating / steady / cooling). For demo fixtures the follower change is
+  measured from the latest two monthly history points and never modeled. For real public/live
+  accounts Instagram does not publish 30-day follower history, so the change is modeled from the
+  same public signals as 12-month growth and is clearly labelled **Est.**
 - **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest tracked real public profile
   by audience-size proximity (log-scaled), shared business/topic keywords from the name, category
   and bio, and engagement-rate similarity. It shows the peer's followers, engagement and estimated
@@ -307,8 +312,18 @@ Every profile page now includes two extra sections below the demographics:
   profile's rank (for example, "Rank #2 of 6") plus the share of peers it outperforms — so a
   looked-up account can see where it stands against comparable profiles. If no tracked profile is
   available (for example, without API credentials) the panel shows an empty state.
+- **UAE/GCC category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
+  `src/core/data/regional.ts`) compares the searched profile with the closest real public UAE/GCC
+  account matched on business category, audience size, and engagement. It always returns an **80%+
+  category match** (a relative fit inside the curated regional pool, scaled 80-99, not an absolute
+  identity claim), shows **four key comparisons** — Followers, Engagement rate, Authenticity
+  (est.), and Verification — in the existing comparison-card design, and ranks the profile among
+  the **top 10 UAE/GCC peers** by engagement rate with the searched profile highlighted and its rank
+  (for example, "Rank #3 of 11"). The regional pool (`UAE_GCC_HANDLES` in `leaderboard.ts`) consists
+  of real public accounts verified through the live Business Discovery path; it is a curated
+  reference set, not a complete directory of every regional account.
 
-Both are computed on the server in `src/app/profile/[username]/page.tsx`. The tracked-pool fetch is
+All are computed on the server in `src/app/profile/[username]/page.tsx`. The tracked-pool fetch is
 guarded by `isLiveConfigured()` so local development without Meta keys does not make pointless API
 calls, and profile pages read the shared Upstash snapshot instead of calling Meta directly.
 
