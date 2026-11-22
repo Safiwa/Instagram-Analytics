@@ -391,7 +391,8 @@ Profile pages now surface verification, growth, and regional comparison:
 - **Middle East ±30% gate** (`isWithinFollowerLatency()` in `src/core/analytics/rank.ts`) is stricter
   and applies to both the highlighted Middle East peer and its ranking table. A candidate must have
   between 70% and 130% of the searched profile's follower count, with no out-of-band fallback. The
-  displayed band is disclosed in the panel and in the match reasons.
+  panel copy intentionally stays concise; the gate is enforced in code and tests rather than spelled
+  out in the UI.
 - **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest category-compatible tracked
   real public profile. It first prefers the same inferred country (handle, then profile text, then
   promoted hashtags/captions), falling back to same region, unknown country and then different

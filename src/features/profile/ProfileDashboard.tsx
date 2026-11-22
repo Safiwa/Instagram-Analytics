@@ -806,15 +806,6 @@ export function ProfileDashboard({
             <h3 className="mt-1 text-base font-semibold text-slate-950">
               Closest Middle East profile and where this account sits
             </h3>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              We compare only with real public Middle East accounts whose followers are within ±30%
-              of this profile ({formatCompact(Math.round(profile.followers * 0.7))}–
-              {formatCompact(Math.round(profile.followers * 1.3))}). Similar category or activity is
-              inferred only from public Reel/post captions and hashtags — never the display name or
-              bio. The group is ranked by followers 55%, engagement 20%, average interactions 15% and
-              follower change 10%. Instagram does not publish account country, so the country badge is
-              inferred.
-            </p>
           </div>
         </div>
 
@@ -839,12 +830,6 @@ export function ProfileDashboard({
                   <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
                     {regionalPeer.category}
                   </span>
-                  <span
-                    data-testid="regional-follower-band"
-                    className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
-                  >
-                    ±30% follower band
-                  </span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                     {regionalPeer.country.label}
                   </span>
@@ -852,7 +837,7 @@ export function ProfileDashboard({
                 <p className="text-xs text-slate-500">@{regionalPeer.profile.username}</p>
                 {regionalPeer.sharedActivity.length > 0 ? (
                   <p className="text-xs text-slate-500">
-                    Shared activity from Reels/posts: {regionalPeer.sharedActivity.join(", ")}
+                    Shared activity: {regionalPeer.sharedActivity.join(", ")}
                   </p>
                 ) : null}
                 <p className="text-xs leading-relaxed text-slate-600">
@@ -889,16 +874,12 @@ export function ProfileDashboard({
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
               Follower change is modeled from public signals for non-demo profiles; see the
-              estimates panel below for details. Country signals are inferred because Instagram
-              does not publish account location.
+              estimates panel below for details.
             </p>
           </>
         ) : (
           <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No comparable Middle East profile is available right now. We only compare accounts with{" "}
-            {formatCompact(Math.round(profile.followers * 0.7))}–
-            {formatCompact(Math.round(profile.followers * 1.3))} followers (±30%) and matching activity
-            inferred from Reels/posts and hashtags.
+            No comparable Middle East profile is available right now. Check back shortly.
           </p>
         )}
 
@@ -908,10 +889,6 @@ export function ProfileDashboard({
               <div>
                 <p className="text-sm font-semibold text-slate-950">
                   Rank #{regionalRanking.targetRank} of {regionalRanking.total} Middle East profiles
-                </p>
-                <p className="text-xs text-slate-500">
-                  Rank score: 55% followers, 20% engagement, 15% avg interactions, 10% follower
-                  change
                 </p>
               </div>
               {regionalRanking.outperformedPercent !== null ? (
@@ -979,8 +956,7 @@ export function ProfileDashboard({
           </div>
         ) : (
           <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No Middle East account in a similar activity band is available right now. Check back
-            shortly.
+            No Middle East ranking is available right now. Check back shortly.
           </p>
         )}
       </section>

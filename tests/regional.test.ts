@@ -101,17 +101,17 @@ describe("Middle East activity peer", () => {
     expect(buildRegionalRanking(target, computeMetrics(target), [far])).toBeNull();
   });
 
-  it("discloses the follower band, post-only activity match and four-factor weights", () => {
+  it("keeps the visible match reasons short", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
     const peer = profile("peer", 1_100_000, ["festival poetry"]);
 
     const match = findRegionalCategoryPeer(target, computeMetrics(target), [peer])!;
     const reasons = match.matchReasons.join(" ");
 
-    expect(reasons).toContain("±30%");
-    expect(reasons).toContain("700K–1.3M");
-    expect(reasons).toContain("Reels/post captions and hashtags only");
-    expect(reasons).toContain("55% followers, 20% engagement, 15% avg interactions, 10% follower change");
+    expect(reasons).toContain("shared activity:");
+    expect(reasons).not.toContain("±30%");
+    expect(reasons).not.toContain("Reels/post captions and hashtags only");
+    expect(reasons).not.toContain("55% followers");
   });
 
   it("returns null for an empty regional pool", () => {

@@ -13,7 +13,6 @@ import { computeMetrics, type ProfileMetrics } from "./metrics";
 import {
   clampRankScoreToMatch,
   compareRank,
-  FOLLOWER_LATENCY,
   isWithinFollowerLatency,
   rankFactorSimilarity,
   rankFactors,
@@ -79,12 +78,6 @@ function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): 
   );
 }
 
-function followerBand(followers: number): string {
-  return `${formatCompact(Math.round(followers * (1 - FOLLOWER_LATENCY)))}–${formatCompact(
-    Math.round(followers * (1 + FOLLOWER_LATENCY)),
-  )}`;
-}
-
 // The Middle East panel is deliberately stricter than the global peer pool:
 // every candidate must be inside the ±30% follower band AND share an activity
 // inferred only from public Reels/post captions and hashtags. The same filtered
@@ -119,10 +112,9 @@ function rankedCandidates(
       const raw = factorScore * 0.4 + activityScore * 0.35 + countryScore(relationship) * 0.25;
 
       const matchReasons = [
-        `followers within ±${Math.round(FOLLOWER_LATENCY * 100)}% of this profile (${followerBand(target.followers)})`,
-        `activity from Reels/post captions and hashtags only: ${shared.join(", ")}`,
+        `shared activity: ${shared.join(", ")}`,
         countryReason(relationship, targetCountry, candidateCountry),
-        "ranked by 55% followers, 20% engagement, 15% avg interactions, 10% follower change",
+        `four-factor fit ${Math.round(factorScore)}%`,
       ];
 
       return {
