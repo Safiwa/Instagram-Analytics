@@ -112,26 +112,34 @@ describe("live Instagram adapter", () => {
         username: "verified.test",
       },
     };
-    const identityPayload = {
-      data: {
-        user: {
-          username: "verified.test",
-          full_name: "Verified Test",
-          is_verified: true,
-          edge_followed_by: { count: 15_000 },
-          profile_pic_url_hd: "https://example.com/hd-avatar.jpg",
+    const identityHtml = `<!DOCTYPE html><html><body><script type="application/json" data-sjs>${JSON.stringify({
+      require: [
+        {
+          __bbox: {
+            result: {
+              data: {
+                xig_user_by_igid_v2: {
+                  username: "verified.test",
+                  full_name: "Verified Test",
+                  is_verified: true,
+                  follower_count: 15_000,
+                  profile_pic_url: "https://example.com/public-avatar.jpg",
+                },
+              },
+            },
+          },
         },
-      },
-    };
+      ],
+    })}</script></body></html>`;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("graph.facebook.com")) {
         return jsonResponse(discovery);
       }
-      if (url.includes("web_profile_info")) {
-        return new Response(JSON.stringify(identityPayload), {
+      if (url.includes("instagram.com/verified.test/")) {
+        return new Response(identityHtml, {
           status: 200,
-          headers: { "Content-Type": "application/json", "X-Instagram-Proxy": "ok" },
+          headers: { "Content-Type": "text/html", "X-Instagram-Proxy": "ok" },
         });
       }
       return new Response("", { status: 404 });
@@ -144,11 +152,40 @@ describe("live Instagram adapter", () => {
       throw new Error("expected a live profile");
     }
     expect(first.profile.isVerified).toBe(true);
-    expect(first.profile.profilePictureUrl).toBe("https://example.com/hd-avatar.jpg");
+    expect(first.profile.profilePictureUrl).toBe("https://example.com/public-avatar.jpg");
 
     // Both the live profile and the identity lookup are cached per handle.
     await resolveProfile("verified.test");
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the real public verification snapshot when the bridge is offline", async () => {
+    const discovery = {
+      business_discovery: {
+        ...discoveryPayload.business_discovery,
+        username: "natgeo",
+        name: "National Geographic",
+      },
+    };
+    // Every non-Graph request is an offline bridge response.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes("graph.facebook.com")) {
+          return jsonResponse(discovery);
+        }
+        return new Response("", { status: 403 });
+      }),
+    );
+
+    const resolution = await resolveProfile("natgeo");
+
+    expect(resolution.status).toBe("found");
+    if (resolution.status !== "found") {
+      throw new Error("expected a live profile");
+    }
+    expect(resolution.profile.isVerified).toBe(true);
+    expect(resolution.profile.profilePictureUrl).toBe("https://example.com/avatar.jpg");
   });
 
   it("maps an invalid token to an auth error", async () => {

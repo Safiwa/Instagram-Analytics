@@ -75,11 +75,19 @@ function sharedTopics(target: CreatorProfile, candidate: CreatorProfile): string
   return [...profileTopics(target)].filter((topic) => candidateTopics.has(topic));
 }
 
+type RankOptions = {
+  // The highlighted UAE/GCC benchmark is range-gated; the leaderboard table is
+  // not, so it always has enough peers to show a meaningful rank.
+  requireComparableRange?: boolean;
+};
+
 function rankedCandidates(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
+  options: RankOptions = {},
 ): RegionalPeer[] {
+  const requireComparableRange = options.requireComparableRange !== false;
   const targetCategory = inferCategory(target);
   const targetCountry = inferCountrySignal(target);
   const targetFactors = rankFactors(target, metrics);
@@ -98,9 +106,13 @@ function rankedCandidates(
       const candidateFactors = rankFactors(candidate, candidateMetrics);
       return { candidate, candidateCategory, candidateMetrics, candidateFactors };
     })
-    // Keep UAE/GCC benchmarks inside one audience band: a micro account must not
-    // be compared with a million-follower regional brand just because both are local.
-    .filter(({ candidateFactors }) => isComparableRange(targetFactors, candidateFactors))
+    // Keep the highlighted UAE/GCC benchmark inside one audience band: a micro
+    // account must not be compared with a million-follower regional brand just
+    // because both are local. The ranking table opts out to stay fully populated.
+    .filter(
+      ({ candidateFactors }) =>
+        !requireComparableRange || isComparableRange(targetFactors, candidateFactors),
+    )
     .map(({ candidate, candidateCategory, candidateMetrics, candidateFactors }) => {
       const candidateCountry = inferCountrySignal(candidate);
       const relationship = countryRelationship(targetCountry, candidateCountry);
@@ -116,7 +128,7 @@ function rankedCandidates(
 
       const matchReasons = [
         countryReason(relationship, targetCountry, candidateCountry),
-        "similar audience size and engagement range",
+        ...(requireComparableRange ? ["similar audience size and engagement range"] : []),
         `four-factor fit ${Math.round(factorScore)}% (followers, engagement, interactions, follower change)`,
         exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`,
       ];
@@ -232,7 +244,7 @@ export function buildRegionalRanking(
 ): RegionalRanking | null {
   // The leaderboard itself is a top-ten by the four-factor score, not by the
   // softer "closest profile" match score used for the single highlighted peer.
-  const peers = [...rankedCandidates(target, metrics, pool)]
+  const peers = [...rankedCandidates(target, metrics, pool, { requireComparableRange: false })]
     .sort(
       (left, right) =>
         rankScore(right.factors) - rankScore(left.factors) ||

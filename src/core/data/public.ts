@@ -648,7 +648,7 @@ function preferredCategory(user: PublicUser | null): string {
 // offline bridge simply leaves the live profile unchanged.
 export async function fetchPublicIdentity(username: string): Promise<PublicIdentity | null> {
   const key = username.trim().replace(/^@/, "").toLowerCase();
-  if (!key) {
+  if (!isValidHandle(key)) {
     return null;
   }
 
@@ -657,8 +657,26 @@ export async function fetchPublicIdentity(username: string): Promise<PublicIdent
     return cached.identity;
   }
 
-  const result = await fetchWebProfile(key);
-  const user = result?.user;
+  // The signed proxy bridge serves the public HTML profile with a real
+  // `is_verified` field; `web_profile_info` is blocked by Instagram's login wall.
+  let user: PublicUser | null = null;
+  try {
+    const response = await fetchInstagram(
+      `${ORIGIN}/${encodeURIComponent(key)}/`,
+      HEADERS,
+      REQUEST_TIMEOUT_MS,
+    );
+    if (response.ok) {
+      user = parseProfileHtml(await response.text(), key).user;
+    }
+  } catch (error) {
+    log.warn("public identity lookup failed", {
+      username: key,
+      message: error instanceof Error ? error.message : "network",
+    });
+    return null;
+  }
+
   if (!user) {
     return null;
   }

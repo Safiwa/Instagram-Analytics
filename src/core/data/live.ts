@@ -1,5 +1,6 @@
 import { log } from "../logging/logger";
 import type { CreatorProfile, Post } from "./types";
+import { isVerifiedHandle } from "./verified";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_MAX = 100;
@@ -112,7 +113,9 @@ function mapProfile(data: IgBusinessDiscovery, fallbackUsername: string): Creato
     followers: Math.max(0, data.followers_count ?? 0),
     following: Math.max(0, data.follows_count ?? 0),
     postsCount: Math.max(0, data.media_count ?? media.length),
-    isVerified: false,
+    // business_discovery cannot return the badge; use the real public-data
+    // snapshot as a fallback. Fresh web identity lookups override this in adapter.ts.
+    isVerified: isVerifiedHandle(username),
     source: "live",
     profilePictureUrl: data.profile_picture_url,
     website: data.website,

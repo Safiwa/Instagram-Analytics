@@ -209,24 +209,11 @@ describe("public Instagram reader", () => {
 
   it("reads the public verification badge and picture for live enrichment", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).includes("web_profile_info")) {
-        return new Response(
-          JSON.stringify({
-            data: {
-              user: {
-                username: "public.test",
-                is_verified: true,
-                edge_followed_by: { count: 1_000 },
-                profile_pic_url: "https://example.com/avatar.jpg",
-                profile_pic_url_hd: "https://example.com/hd-avatar.jpg",
-              },
-            },
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json", "X-Instagram-Proxy": "ok" },
-          },
-        );
+      if (String(input).includes("instagram.com/public.test/")) {
+        return new Response(profileHtml({ username: "public.test", isVerified: true }), {
+          status: 200,
+          headers: { "Content-Type": "text/html", "X-Instagram-Proxy": "ok" },
+        });
       }
       return new Response("", { status: 404 });
     });
@@ -236,7 +223,7 @@ describe("public Instagram reader", () => {
 
     expect(identity).toEqual({
       isVerified: true,
-      profilePictureUrl: "https://example.com/hd-avatar.jpg",
+      profilePictureUrl: "https://example.com/avatar.jpg",
     });
     await fetchPublicIdentity("public.test");
     expect(fetchMock).toHaveBeenCalledTimes(1);

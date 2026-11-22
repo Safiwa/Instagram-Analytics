@@ -69,8 +69,12 @@ describe("UAE/GCC category peer", () => {
     const target = profile("small.uae", 1_000, "Food blogger in Abu Dhabi", 100);
     const huge = profile("big.food.uae", 2_300_000, "Food blogger and chef in Dubai", 50_000);
 
+    // The highlighted benchmark stays range-gated and returns no misleading peer.
     expect(findRegionalCategoryPeer(target, computeMetrics(target), [huge])).toBeNull();
-    expect(buildRegionalRanking(target, computeMetrics(target), [huge])).toBeNull();
+    // The leaderboard still shows a full rank group, ordered by the four factors.
+    const ranking = buildRegionalRanking(target, computeMetrics(target), [huge]);
+    expect(ranking?.rows).toHaveLength(2);
+    expect(ranking!.rows[0].profile.username).toBe("big.food.uae");
   });
 
   it("reports the audience range in the match reasons", () => {
@@ -177,12 +181,19 @@ describe("UAE/GCC top peer ranking", () => {
     expect(ranking!.rows[0].rankScore).toBeGreaterThan(ranking!.rows[1].rankScore);
   });
 
-  it("excludes out-of-band peers instead of ranking them", () => {
+  it("ranks out-of-band peers by score but never suggests them as benchmarks", () => {
     const target = profile("rank.target", 50_000, "Fashion and beauty", 500);
     const highRate = profile("high.er", 5_000, "Fashion and beauty", 1_000);
     const balanced = profile("balanced.peer", 100_000_000, "Fashion and beauty", 1_000_000);
 
-    expect(buildRegionalRanking(target, computeMetrics(target), [highRate, balanced])).toBeNull();
+    expect(findRegionalCategoryPeer(target, computeMetrics(target), [highRate, balanced])).toBeNull();
+
+    const ranking = buildRegionalRanking(target, computeMetrics(target), [highRate, balanced])!;
+    expect(ranking.rows).toHaveLength(3);
+    const balancedRow = ranking.rows.find((row) => row.profile.username === "balanced.peer")!;
+    const highRow = ranking.rows.find((row) => row.profile.username === "high.er")!;
+    expect(balancedRow.rankScore).toBeGreaterThan(highRow.rankScore);
+    expect(ranking.rows.indexOf(balancedRow)).toBeLessThan(ranking.rows.indexOf(highRow));
   });
 
   it("ranks in-range peers by four-factor score", () => {

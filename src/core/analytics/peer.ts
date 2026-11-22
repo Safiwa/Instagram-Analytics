@@ -69,11 +69,19 @@ export type PeerMatch = {
   reasons: string[];
 };
 
+type ScoreOptions = {
+  // Suggestions/benchmarks enforce a believable audience band. Ranking tables
+  // opt out so the searched profile always appears in a full five-profile group.
+  requireComparableRange?: boolean;
+};
+
 function scorePeers(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
+  options: ScoreOptions = {},
 ): PeerMatch[] {
+  const requireComparableRange = options.requireComparableRange !== false;
   const targetCategory = inferCategory(target);
   const targetCountry = inferCountrySignal(target);
   const targetTopics = profileTopics(target);
@@ -97,9 +105,13 @@ function scorePeers(
       const candidateFactors = rankFactors(candidate, candidateMetrics);
       return { candidate, candidateCategory, candidateMetrics, candidateFactors };
     })
-    // A peer is only a benchmark if it sits in the same audience-size and
-    // engagement band. Category and country fit cannot excuse a 1K vs 10M gap.
-    .filter(({ candidateFactors }) => isComparableRange(targetFactors, candidateFactors))
+    // A suggested benchmark must sit in the same audience-size and engagement
+    // band. Category and country fit cannot excuse a 1K vs 10M gap. Ranking
+    // tables keep all category peers so the five-profile group stays visible.
+    .filter(
+      ({ candidateFactors }) =>
+        !requireComparableRange || isComparableRange(targetFactors, candidateFactors),
+    )
     .map(({ candidate, candidateCategory, candidateMetrics, candidateFactors }) => {
       const candidateCountry = inferCountrySignal(candidate);
       const relationship = countryRelationship(targetCountry, candidateCountry);
@@ -123,7 +135,9 @@ function scorePeers(
         exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`,
       );
       reasons.push(countryReason(relationship, targetCountry, candidateCountry));
-      reasons.push("similar audience size and engagement range");
+      if (requireComparableRange) {
+        reasons.push("similar audience size and engagement range");
+      }
       reasons.push(
         `four-factor fit ${Math.round(factorScore)}% (followers, engagement, interactions, follower change)`,
       );
@@ -168,7 +182,7 @@ export function findSimilarPeers(
   pool: CreatorProfile[],
   limit = 4,
 ): PeerMatch[] {
-  return scorePeers(target, metrics, pool).slice(0, limit);
+  return scorePeers(target, metrics, pool, { requireComparableRange: true }).slice(0, limit);
 }
 
 export type PeerRankingRow = {
@@ -192,15 +206,15 @@ export type PeerRanking = {
 };
 
 // Builds a five-profile leaderboard: the searched profile plus its four closest
-// comparable peers. Rank is therefore always "1 of 5" when the pool has enough
-// in-range candidates, rather than a six-profile group.
+// category peers. Unlike the benchmark suggestions this table is not range-gated,
+// so the rank group stays visible even for unusually large or small accounts.
 export function buildPeerRanking(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
   limit = 4,
 ): PeerRanking | null {
-  const peers = scorePeers(target, metrics, pool).slice(0, limit);
+  const peers = scorePeers(target, metrics, pool, { requireComparableRange: false }).slice(0, limit);
   if (peers.length === 0) {
     return null;
   }
