@@ -251,7 +251,7 @@ describe("Middle East authenticity-aware ranking", () => {
     expect(ranking.rows[0].rankScore).toBeGreaterThan(ranking.rows[1].rankScore);
   });
 
-  it("supports a top-10 limit after the band and activity filters", () => {
+  it("defaults to five profiles: the target plus four peers", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
     const pool = [target];
     for (let index = 1; index <= 12; index += 1) {
@@ -264,8 +264,25 @@ describe("Middle East authenticity-aware ranking", () => {
 
     const ranking = buildRegionalRanking(target, computeMetrics(target), pool);
 
+    expect(ranking?.rows).toHaveLength(5); // target + top 4 peers
+    expect(ranking?.total).toBe(5);
+    expect(ranking!.rows.filter((row) => row.isTarget)).toHaveLength(1);
+  });
+
+  it("still supports an explicit top-10 limit after the filters", () => {
+    const target = profile("target", 1_000_000, ["festival poetry"]);
+    const pool = [target];
+    for (let index = 1; index <= 12; index += 1) {
+      pool.push(
+        profile(`peer.${index}`, 900_000 + index * 10_000, ["festival poetry"], {
+          likes: 1_000 + index * 100,
+        }),
+      );
+    }
+
+    const ranking = buildRegionalRanking(target, computeMetrics(target), pool, 10);
+
     expect(ranking?.rows).toHaveLength(11); // target + top 10 peers
     expect(ranking?.total).toBe(11);
-    expect(ranking!.rows.filter((row) => row.isTarget)).toHaveLength(1);
   });
 });

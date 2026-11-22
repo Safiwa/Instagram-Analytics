@@ -175,6 +175,8 @@ describe("country leaderboards", () => {
     expect(regionForHandle("davidguetta")).toBe("europe");
     expect(regionForHandle("aljazeera")).toBe("middle-east");
     expect(regionForHandle("emirates")).toBe("uae");
+    expect(regionForHandle("jexmi")).toBe("uae");
+    expect(regionForHandle("elsakahwaji")).toBe("middle-east");
     expect(regionForHandle("leomessi")).toBeNull();
     expect(regionForHandle("UNKNOWN")).toBeNull();
     expect(REGION_BOARDS.map((board) => board.id)).toEqual([
@@ -217,6 +219,12 @@ describe("country leaderboards", () => {
       "visitoman",
       "visittunisia",
       "visitmorocco",
+      "alisha_sajjal",
+      "alitofique",
+      "hinaashh",
+      "jexmi",
+      "najet.dh",
+      "elsakahwaji",
     ]) {
       expect(isInRegionBoard(handle, "middle-east"), handle).toBe(true);
     }

@@ -86,6 +86,14 @@ export const LEADERBOARD_HANDLES = [
   "visitoman",
   "visittunisia",
   "visitmorocco",
+  // Real, publicly discoverable Middle East creator accounts in the same
+  // follower range as @rim.official__, with explicit public category labels.
+  "alisha_sajjal",
+  "alitofique",
+  "hinaashh",
+  "jexmi",
+  "najet.dh",
+  "elsakahwaji",
 ] as const;
 
 // Real, public UAE/GCC accounts verified through the live Instagram Business Discovery
@@ -107,6 +115,10 @@ export const UAE_GCC_HANDLES = [
   "visitqatar",
   "dubaimall",
   "rafflesdubai",
+  "alisha_sajjal",
+  "alitofique",
+  "hinaashh",
+  "jexmi",
 ] as const;
 
 export type LeaderboardEntry = {

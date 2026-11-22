@@ -136,6 +136,11 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   fcbarcelona: "Spain",
   realmadrid: "Spain",
   adidas: "Germany",
+  alisha_sajjal: "United Arab Emirates",
+  alitofique: "United Arab Emirates",
+  hinaashh: "United Arab Emirates",
+  jexmi: "United Arab Emirates",
+  elsakahwaji: "Lebanon",
 };
 
 const REGION_COUNTRY: Partial<Record<Region, string>> = {

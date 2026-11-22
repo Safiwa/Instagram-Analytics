@@ -244,7 +244,8 @@ export function buildRegionalRanking(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
-  limit = 10,
+  // Four peers plus the searched profile keeps the panel at five rows.
+  limit = 4,
 ): RegionalRanking | null {
   const targetFactors = rankFactors(target, metrics);
   const targetRegionalScore = regionalRankScore(targetFactors, metrics.authenticityPct);

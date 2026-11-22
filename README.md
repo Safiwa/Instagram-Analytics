@@ -419,7 +419,10 @@ Profile pages now surface verification, growth, and regional comparison:
 - **Middle East category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
   `src/core/data/regional.ts`) replaces the old UAE/GCC panel. Its pool is every tracked profile on
   the Middle East homepage board (`isInRegionBoard(username, "middle-east")`), which includes the
-  UAE accounts and the other tracked Middle East countries. A candidate must (1) sit inside the
+  UAE accounts and the other tracked Middle East countries. The curated pool includes six real,
+  publicly discoverable creator accounts in the same follower band — `alisha_sajjal`, `alitofique`,
+  `hinaashh`, `jexmi`, `najet.dh` and `elsakahwaji` — so a five-profile rank can appear without
+  relaxing any gate. A candidate must (1) sit inside the
   **±30% follower band**, (2) have an explicit category label inferred from its public display
   name/bio via `inferExplicitCategory()` (fallback `Digital creator` / `Public figure` labels do not
   qualify), and (3) be in the same creator group under `isSimilarCategory()`. Post-derived
@@ -428,9 +431,10 @@ Profile pages now surface verification, growth, and regional comparison:
   beauty or travel. The same filtered set feeds the highlighted peer and the ranking table, so they
   cannot disagree. It shows an **80%+ relative match** (scaled 80–99, not an identity claim), key
   comparisons (Followers, Engagement rate, Avg interactions, Follower change and Authenticity,
-  labeled `est.` for real accounts), and a **Middle East rank** of up to ten in-band peers ordered by
-  `regionalRankScore()` — 90% four-factor rank plus 10% authenticity, so lower modeled fake-follower
-  share ranks higher. Each row shows the inferred category label, country, average interactions and
+  labeled `est.` for real accounts), and a **Middle East rank** of five profiles — the searched
+  account plus its four best in-band peers — ordered by `regionalRankScore()` — 90% four-factor rank
+  plus 10% authenticity, so lower modeled fake-follower share ranks higher. Each row shows the
+  inferred category label, country, average interactions and
   follower change. If no tracked Middle East account is inside the band with a compatible creator
   label, the panel shows a short empty state instead of substituting an out-of-band account.
 - **No repeated UAE lifestyle peer** (`src/core/analytics/exclusive.ts`) treats `ola.alqodmani`
