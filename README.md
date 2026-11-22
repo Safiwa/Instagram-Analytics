@@ -252,7 +252,7 @@ request plus a few embed requests.
 |---|---|
 | `/` | Analysis dashboard: lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, Modash benchmark, sources, confidence |
 | `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and UAE/GCC benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
-| `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with same-country comparable suggestions |
+| `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region four-factor rank table and remaining comparable suggestions |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
 | `/api/digest/send` | Cron-only weekly digest sender |
@@ -413,10 +413,15 @@ Profile pages now surface verification, growth, and regional comparison:
   consists of real public accounts verified through the live Business Discovery path; it is a
   curated reference set, not a complete directory of every regional account.
 
-- **Compare suggestions** (`src/app/compare/page.tsx`) use `findSimilarPeers()` on the first selected
-  profile: same category, same country preferred, ordered by the same four-factor score. Each
-  suggestion links to a profile or adds it to the current comparison, so benchmarking and the PDF
-  report can be extended with relevant same-country peers rather than arbitrary handles.
+- **Compare rank and suggestions** (`src/app/compare/page.tsx`) use the first selected profile as
+  the benchmark anchor. `buildCompareRanking()` in `src/core/analytics/compare.ts` lists other real
+  public profiles from the same inferred country first and then the same wider region, keeps the
+  category gate, removes every handle already in the comparison, and orders the rows by the shared
+  four-factor `rankScore` (`compare-rank`). This replaces recently viewed handles being recycled as
+  "suggested peers": `findSimilarPeers()` suggestions now exclude the ranked handles too, and only
+  the remaining comparables are shown. Each suggestion links to a profile or adds it to the current
+  comparison, so benchmarking and the PDF report can be extended with relevant peers rather than
+  arbitrary handles.
 
 All are computed on the server in `src/app/profile/[username]/page.tsx`. The tracked-pool fetch is
 guarded by `isLiveConfigured()` so local development without Meta keys does not make pointless API
@@ -601,6 +606,7 @@ src/
 ├─ app/                         # routes: home, profile, compare, report API, local Instagram proxy
 ├─ components/                  # MetricCard, EmptyState
 ├─ core/
+│  ├─ analytics/compare.ts      # same-country/region four-factor compare ranking
 │  ├─ analytics/estimates.ts    # public-signal fake/authenticity/growth models
 │  ├─ analytics/metrics.ts      # measured metrics + disclosed estimate fallback
 │  ├─ data/adapter.ts           # demo, public, and optional official resolution

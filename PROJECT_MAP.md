@@ -128,7 +128,7 @@ src/
 │  ├─ layout.tsx                         # shell, nav, live/demo indicator
 │  ├─ page.tsx                           # handle lookup + analysis dashboard (server component)
 │  ├─ profile/[username]/page.tsx        # async params → resolveProfile → ProfileDashboard
-│  ├─ compare/page.tsx                   # async searchParams → resolveProfile → ComparisonTable
+│  ├─ compare/page.tsx                   # async searchParams → resolveProfile → rank table + ComparisonTable + remaining suggestions
 │  ├─ api/report/route.ts                # GET → resolveProfile → reportDocument → PDF Response
 │  ├─ api/instagram-proxy/route.ts       # authenticated, allowlisted fetch from the local home IP
 │  ├─ api/digest/subscribe/route.ts      # POST → validate → store 30-day trial signup
@@ -146,6 +146,7 @@ src/
 │  ├─ data/adapter.ts                    # listProfiles / searchProfiles / getProfile / resolveProfile
 │  ├─ data/public.ts                     # public-page reader, proxy bridge, parsers, pk helpers, cache, error kinds
 │  ├─ data/live.ts                       # optional Business Discovery fetch, mapping, cache, error kinds
+│  ├─ analytics/compare.ts               # same-country/region four-factor compare ranking
 │  ├─ analytics/estimates.ts             # public-signal models + confidence/signals/methodology
 │  ├─ analytics/metrics.ts               # measured metrics + disclosed estimate fallback
 │  ├─ digest/validation.ts               # signup validation, normalization, 30-day trial end
@@ -167,6 +168,7 @@ src/
    ├─ live.test.ts
    ├─ public.test.ts
    ├─ proxy.test.ts
+   ├─ compare.test.ts
    └─ digest.test.ts
 ```
 
@@ -180,6 +182,7 @@ src/
 - `"use client"` limited to `ProfileDashboard` (charts), `HandleLookup` (navigation + validation), and `WeeklyDigestSignup` (form state). Data loading stays in server components/route handlers.
 - Any failure (unknown handle, >4 handles, rate limit, network, PDF build error) becomes an `EmptyState`, `400`, or `500` **and** is logged — never an unhandled throw.
 - `core/data/public.ts` owns every public-page selector and embed parser; UI and metrics never parse HTML.
+- Compare pages rank other tracked public profiles from the anchor account's inferred country first, then the same wider region, using `rankScore()`. Handles already in the comparison are excluded from both the `compare-rank` table and the remaining `compare-suggestions`.
 - No placeholders, no `TODO`, no speculative abstraction.
 
 ### Public lookup limitations
