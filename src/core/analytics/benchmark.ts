@@ -7,8 +7,6 @@ export type BenchmarkTier = {
 };
 
 export const MODASH_SOURCE_LABEL = "Modash engagement benchmarks";
-export const MODASH_SOURCE_URL =
-  "https://help.modash.io/en/articles/6542471-understanding-engagement-rate-and-how-modash-calculates-it";
 
 // Published by Modash (updated 21 Oct 2026). Ranges describe typical Instagram
 // engagement by audience size and are context, not a pass/fail grade.

@@ -1,5 +1,4 @@
-import { ExternalLink, Scale } from "lucide-react";
-import { MODASH_BENCHMARKS, MODASH_SOURCE_URL } from "../../core/analytics/benchmark";
+import { MODASH_BENCHMARKS } from "../../core/analytics/benchmark";
 
 export function BenchmarkPanel() {
   return (
@@ -35,24 +34,6 @@ export function BenchmarkPanel() {
             <p className="text-sm font-semibold text-indigo-700">{tier.range}</p>
           </div>
         ))}
-      </div>
-
-      <div className="flex flex-wrap items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600">
-        <Scale className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-        <p className="max-w-3xl">
-          Modash uses median likes divided by followers over roughly the last three months. This
-          site uses average likes and comments divided by followers over up to 12 recent posts, so
-          treat the comparison as directional rather than exact.
-          <a
-            href={MODASH_SOURCE_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="ml-1 inline-flex items-center gap-1 font-medium text-indigo-600 hover:text-indigo-700"
-          >
-            Read the Modash methodology
-            <ExternalLink className="h-3 w-3" aria-hidden="true" />
-          </a>
-        </p>
       </div>
     </section>
   );
