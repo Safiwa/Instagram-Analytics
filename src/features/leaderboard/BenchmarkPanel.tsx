@@ -2,21 +2,7 @@ import { MODASH_BENCHMARKS } from "../../core/analytics/benchmark";
 
 export function BenchmarkPanel() {
   return (
-    <section data-testid="modash-benchmark" className="space-y-5">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
-          External benchmark
-        </p>
-        <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-950">
-          What does a good engagement rate look like?
-        </h2>
-        <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
-          Modash publishes typical Instagram engagement ranges by audience size. Use these
-          benchmarks as context when you benchmark a creator, not as a pass/fail grade. Always
-          compare profiles within the same niche and follower tier.
-        </p>
-      </div>
-
+    <section data-testid="modash-benchmark">
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-slate-100 bg-slate-50 px-5 py-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
           <span>Audience tier</span>
