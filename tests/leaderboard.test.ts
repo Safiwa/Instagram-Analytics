@@ -8,7 +8,12 @@ import {
   refreshBatch,
   TRENDING_WINDOW_DAYS,
 } from "../src/core/data/leaderboard";
-import { REGION_BOARDS, regionForHandle } from "../src/core/data/regions";
+import {
+  isInRegionBoard,
+  MIDDLE_EAST_COUNTRIES,
+  REGION_BOARDS,
+  regionForHandle,
+} from "../src/core/data/regions";
 import type { CreatorProfile, Post } from "../src/core/data/types";
 
 const NOW = new Date("2026-11-21T12:00:00.000Z");
@@ -154,6 +159,45 @@ describe("country leaderboards", () => {
     ]);
   });
 
+  it("covers all requested Middle East countries and includes UAE in that board", () => {
+    expect([...MIDDLE_EAST_COUNTRIES]).toEqual([
+      "Qatar",
+      "Saudi Arabia",
+      "Jordan",
+      "Egypt",
+      "Kuwait",
+      "United Arab Emirates",
+      "Syria",
+      "Lebanon",
+      "Iraq",
+      "Palestine",
+      "Bahrain",
+      "Oman",
+      "Tunisia",
+      "Morocco",
+    ]);
+    for (const handle of [
+      "visitqatar",
+      "visitsaudi",
+      "visitjordan",
+      "visitegypt",
+      "visitkuwait",
+      "emirates",
+      "visitsyria",
+      "visitlebanon",
+      "visitiraq",
+      "explorepalestine",
+      "visitbahrain",
+      "visitoman",
+      "visittunisia",
+      "visitmorocco",
+    ]) {
+      expect(isInRegionBoard(handle, "middle-east"), handle).toBe(true);
+    }
+    expect(isInRegionBoard("emirates", "uae")).toBe(true);
+    expect(isInRegionBoard("taylorswift", "middle-east")).toBe(false);
+  });
+
   it("builds a separate top-ten board for each region", () => {
     const board = rankProfiles(
       [
@@ -168,7 +212,10 @@ describe("country leaderboards", () => {
 
     expect(board.regional.usa.map((entry) => entry.username)).toEqual(["taylorswift"]);
     expect(board.regional.europe.map((entry) => entry.username)).toEqual(["davidguetta"]);
-    expect(board.regional["middle-east"].map((entry) => entry.username)).toEqual(["aljazeera"]);
+    expect(board.regional["middle-east"].map((entry) => entry.username)).toEqual([
+      "aljazeera",
+      "emirates",
+    ]);
     expect(board.regional.uae.map((entry) => entry.username)).toEqual(["emirates"]);
   });
 

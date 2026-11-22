@@ -141,7 +141,7 @@ export default function Home() {
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">
             Profile intelligence
           </p>
-          <h1 className="mt-3 max-w-3xl text-3xl font-semibold leading-tight tracking-tight md:text-4xl">
+          <h1 className="mt-3 max-w-4xl text-2xl font-semibold leading-tight tracking-tight md:text-3xl">
             Leading Instagram analytics platform in the UAE — performance-driven tools and a
             practical growth plan
           </h1>

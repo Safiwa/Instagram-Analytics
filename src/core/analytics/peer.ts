@@ -1,6 +1,23 @@
 import type { CreatorProfile } from "../data/types";
 import { inferCategory, isSimilarCategory } from "./category";
+import {
+  countryReason,
+  countryRelationship,
+  countryScore,
+  countryTier,
+  inferCountrySignal,
+  type CountryRelationship,
+  type CountrySignal,
+} from "./country";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
+import {
+  compareRank,
+  rankFactorSimilarity,
+  rankFactors,
+  rankScore,
+  round2,
+  type RankFactors,
+} from "./rank";
 
 const TOPIC_KEYWORDS: Record<string, string[]> = {
   fashion: ["fashion", "style", "outfit", "clothing", "beauty", "makeup", "skincare"],
@@ -16,16 +33,15 @@ const TOPIC_KEYWORDS: Record<string, string[]> = {
   family: ["family", "kids", "parenting", "mom", "dad"],
 };
 
-function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
 export function profileTopics(profile: CreatorProfile): Set<string> {
-  const text = `${profile.displayName} ${profile.category} ${profile.bio}`.toLowerCase();
+  const postText = profile.recentPosts
+    .flatMap((post) => [post.caption, ...post.hashtags])
+    .join(" ");
+  const text = `${profile.displayName} ${profile.category} ${profile.bio} ${postText}`.toLowerCase();
   const topics = new Set<string>();
 
   for (const [topic, keywords] of Object.entries(TOPIC_KEYWORDS)) {
@@ -44,8 +60,11 @@ function overlap(left: Set<string>, right: Set<string>): string[] {
 export type PeerMatch = {
   profile: CreatorProfile;
   metrics: ProfileMetrics;
+  factors: RankFactors;
   score: number;
   category: string;
+  country: CountrySignal;
+  countryRelationship: CountryRelationship;
   reasons: string[];
 };
 
@@ -55,6 +74,9 @@ function scorePeers(
   pool: CreatorProfile[],
 ): PeerMatch[] {
   const targetCategory = inferCategory(target);
+  const targetCountry = inferCountrySignal(target);
+  const targetTopics = profileTopics(target);
+  const targetFactors = rankFactors(target, metrics);
   const candidates = pool.filter(
     (candidate) =>
       candidate.username !== target.username &&
@@ -67,45 +89,56 @@ function scorePeers(
     return [];
   }
 
-  const targetTopics = profileTopics(target);
-  const targetMagnitude = Math.log10(Math.max(target.followers, 1));
-
   const scored = candidates.map((candidate) => {
     const candidateCategory = inferCategory(candidate);
     const candidateMetrics = computeMetrics(candidate);
-    const magnitudeGap = Math.abs(targetMagnitude - Math.log10(Math.max(candidate.followers, 1)));
-    const sizeScore = clamp(100 - magnitudeGap * 55, 0, 100);
+    const candidateFactors = rankFactors(candidate, candidateMetrics);
+    const candidateCountry = inferCountrySignal(candidate);
+    const relationship = countryRelationship(targetCountry, candidateCountry);
     const sharedTopics = overlap(targetTopics, profileTopics(candidate));
     const topicScore = sharedTopics.length > 0 ? clamp(60 + sharedTopics.length * 20, 0, 100) : 0;
-    const engagementGap = Math.abs(metrics.engagementRate - candidateMetrics.engagementRate);
-    const engagementScore = clamp(100 - engagementGap * 25, 0, 100);
+    const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
     const exactCategory = candidateCategory === targetCategory;
 
+    // Four-factor fit, category fit, country fit and themes all contribute. The
+    // country tier filter below makes same-country candidates win whenever they
+    // exist; the score then orders them by the same criteria as the ranking.
     const score = round2(
-      sizeScore * 0.45 + topicScore * 0.15 + engagementScore * 0.15 + (exactCategory ? 100 : 70) * 0.25,
+      factorScore * 0.35 +
+        topicScore * 0.15 +
+        countryScore(relationship) * 0.25 +
+        (exactCategory ? 100 : 75) * 0.25,
     );
     const reasons: string[] = [];
 
     reasons.push(exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`);
-    if (sizeScore >= 70) {
-      reasons.push("similar audience size");
-    }
+    reasons.push(countryReason(relationship, targetCountry, candidateCountry));
+    reasons.push(
+      `four-factor fit ${Math.round(factorScore)}% (followers, engagement, interactions, follower change)`,
+    );
     if (sharedTopics.length > 0) {
       reasons.push(`shares ${sharedTopics.slice(0, 2).join(" and ")} themes`);
     }
-    if (engagementScore >= 70) {
-      reasons.push("comparable engagement rate");
-    }
 
-    return { profile: candidate, metrics: candidateMetrics, score, category: candidateCategory, reasons };
+    return {
+      profile: candidate,
+      metrics: candidateMetrics,
+      factors: candidateFactors,
+      score,
+      category: candidateCategory,
+      country: candidateCountry,
+      countryRelationship: relationship,
+      reasons,
+    };
   });
 
-  scored.sort(
-    (left, right) =>
-      right.score - left.score || left.profile.username.localeCompare(right.profile.username),
-  );
-
-  return scored;
+  // A same-country match is always preferred over a merely similar region, an
+  // unknown country, or a clearly different country. If none exists, fall back
+  // through those tiers instead of returning no suggestions.
+  const bestTier = Math.min(...scored.map((match) => countryTier(match.countryRelationship)));
+  return scored
+    .filter((match) => countryTier(match.countryRelationship) === bestTier)
+    .sort((left, right) => right.score - left.score || left.profile.username.localeCompare(right.profile.username));
 }
 
 export function findClosestPeer(
@@ -113,14 +146,30 @@ export function findClosestPeer(
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
 ): PeerMatch | null {
-  return scorePeers(target, metrics, pool)[0] ?? null;
+  return findSimilarPeers(target, metrics, pool, 1)[0] ?? null;
+}
+
+// Used by the compare page for same-country suggestions. The caller filters out
+// handles already in the comparison before rendering.
+export function findSimilarPeers(
+  target: CreatorProfile,
+  metrics: ProfileMetrics,
+  pool: CreatorProfile[],
+  limit = 4,
+): PeerMatch[] {
+  return scorePeers(target, metrics, pool).slice(0, limit);
 }
 
 export type PeerRankingRow = {
   profile: CreatorProfile;
   engagementRate: number;
+  rankScore: number;
+  avgInteractions: number;
+  followerChangePct: number;
+  followerChangeEstimated: boolean;
   matchScore: number | null;
   category: string;
+  country: CountrySignal;
   isTarget: boolean;
 };
 
@@ -144,32 +193,38 @@ export function buildPeerRanking(
     return null;
   }
 
+  const targetFactors = rankFactors(target, metrics);
   const rows: PeerRankingRow[] = [
     {
       profile: target,
-      engagementRate: metrics.engagementRate,
+      engagementRate: targetFactors.engagementRate,
+      rankScore: rankScore(targetFactors),
+      avgInteractions: targetFactors.avgInteractions,
+      followerChangePct: targetFactors.followerChangePct,
+      followerChangeEstimated: targetFactors.followerChangeEstimated,
       matchScore: null,
       category: inferCategory(target),
+      country: inferCountrySignal(target),
       isTarget: true,
     },
     ...peers.map((peer) => ({
       profile: peer.profile,
       engagementRate: peer.metrics.engagementRate,
+      rankScore: rankScore(peer.factors),
+      avgInteractions: peer.factors.avgInteractions,
+      followerChangePct: peer.factors.followerChangePct,
+      followerChangeEstimated: peer.factors.followerChangeEstimated,
       matchScore: peer.score,
       category: peer.category,
+      country: peer.country,
       isTarget: false,
     })),
   ];
 
-  rows.sort(
-    (left, right) =>
-      right.engagementRate - left.engagementRate ||
-      right.profile.followers - left.profile.followers,
-  );
+  rows.sort((left, right) => compareRank(left, right));
 
-  const beaten = peers.filter(
-    (peer) => peer.metrics.engagementRate < metrics.engagementRate,
-  ).length;
+  const targetRankScore = rankScore(targetFactors);
+  const beaten = peers.filter((peer) => rankScore(peer.factors) < targetRankScore).length;
 
   return {
     rows,

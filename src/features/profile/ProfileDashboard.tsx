@@ -620,9 +620,11 @@ export function ProfileDashboard({
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
               We match this profile only to real public accounts in the same or a closely related
-              category (for example Digital creator, Blogger, Public figure, or Beauty), then rank
-              that group by engagement rate so you can see how it performs against comparable
-              profiles. This is a curated reference set, not an exhaustive niche search.
+              category (for example Digital creator, Blogger, Public figure, or Beauty), prefer the
+              same country, then rank the group by followers, engagement rate, average interactions
+              and follower change. Country is inferred from the handle first, then profile text,
+              hashtags and promoted locations; Instagram does not publish account country. This is
+              a curated reference set, not an exhaustive niche search.
             </p>
           </div>
         </div>
@@ -693,7 +695,8 @@ export function ProfileDashboard({
                   Rank #{ranking.targetRank} of {ranking.total} among comparable profiles
                 </p>
                 <p className="text-xs text-slate-500">
-                  Ordered by engagement rate from up to 12 recent public posts
+                  Rank score: 55% followers, 20% engagement, 15% avg interactions, 10% follower
+                  change
                 </p>
               </div>
               {ranking.outperformedPercent !== null ? (
@@ -738,13 +741,21 @@ export function ProfileDashboard({
                       {formatCompact(row.profile.followers)} followers
                       {row.matchScore !== null ? ` · ${row.matchScore.toFixed(0)}% match` : ""}
                     </p>
+                    <p className="truncate text-[11px] text-slate-400">
+                      {row.country.label} · {formatCompact(row.avgInteractions)} avg interactions ·{" "}
+                      {formatPercent(row.followerChangePct)}
+                      {row.followerChangeEstimated ? " est." : ""} follower change
+                    </p>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold text-slate-950">
-                      {formatPercent(row.engagementRate)}
+                      {row.rankScore.toFixed(1)}
                     </p>
                     <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                      Engagement
+                      Rank score
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-slate-500">
+                      {formatPercent(row.engagementRate)} ER
                     </p>
                   </div>
                 </li>
@@ -776,8 +787,11 @@ export function ProfileDashboard({
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
               We match this profile only to real public UAE/GCC accounts in the same or a closely
               related category (for example Digital creator, Blogger, Public figure, or Beauty),
-              compare four key metrics, then rank that group in our curated UAE/GCC tracking set.
-              Match scores are relative to this regional pool, not an absolute identity claim.
+              prefer the same inferred country, then rank that group by followers, engagement rate,
+              average interactions and follower change. Match scores are relative to this curated
+              regional pool, not an absolute identity claim. Instagram does not publish account
+              country, so country is inferred from the handle, profile text, hashtags and promoted
+              locations.
             </p>
           </div>
         </div>
@@ -798,10 +812,13 @@ export function ProfileDashboard({
                     />
                   </Link>
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                    {regionalPeer.matchScore}% category match
+                    {regionalPeer.matchScore}% regional match
                   </span>
                   <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
                     {regionalPeer.category}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    {regionalPeer.country.label}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">@{regionalPeer.profile.username}</p>
@@ -810,6 +827,9 @@ export function ProfileDashboard({
                     Shared business themes: {regionalPeer.sharedBusiness.join(", ")}
                   </p>
                 ) : null}
+                <p className="text-xs leading-relaxed text-slate-600">
+                  Why this peer: {regionalPeer.matchReasons.join(", ")}.
+                </p>
               </div>
               <Link
                 href={`/compare?handles=${profile.username},${regionalPeer.profile.username}`}
@@ -840,8 +860,9 @@ export function ProfileDashboard({
               ))}
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
-              Verification reflects the account&apos;s public Instagram badge. Authenticity is an
-              estimate for public accounts; see the estimates panel below for details.
+              Follower change is modeled from public signals for non-demo profiles; see the
+              estimates panel below for details. Country signals are inferred because Instagram
+              does not publish account location.
             </p>
           </>
         ) : (
@@ -859,7 +880,8 @@ export function ProfileDashboard({
                   peers
                 </p>
                 <p className="text-xs text-slate-500">
-                  Ordered by engagement rate from up to 12 recent public posts
+                  Rank score: 55% followers, 20% engagement, 15% avg interactions, 10% follower
+                  change
                 </p>
               </div>
               {regionalRanking.outperformedPercent !== null ? (
@@ -904,13 +926,21 @@ export function ProfileDashboard({
                       {formatCompact(row.profile.followers)} followers
                       {row.matchScore !== null ? ` · ${row.matchScore}% category match` : ""}
                     </p>
+                    <p className="truncate text-[11px] text-slate-400">
+                      {row.country.label} · {formatCompact(row.avgInteractions)} avg interactions ·{" "}
+                      {formatPercent(row.followerChangePct)}
+                      {row.followerChangeEstimated ? " est." : ""} follower change
+                    </p>
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold text-slate-950">
-                      {formatPercent(row.engagementRate)}
+                      {row.rankScore.toFixed(1)}
                     </p>
                     <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                      Engagement
+                      Rank score
+                    </p>
+                    <p className="mt-0.5 text-[10px] text-slate-500">
+                      {formatPercent(row.engagementRate)} ER
                     </p>
                   </div>
                 </li>

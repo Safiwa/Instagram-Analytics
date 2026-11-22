@@ -203,11 +203,14 @@ export async function GlobalPulse() {
 
       <p className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
         <Globe2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-        Ranked among a curated tracked pool, not every account on Instagram. Country is assigned
-        from our curated account list because Instagram does not publish account location; UAE
-        accounts are listed separately from the rest of the Middle East. Engagement and average
-        interactions are measured from public likes and comments (saves only when exposed for every
-        post). Follower change is an estimate for real accounts. Updated{" "}
+        Ranked among a curated tracked pool, not every account on Instagram, using followers (55%),
+        engagement rate (20%), average interactions (15%) and 30-day follower change (10%). Country
+        is assigned from our curated account list because Instagram does not publish account
+        location; the Middle East board covers Qatar, Saudi Arabia, Jordan, Egypt, Kuwait, UAE,
+        Syria, Lebanon, Iraq, Palestine, Bahrain, Oman, Tunisia and Morocco, with UAE accounts also
+        highlighted separately. Engagement and average interactions are measured from public likes
+        and comments (saves only when exposed for every post). Follower change is an estimate for
+        real accounts. Updated{" "}
         {formatDate(board.generatedAt)}.
       </p>
     </section>

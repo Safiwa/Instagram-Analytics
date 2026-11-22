@@ -7,15 +7,15 @@ import {
 } from "../src/core/analytics/regional";
 import type { CreatorProfile, Post } from "../src/core/data/types";
 
-function post(likes: number): Post {
+function post(likes: number, hashtags: string[] = []): Post {
   return {
-    id: `p-${likes}`,
+    id: `p-${likes}-${hashtags.join("-")}`,
     type: "Reel",
-    caption: "",
+    caption: hashtags.join(" "),
     postedAt: new Date("2026-11-20T00:00:00.000Z").toISOString(),
     likes,
     comments: 50,
-    hashtags: [],
+    hashtags,
   };
 }
 
@@ -73,6 +73,38 @@ describe("UAE/GCC category peer", () => {
     expect(buildRegionalRanking(target, computeMetrics(target), [airline, news])).toBeNull();
   });
 
+  it("prefers a peer in the same country inferred from the handle", () => {
+    const target = profile("dubai.style", 60_000, "Fashion and beauty", 2_000);
+    const sameCountry = profile("uae.creator", 40_000, "Fashion and beauty", 1_500);
+    const otherCountry = profile("doha.creator", 80_000, "Fashion and beauty", 2_500);
+
+    const match = findRegionalCategoryPeer(target, computeMetrics(target), [
+      otherCountry,
+      sameCountry,
+    ]);
+
+    expect(match?.profile.username).toBe("uae.creator");
+    expect(match?.country.country).toBe("United Arab Emirates");
+    expect(match?.matchReasons.join(" ")).toContain("same country");
+  });
+
+  it("falls back to hashtag and promoted-location signals when the handle has no country", () => {
+    const target = {
+      ...profile("style.studio", 60_000, "Fashion and beauty", 2_000),
+      recentPosts: [post(2_000, ["#Dubai", "#Beauty"]), post(1_800, ["#UAE"])],
+    };
+    const sameCountry = profile("beauty.dubai", 40_000, "Fashion and beauty", 1_500);
+    const otherCountry = profile("beauty.paris", 80_000, "Fashion and beauty", 2_500);
+
+    const match = findRegionalCategoryPeer(target, computeMetrics(target), [
+      otherCountry,
+      sameCountry,
+    ]);
+
+    expect(match?.profile.username).toBe("beauty.dubai");
+    expect(match?.country.basis).toBe("handle");
+  });
+
   it("returns null for an empty regional pool", () => {
     const target = profile("solo.uae", 1_000, "Local cafe", 100);
     expect(findRegionalCategoryPeer(target, computeMetrics(target), [])).toBeNull();
@@ -80,7 +112,7 @@ describe("UAE/GCC category peer", () => {
 });
 
 describe("four key regional comparisons", () => {
-  it("covers followers, engagement, authenticity and verification", () => {
+  it("covers the same four criteria used for ranking", () => {
     const target = profile("target.uae", 60_000, "Fashion and beauty", 2_000, false);
     const peer = profile("peer.uae", 75_000, "Fashion and makeup", 1_000, true);
     const match = findRegionalCategoryPeer(target, computeMetrics(target), [peer])!;
@@ -90,15 +122,13 @@ describe("four key regional comparisons", () => {
     expect(comparisons.map((row) => row.label)).toEqual([
       "Followers",
       "Engagement rate",
-      "Authenticity (est.)",
-      "Verification",
+      "Avg interactions",
+      "Follower change",
     ]);
     expect(comparisons.length).toBe(4);
-
-    const verification = comparisons.find((row) => row.label === "Verification")!;
-    expect(verification.target).toBe("Not verified");
-    expect(verification.peer).toBe("Verified");
-    expect(verification.insight).toContain("verified");
+    expect(comparisons[0].target).toBe("60K");
+    expect(comparisons[2].target).toBe("2.1K");
+    expect(comparisons[3].target).toContain("est.");
   });
 });
 
@@ -122,8 +152,23 @@ describe("UAE/GCC top peer ranking", () => {
         .filter((row) => !row.isTarget)
         .every((row) => row.matchScore !== null && row.matchScore >= 80),
     ).toBe(true);
-    const engagements = ranking!.rows.map((row) => row.engagementRate);
-    expect([...engagements].sort((a, b) => b - a)).toEqual(engagements);
+    const scores = ranking!.rows.map((row) => row.rankScore);
+    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+    expect(ranking!.rows[0].rankScore).toBeGreaterThan(ranking!.rows[1].rankScore);
+  });
+
+  it("does not rank a high engagement micro account above a balanced large account", () => {
+    const target = profile("rank.target", 50_000, "Fashion and beauty", 500);
+    const highRate = profile("high.er", 5_000, "Fashion and beauty", 1_000);
+    const balanced = profile("balanced.peer", 100_000_000, "Fashion and beauty", 1_000_000);
+
+    const ranking = buildRegionalRanking(target, computeMetrics(target), [highRate, balanced])!;
+    const highRow = ranking.rows.find((row) => row.profile.username === "high.er")!;
+    const balancedRow = ranking.rows.find((row) => row.profile.username === "balanced.peer")!;
+
+    expect(highRow.engagementRate).toBeGreaterThan(balancedRow.engagementRate);
+    expect(balancedRow.rankScore).toBeGreaterThan(highRow.rankScore);
+    expect(ranking.rows.indexOf(balancedRow)).toBeLessThan(ranking.rows.indexOf(highRow));
   });
 
   it("returns null when no regional peers are available", () => {

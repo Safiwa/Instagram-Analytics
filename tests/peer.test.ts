@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { computeMetrics } from "../src/core/analytics/metrics";
-import { buildPeerRanking, findClosestPeer } from "../src/core/analytics/peer";
+import { buildPeerRanking, findClosestPeer, findSimilarPeers } from "../src/core/analytics/peer";
 import type { CreatorProfile, Post } from "../src/core/data/types";
 
 function post(likes: number): Post {
@@ -52,8 +52,46 @@ describe("closest public peer", () => {
   });
 });
 
+describe("country-aware peer suggestions", () => {
+  it("prefers same-country profiles and orders them by four-factor fit", () => {
+    const target = profile("dubai.style", 60_000, "Fashion and beauty", 2_000);
+    const closeFit = profile("uae.close", 70_000, "Fashion and beauty", 2_200);
+    const weakFit = profile("uae.weak", 2_000, "Fashion and beauty", 100);
+    const otherCountry = profile("london.style", 90_000, "Fashion and beauty", 3_000);
+
+    const suggestions = findSimilarPeers(target, computeMetrics(target), [
+      otherCountry,
+      weakFit,
+      closeFit,
+    ]);
+
+    expect(suggestions.map((match) => match.profile.username)).toEqual(["uae.close", "uae.weak"]);
+    expect(suggestions.every((match) => match.country.country === "United Arab Emirates")).toBe(
+      true,
+    );
+    expect(suggestions[0].reasons.join(" ")).toContain("four-factor fit");
+  });
+
+  it("uses promoted-location hashtags when the handle has no country word", () => {
+    const target = {
+      ...profile("style.studio", 60_000, "Fashion and beauty", 2_000),
+      recentPosts: [
+        { ...post(2_000), caption: "Dubai edit", hashtags: ["#Dubai", "#UAE"] },
+        { ...post(1_800), caption: "Abu Dhabi find", hashtags: ["#AbuDhabi"] },
+      ],
+    };
+    const sameCountry = profile("beauty.dubai", 40_000, "Fashion and beauty", 1_500);
+    const otherCountry = profile("beauty.paris", 80_000, "Fashion and beauty", 2_500);
+
+    const match = findClosestPeer(target, computeMetrics(target), [otherCountry, sameCountry]);
+
+    expect(match?.profile.username).toBe("beauty.dubai");
+    expect(match?.countryRelationship).toBe("same-country");
+  });
+});
+
 describe("peer ranking for the searched profile", () => {
-  it("includes the searched profile and ranks the group by engagement rate", () => {
+  it("includes the searched profile and ranks the group by four-factor score", () => {
     const target = profile("searched", 60_000, "Fashion and skincare boutique", 2_000);
     const low = profile("low.peer", 62_000, "Fashion and beauty", 500);
     const high = profile("high.peer", 58_000, "Fashion and style", 8_000);
@@ -70,6 +108,10 @@ describe("peer ranking for the searched profile", () => {
     expect(ranking!.targetRank).toBe(2);
     expect(ranking!.total).toBe(3);
     expect(ranking!.outperformedPercent).toBe(50);
+    const scores = ranking!.rows.map((row) => row.rankScore);
+    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+    expect(ranking!.rows.every((row) => typeof row.avgInteractions === "number")).toBe(true);
+    expect(ranking!.rows.every((row) => typeof row.followerChangePct === "number")).toBe(true);
     expect(ranking!.rows.find((row) => row.isTarget)?.matchScore).toBeNull();
     expect(ranking!.rows.filter((row) => !row.isTarget).every((row) => row.matchScore !== null)).toBe(
       true,

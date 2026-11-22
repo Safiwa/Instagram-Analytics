@@ -252,7 +252,7 @@ request plus a few embed requests.
 |---|---|
 | `/` | Analysis dashboard: lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, Modash benchmark, sources, confidence |
 | `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and UAE/GCC benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
-| `/compare?handles=a,b,c,d` | Side-by-side comparison, maximum four accounts |
+| `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with same-country comparable suggestions |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
 | `/api/digest/send` | Cron-only weekly digest sender |
@@ -271,14 +271,16 @@ Graph API path. Each entry links to a full profile analysis.
 
 **By country** (top 10 each, added alongside the worldwide cards)
 
-- **USA · top 10**, **Europe · top 10**, **Middle East · top 10** (outside the UAE), and
-  **UAE · top 10** (listed separately from the rest of the Middle East).
+- **USA · top 10**, **Europe · top 10**, **Middle East · top 10**, and **UAE · top 10**. The Middle
+  East board covers Qatar, Saudi Arabia, Jordan, Egypt, Kuwait, UAE, Syria, Lebanon, Iraq, Palestine,
+  Bahrain, Oman, Tunisia and Morocco; UAE accounts are also highlighted on their own board.
 
 ### Four-factor ranking
 
 "Trending" and the four country boards no longer rank by engagement rate alone — that promoted
 small accounts with one viral post above million-follower accounts. They now use a weighted rank
-score (`rankScore()` in `src/core/data/leaderboard.ts`) built from four signals, in priority order:
+score (`rankScore()` in `src/core/analytics/rank.ts`, re-exported by `leaderboard.ts`) built from
+four signals, in priority order:
 
 1. **Followers** — 55%
 2. **Engagement rate** — 20%
@@ -289,16 +291,21 @@ Each signal is normalised to 0–100 against fixed anchors (followers: 200M ceil
 cap; average interactions: 2M ceiling; follower change: −5% to +15%) so scores stay stable across
 refreshes. Followers carry the most weight, so a large account is not outranked by a small one with
 exceptional engagement. Follower change is an estimate for real accounts and is labelled `est.` in
-the UI.
+the UI. The same scoring module powers the global peer ranking, the UAE/GCC peer ranking and the
+compare-page suggestions, so "similar profile" and "rank" never use different definitions.
 
-Country is **curated, not inferred from Instagram**: Instagram does not publish an account's
-country, so `src/core/data/regions.ts` maps each tracked handle to exactly one board from its public
+Country is **curated, not inferred from Instagram demographics**: Instagram does not publish an
+account's country, so `src/core/data/regions.ts` maps each tracked handle to a board from its public
 identity. This is editorial metadata, not an audience-demographic claim, and the homepage discloses
-it. Accounts based in the UAE appear only on the UAE board.
+it. The Middle East board includes UAE accounts, and a dedicated UAE board highlights them again.
+For benchmark and compare suggestions, `src/core/analytics/country.ts` prefers a country signal from
+the handle (including curated handle metadata), then public profile text, then hashtags and captions
+promoting a location. Instagram still does not publish account country, so these are inference
+signals, not measurements.
 
 ### Tracked pool and caching
 
-The pool is 55 curated, real worldwide Creator/Business accounts listed in
+The pool is 65 curated, real worldwide Creator/Business accounts listed in
 `src/core/data/leaderboard.ts` (expanded from 25 with verified European and Middle Eastern handles
 so every country board can fill). It is not an exhaustive global index, and accounts the API cannot
 resolve are skipped. Results are cached for 15 minutes in the data layer, and the home page is
@@ -306,7 +313,7 @@ dynamic so that a deployment without API credentials shows an empty-state messag
 data. The same pool is shared with profile pages for peer benchmarking
 (`getTrackedProfiles()`).
 
-To avoid firing 55 Meta API calls on every profile load, the pool is stored in Upstash
+To avoid firing 65 Meta API calls on every profile load, the pool is stored in Upstash
 (`src/core/data/tracked-store.ts`) and shared between the homepage and profile pages. Empty pools
 are never written, so a transient API rate limit cannot wipe a good snapshot. Meta throttles large
 bursts of Business Discovery calls (`code 4`), so refreshes are deliberately paced:
@@ -328,8 +335,9 @@ over roughly three months; this app uses average likes and comments divided by f
 to 12 recent posts, so the comparison is directional, not exact. The matching tier also appears as
 a hint on each profile's engagement card.
 
-The homepage hero leads with the large headline "Leading Instagram analytics platform in the UAE —
-performance-driven tools and a practical growth plan", followed by the lookup prompt. The browser
+The homepage hero leads with a compact, top-positioned headline "Leading Instagram analytics platform
+in the UAE — performance-driven tools and a practical growth plan", followed by the lookup prompt.
+The browser
 tab icon is an original indigo ascending-bars mark defined in `src/app/icon.svg` (Next.js `icon`
 file convention), so no external icon asset is required.
 
@@ -338,8 +346,8 @@ file convention), so no external icon asset is required.
 Profile pages now surface verification, growth, and regional comparison:
 
 - **Verification badge** (`verification-badge`) sits beside the profile name in the header and shows
-  **Verified** or **Not verified** from the account's public Instagram badge. Verification is also
-  one of the four key comparisons in the UAE/GCC panel and is called out in the analysis note there.
+  **Verified** or **Not verified** from the account's public Instagram badge. The UAE/GCC comparison
+  panel now focuses on the four ranking criteria instead of verification.
 - **30-day growth card** was moved up into the main metric grid (`metric-grid`), right beside the
   12-month growth card, with an **Est.** badge and the same disclosure as the growth analysis below.
   The full **30-day growth analysis** (`growth-analysis`) section was also moved directly beneath
@@ -360,26 +368,35 @@ Profile pages now surface verification, growth, and regional comparison:
   means searching a beauty creator no longer surfaces an airline, a newspaper or a shopping mall as
   a "similar" profile.
 - **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest category-compatible tracked
-  real public profile by exact-category priority, audience-size proximity (log-scaled), shared
-  topic keywords from the name and bio, and engagement-rate similarity. Each peer row shows its
-  inferred category badge alongside the match score, followers, engagement and estimated
-  authenticity, why it matched, and how this profile compares, with a link to a side-by-side
-  comparison. The same matched set powers a small ranking table (`peer-ranking`) that includes the
-  searched profile, orders it and its closest peers by engagement rate, and shows the searched
-  profile's rank (for example, "Rank #2 of 6") plus the share of peers it outperforms. If no tracked
-  profile in a compatible category is available (for example, without API credentials) the panel
-  shows an empty state rather than unrelated profiles.
+  real public profile. It first prefers the same inferred country (handle, then profile text, then
+  promoted hashtags/captions), falling back to same region, unknown country and then different
+  country only if no better tier exists. Within that tier, candidates are scored by the shared
+  four-factor fit (followers, engagement rate, average interactions, 30-day follower change), exact
+  category and shared themes. Each peer row shows its inferred category and country badges,
+  match score, followers, engagement, average interactions and estimated follower change, why it
+  matched, and how this profile compares, with a link to a side-by-side comparison. The same
+  matched set powers a small ranking table (`peer-ranking`) that includes the searched profile,
+  orders it and its closest peers by `rankScore`, and shows the searched profile's rank (for
+  example, "Rank #2 of 6") plus the share of peers it outperforms. If no tracked profile in a
+  compatible category is available (for example, without API credentials) the panel shows an empty
+  state rather than unrelated profiles.
 - **UAE/GCC category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
   `src/core/data/regional.ts`) applies the same category gate inside the regional pool: the searched
   profile is matched only to real public UAE/GCC accounts in the same or a closely related category,
-  prioritising exact category matches. It always returns an **80%+ category match** (a relative fit
-  inside the curated regional pool, scaled 80-99, not an absolute identity claim), shows **four key
-  comparisons** — Followers, Engagement rate, Authenticity (est.), and Verification — in the
-  existing comparison-card design, and ranks the profile among the category-compatible **top 10
-  UAE/GCC peers** by engagement rate with the searched profile highlighted and its rank (for example,
-  "Rank #3 of 11"). Every ranking row shows its category. The regional pool (`UAE_GCC_HANDLES` in
-  `leaderboard.ts`) consists of real public accounts verified through the live Business Discovery
-  path; it is a curated reference set, not a complete directory of every regional account.
+  preferring the same inferred country and then exact category. It always returns an **80%+ regional
+  match** (a relative fit inside the curated pool, scaled 80-99, not an absolute identity claim),
+  shows the **four ranking comparisons** — Followers, Engagement rate, Avg interactions and Follower
+  change (labeled `est.` for real accounts) — and ranks the profile among the category-compatible
+  **top 10 UAE/GCC peers** by the same `rankScore` with the searched profile highlighted and its
+  rank (for example, "Rank #3 of 11"). Every ranking row shows its category, country, average
+  interactions and follower change. The regional pool (`UAE_GCC_HANDLES` in `leaderboard.ts`)
+  consists of real public accounts verified through the live Business Discovery path; it is a
+  curated reference set, not a complete directory of every regional account.
+
+- **Compare suggestions** (`src/app/compare/page.tsx`) use `findSimilarPeers()` on the first selected
+  profile: same category, same country preferred, ordered by the same four-factor score. Each
+  suggestion links to a profile or adds it to the current comparison, so benchmarking and the PDF
+  report can be extended with relevant same-country peers rather than arbitrary handles.
 
 All are computed on the server in `src/app/profile/[username]/page.tsx`. The tracked-pool fetch is
 guarded by `isLiveConfigured()` so local development without Meta keys does not make pointless API

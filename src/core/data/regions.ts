@@ -1,9 +1,27 @@
 // Instagram does not expose an account's country, so the homepage region boards use
 // a curated map of the public accounts we track. This is editorial metadata about
 // each handle, not a claim derived from Instagram audience demographics. Accounts
-// based in the UAE are listed under "uae" only; the Middle East board covers the
-// rest of the region (Qatar, Saudi Arabia, Jordan, Egypt and Kuwait).
+// based in the UAE are also highlighted on their own "uae" board.
 export type Region = "usa" | "europe" | "middle-east" | "uae";
+
+// Countries covered by the Middle East board. Instagram has no account-country
+// field, so these are editorial groupings of the real public accounts we track.
+export const MIDDLE_EAST_COUNTRIES = [
+  "Qatar",
+  "Saudi Arabia",
+  "Jordan",
+  "Egypt",
+  "Kuwait",
+  "United Arab Emirates",
+  "Syria",
+  "Lebanon",
+  "Iraq",
+  "Palestine",
+  "Bahrain",
+  "Oman",
+  "Tunisia",
+  "Morocco",
+] as const;
 
 export const REGION_BOARDS: { id: Region; label: string; description: string }[] = [
   { id: "usa", label: "USA · top 10", description: "Tracked accounts based in the United States" },
@@ -11,9 +29,13 @@ export const REGION_BOARDS: { id: Region; label: string; description: string }[]
   {
     id: "middle-east",
     label: "Middle East · top 10",
-    description: "Tracked accounts in Qatar, Saudi Arabia, Jordan, Egypt and Kuwait",
+    description: `Tracked accounts in ${MIDDLE_EAST_COUNTRIES.join(", ")}`,
   },
-  { id: "uae", label: "UAE · top 10", description: "Tracked accounts based in the UAE" },
+  {
+    id: "uae",
+    label: "UAE · top 10",
+    description: "Tracked accounts based in the UAE, also shown on the dedicated UAE board",
+  },
 ];
 
 const ACCOUNT_REGIONS: Record<string, Region> = {
@@ -49,7 +71,7 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   adidas: "europe",
   gucci: "europe",
 
-  // Middle East (outside the UAE)
+  // Middle East (including UAE accounts, which also have a dedicated board)
   qatarairways: "middle-east",
   visitqatar: "middle-east",
   aljazeera: "middle-east",
@@ -60,6 +82,16 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   flynas: "middle-east",
   qatar: "middle-east",
   visitjordan: "middle-east",
+  visitsyria: "middle-east",
+  visitiraq: "middle-east",
+  explorepalestine: "middle-east",
+  visitkuwait: "middle-east",
+  visitegypt: "middle-east",
+  visitlebanon: "middle-east",
+  visitbahrain: "middle-east",
+  visitoman: "middle-east",
+  visittunisia: "middle-east",
+  visitmorocco: "middle-east",
 
   // United Arab Emirates
   hudabeauty: "uae",
@@ -80,4 +112,14 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
 
 export function regionForHandle(username: string): Region | null {
   return ACCOUNT_REGIONS[username.toLowerCase()] ?? null;
+}
+
+// The Middle East board covers every configured Middle East country, including
+// the UAE. The UAE board remains a narrower editorial view of the same accounts.
+export function isInRegionBoard(username: string, board: Region): boolean {
+  const region = regionForHandle(username);
+  if (region === board) {
+    return true;
+  }
+  return board === "middle-east" && region === "uae";
 }

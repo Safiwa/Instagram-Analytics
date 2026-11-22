@@ -1,14 +1,16 @@
-import { analyzeGrowth } from "../analytics/growth";
 import { computeMetrics } from "../analytics/metrics";
+import { rankFactors, rankScore, round2 } from "../analytics/rank";
 import { log } from "../logging/logger";
 import { fetchLiveProfile, isLiveConfigured } from "./live";
-import { REGION_BOARDS, regionForHandle, type Region } from "./regions";
+import { isInRegionBoard, REGION_BOARDS, type Region } from "./regions";
 import {
   readTrackedSnapshotAny,
   TRACKED_SNAPSHOT_TTL_SECONDS,
   writeTrackedSnapshot,
 } from "./tracked-store";
 import type { CreatorProfile, Post } from "./types";
+
+export { RANK_WEIGHTS, rankScore } from "../analytics/rank";
 
 export const TRENDING_WINDOW_DAYS = 15;
 export const LEADERBOARD_SIZE = 10;
@@ -73,6 +75,17 @@ export const LEADERBOARD_HANDLES = [
   "flynas",
   "qatar",
   "visitjordan",
+  // Curated real public accounts covering the wider Middle East board.
+  "visitsyria",
+  "visitiraq",
+  "explorepalestine",
+  "visitkuwait",
+  "visitegypt",
+  "visitlebanon",
+  "visitbahrain",
+  "visitoman",
+  "visittunisia",
+  "visitmorocco",
 ] as const;
 
 // Real, public UAE/GCC accounts verified through the live Instagram Business Discovery
@@ -119,46 +132,8 @@ export type Leaderboard = {
   windowDays: number;
 };
 
-// Followers carry the most weight, then engagement rate, average interactions and
-// 30-day follower change. Signals are normalised to 0-100 against fixed anchors so
-// scores stay stable across refreshes and between the global and region boards.
-export const RANK_WEIGHTS = {
-  followers: 0.55,
-  engagement: 0.2,
-  interactions: 0.15,
-  followerChange: 0.1,
-} as const;
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-
-function logScore(value: number, ceiling: number): number {
-  if (value <= 0) {
-    return 0;
-  }
-  return clamp((Math.log10(value) / Math.log10(ceiling)) * 100, 0, 100);
-}
-
-export function rankScore(entry: {
-  followers: number;
-  engagementRate: number;
-  avgInteractions: number;
-  followerChangePct: number;
-}): number {
-  const followers = logScore(entry.followers, 200_000_000);
-  const engagement = clamp((entry.engagementRate / 5) * 100, 0, 100);
-  const interactions = logScore(entry.avgInteractions, 2_000_000);
-  const followerChange = clamp(((entry.followerChangePct + 5) / 20) * 100, 0, 100);
-
-  return round2(
-    followers * RANK_WEIGHTS.followers +
-      engagement * RANK_WEIGHTS.engagement +
-      interactions * RANK_WEIGHTS.interactions +
-      followerChange * RANK_WEIGHTS.followerChange,
-  );
-}
-
+// Ranking math lives in analytics/rank so homepage boards, profile benchmarks
+// and compare suggestions all use exactly the same four-factor score.
 function byRank(left: LeaderboardEntry, right: LeaderboardEntry): number {
   return right.rankScore - left.rankScore || right.followers - left.followers;
 }
@@ -166,10 +141,6 @@ function byRank(left: LeaderboardEntry, right: LeaderboardEntry): number {
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const WINDOW_MS = TRENDING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 const FETCH_CHUNK = 10;
-
-function round2(value: number): number {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
 
 function windowRate(posts: Post[], followers: number, cutoff: number) {
   const recent = posts.filter((post) => {
@@ -200,27 +171,19 @@ function toEntry(profile: CreatorProfile, now: number): LeaderboardEntry | null 
 
   const window = windowRate(profile.recentPosts, profile.followers, now - WINDOW_MS);
   const metrics = computeMetrics(profile);
-  const growth = analyzeGrowth(profile, new Date(now));
-  const avgInteractions = round2(
-    metrics.avgLikes + metrics.avgComments + (metrics.avgSaves ?? 0),
-  );
+  const factors = rankFactors(profile, metrics, new Date(now));
 
   return {
     username: profile.username,
     displayName: profile.displayName,
     followers: profile.followers,
-    engagementRate: metrics.engagementRate,
+    engagementRate: factors.engagementRate,
     windowRate: window.rate,
     postsInWindow: window.count,
-    avgInteractions,
-    followerChangePct: growth.monthGrowthPct ?? 0,
-    followerChangeEstimated: growth.growthEstimated,
-    rankScore: rankScore({
-      followers: profile.followers,
-      engagementRate: metrics.engagementRate,
-      avgInteractions,
-      followerChangePct: growth.monthGrowthPct ?? 0,
-    }),
+    avgInteractions: factors.avgInteractions,
+    followerChangePct: factors.followerChangePct,
+    followerChangeEstimated: factors.followerChangeEstimated,
+    rankScore: rankScore(factors),
     profilePictureUrl: profile.profilePictureUrl,
   };
 }
@@ -229,7 +192,7 @@ function regionalBoards(entries: LeaderboardEntry[]): Record<Region, Leaderboard
   const boards = {} as Record<Region, LeaderboardEntry[]>;
   for (const board of REGION_BOARDS) {
     boards[board.id] = entries
-      .filter((entry) => regionForHandle(entry.username) === board.id)
+      .filter((entry) => isInRegionBoard(entry.username, board.id))
       .sort(byRank)
       .slice(0, LEADERBOARD_SIZE);
   }
@@ -270,7 +233,7 @@ function emptyLeaderboard(): Leaderboard {
 
 // Bump the prefix whenever the tracked-pool rebuild logic changes so a snapshot
 // written by the previous version is not reused with the new expectations.
-const TRACKED_SIGNATURE = `v4:${LEADERBOARD_HANDLES.join(",")}`;
+const TRACKED_SIGNATURE = `v5:${LEADERBOARD_HANDLES.join(",")}`;
 
 // Meta rate-limits large bursts of Business Discovery calls. Instead of
 // rebuilding all 55 profiles at once, each refresh updates a small rotating
