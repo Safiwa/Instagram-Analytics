@@ -3,6 +3,7 @@ import {
   CREATOR_CATEGORIES,
   categoryGroup,
   inferCategory,
+  inferExplicitCategory,
   isSimilarCategory,
 } from "../src/core/analytics/category";
 import { computeMetrics } from "../src/core/analytics/metrics";
@@ -84,6 +85,15 @@ describe("inferCategory", () => {
     expect(inferCategory(profile("Taylor Swift", "No biography provided"))).toBe("Public figure");
     expect(inferCategory(profile("dailyvibes", ""))).toBe("Digital creator");
   });
+
+  it("does not claim an explicit label for fallback profiles", () => {
+    expect(
+      inferExplicitCategory(profile("Qatar", "Qatar through the eyes of its people.")),
+    ).toBeNull();
+    expect(inferExplicitCategory(profile("Rimo BA", "Beauty skincare creator"))).toBe(
+      "Beauty, cosmetic & personal care",
+    );
+  });
 });
 
 describe("categoryGroup and isSimilarCategory", () => {
@@ -111,8 +121,8 @@ describe("categoryGroup and isSimilarCategory", () => {
 });
 
 describe("benchmark filtering by category", () => {
-  // The Middle East panel reads only Reel/post captions, so give these fixtures
-  // post activity that matches their public bios.
+  // Give these fixtures post activity that matches their public bios; the
+  // regional gate reads the bio label first and uses posts only as support.
   const withCaptions = (entry: CreatorProfile, caption: string): CreatorProfile => ({
     ...entry,
     recentPosts: entry.recentPosts.map((item) => ({ ...item, caption })),

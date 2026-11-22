@@ -170,13 +170,26 @@ function looksLikePerson(displayName: string): boolean {
   return words.every((word) => /^[\p{Lu}][\p{Ll}'.-]*$/u.test(word));
 }
 
-export function inferCategory(profile: CreatorProfile): string {
-  const text = `${profile.displayName} ${profile.bio}`;
-
+function explicitCategory(text: string): string | null {
   for (const rule of RULES) {
     if (rule.keywords.some((keyword) => matchesKeyword(text, keyword))) {
       return rule.label;
     }
+  }
+  return null;
+}
+
+// A public profile label is only explicit when the name/bio actually matched a
+// category rule. The "Digital creator" / "Public figure" fallbacks are useful for
+// global benchmarks but must not satisfy the regional category-label gate.
+export function inferExplicitCategory(profile: CreatorProfile): string | null {
+  return explicitCategory(`${profile.displayName} ${profile.bio}`);
+}
+
+export function inferCategory(profile: CreatorProfile): string {
+  const matched = inferExplicitCategory(profile);
+  if (matched) {
+    return matched;
   }
 
   if (looksLikePerson(profile.displayName)) {

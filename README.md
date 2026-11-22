@@ -418,8 +418,9 @@ Profile pages now surface verification, growth, and regional comparison:
   `src/core/data/regional.ts`) replaces the old UAE/GCC panel. Its pool is every tracked profile on
   the Middle East homepage board (`isInRegionBoard(username, "middle-east")`), which includes the
   UAE accounts and the other tracked Middle East countries. A candidate must (1) sit inside the
-  **±30% follower band**, (2) have a category label inferred from its public display name/bio via
-  `inferCategory()`, and (3) be in the same creator group under `isSimilarCategory()`. Post-derived
+  **±30% follower band**, (2) have an explicit category label inferred from its public display
+  name/bio via `inferExplicitCategory()` (fallback `Digital creator` / `Public figure` labels do not
+  qualify), and (3) be in the same creator group under `isSimilarCategory()`. Post-derived
   activity from `inferPostActivity()` is supporting evidence only and never a hard gate, so hotels,
   airlines, malls and news outlets cannot become creator peers just because their captions mention
   beauty or travel. The same filtered set feeds the highlighted peer and the ranking table, so they

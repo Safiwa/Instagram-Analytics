@@ -3,6 +3,7 @@ import type { CreatorProfile } from "../data/types";
 import {
   categoryGroup,
   inferCategory,
+  inferExplicitCategory,
   inferPostActivity,
   isSimilarCategory,
 } from "./category";
@@ -83,9 +84,10 @@ function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): 
 }
 
 // The Middle East panel keeps the curated pool and the hard ±30% follower band.
-// Category labels decide similarity: both sides must be labelled creator accounts
-// in the same creator group. Public post activity only strengthens the match, so a
-// hotel or news account can no longer become a creator peer through its captions.
+// Category labels decide similarity: both sides must have an explicit public
+// creator label in the same creator group. Fallback labels do not qualify. Public
+// post activity only strengthens the match, so a hotel or news account can no
+// longer become a creator peer through its captions.
 function rankedCandidates(
   target: CreatorProfile,
   metrics: ProfileMetrics,
@@ -93,19 +95,20 @@ function rankedCandidates(
 ): RegionalPeer[] {
   const targetCountry = inferCountrySignal(target);
   const targetFactors = rankFactors(target, metrics);
-  const targetCategory = inferCategory(target);
+  const targetCategory = inferExplicitCategory(target);
 
-  if (categoryGroup(targetCategory) !== "creator") {
+  if (!targetCategory || categoryGroup(targetCategory) !== "creator") {
     return [];
   }
 
   const candidates = pool.filter((candidate) => {
-    const candidateCategory = inferCategory(candidate);
+    const candidateCategory = inferExplicitCategory(candidate);
     return (
       candidate.username !== target.username &&
       candidate.followers > 0 &&
       candidate.recentPosts.length > 0 &&
       isWithinFollowerLatency(target.followers, candidate.followers) &&
+      candidateCategory !== null &&
       categoryGroup(candidateCategory) === "creator" &&
       isSimilarCategory(targetCategory, candidateCategory)
     );
@@ -117,7 +120,7 @@ function rankedCandidates(
       const candidateFactors = rankFactors(candidate, candidateMetrics);
       const candidateCountry = inferCountrySignal(candidate);
       const relationship = countryRelationship(targetCountry, candidateCountry);
-      const candidateCategory = inferCategory(candidate);
+      const candidateCategory = inferExplicitCategory(candidate) ?? inferCategory(candidate);
       const shared = sharedPostActivity(target, candidate);
       const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
       const activityScore = shared.length > 0 ? clamp(80 + shared.length * 5, 0, 100) : 75;
@@ -267,7 +270,7 @@ export function buildRegionalRanking(
       followerChangePct: targetFactors.followerChangePct,
       followerChangeEstimated: targetFactors.followerChangeEstimated,
       matchScore: null,
-      category: inferCategory(target),
+      category: inferExplicitCategory(target) ?? inferCategory(target),
       country: inferCountrySignal(target),
       isTarget: true,
     },

@@ -32,9 +32,9 @@ function profile(
   const likes = options.likes ?? 2_000;
   return {
     username,
-    displayName: options.displayName ?? username,
+    displayName: options.displayName ?? "Digital Creator",
     category: "Instagram Professional",
-    bio: options.bio ?? "",
+    bio: options.bio ?? "Digital creator",
     followers,
     following: 100,
     postsCount: captions.length,
@@ -97,6 +97,19 @@ describe("Middle East category peer", () => {
 
     expect(match?.profile.username).toBe("digital");
     expect(match?.category).toBe("Digital creator");
+  });
+
+  it("rejects fallback labels that are not explicit public categories", () => {
+    const target = profile("target", 1_000_000, ["festival poetry"]);
+    const fallback = profile("qatar", 1_100_000, ["travel destination"], {
+      displayName: "Qatar",
+      bio: "Qatar through the eyes of its people.",
+    });
+
+    const match = findRegionalCategoryPeer(target, computeMetrics(target), [fallback]);
+
+    expect(match).toBeNull();
+    expect(buildRegionalRanking(target, computeMetrics(target), [fallback])).toBeNull();
   });
 
   it("includes the ±30% follower band and rejects profiles outside it", () => {
