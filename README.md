@@ -533,7 +533,7 @@ network call.
 
 ### What it cannot show
 
-These are not published on public profile pages, so they render as `N/A` or `—`:
+These are not published on public profile pages, so they are omitted or render as `N/A` or `—`:
 
 - Saves and reach per post
 - Audience demographics (countries, age, gender)

@@ -612,18 +612,7 @@ export function ProfileDashboard({
           <AudienceBars title="Age groups" slices={profile.audience.ageGroups} />
           <AudienceBars title="Gender" slices={profile.audience.gender} />
         </section>
-      ) : (
-        <section
-          data-testid="audience-unavailable"
-          className="rounded-2xl border border-dashed border-slate-300 bg-white p-6"
-        >
-          <h3 className="text-sm font-semibold text-slate-950">Audience demographics</h3>
-          <p className="mt-1 text-sm text-slate-600">
-            Not available for public accounts. Age, gender, and country breakdowns require insights
-            access to the account itself.
-          </p>
-        </section>
-      )}
+      ) : null}
 
       <section
         data-testid="peer-benchmark"
