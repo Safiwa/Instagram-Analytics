@@ -801,7 +801,7 @@ export function ProfileDashboard({
           </span>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
-              Middle East activity benchmark
+              Middle East category benchmark
             </p>
             <h3 className="mt-1 text-base font-semibold text-slate-950">
               Closest Middle East profile and where this account sits
@@ -890,6 +890,9 @@ export function ProfileDashboard({
                 <p className="text-sm font-semibold text-slate-950">
                   Rank #{regionalRanking.targetRank} of {regionalRanking.total} Middle East profiles
                 </p>
+                <p className="text-xs text-slate-500">
+                  Regional rank score · lower modeled fake-follower share ranks higher
+                </p>
               </div>
               {regionalRanking.outperformedPercent !== null ? (
                 <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
@@ -931,7 +934,7 @@ export function ProfileDashboard({
                     <p className="truncate text-xs text-slate-500">
                       @{row.profile.username} · {row.category} ·{" "}
                       {formatCompact(row.profile.followers)} followers
-                      {row.matchScore !== null ? ` · ${row.matchScore}% activity match` : ""}
+                      {row.matchScore !== null ? ` · ${row.matchScore}% match` : ""}
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
                       {row.country.label} · {formatCompact(row.avgInteractions)} avg interactions ·{" "}
@@ -944,7 +947,7 @@ export function ProfileDashboard({
                       {row.rankScore.toFixed(1)}
                     </p>
                     <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                      Rank score
+                      Regional rank score
                     </p>
                     <p className="mt-0.5 text-[10px] text-slate-500">
                       {formatPercent(row.engagementRate)} ER

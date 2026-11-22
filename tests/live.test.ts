@@ -188,6 +188,34 @@ describe("live Instagram adapter", () => {
     expect(resolution.profile.profilePictureUrl).toBe("https://example.com/avatar.jpg");
   });
 
+  it("uses the verified snapshot for rim.official__ when the bridge is offline", async () => {
+    const discovery = {
+      business_discovery: {
+        ...discoveryPayload.business_discovery,
+        username: "rim.official__",
+        name: "Rimo BA",
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes("graph.facebook.com")) {
+          return jsonResponse(discovery);
+        }
+        return new Response("", { status: 403 });
+      }),
+    );
+
+    const resolution = await resolveProfile("rim.official__");
+
+    expect(resolution.status).toBe("found");
+    if (resolution.status !== "found") {
+      throw new Error("expected a live profile");
+    }
+    expect(resolution.profile.username).toBe("rim.official__");
+    expect(resolution.profile.isVerified).toBe(true);
+  });
+
   it("maps an invalid token to an auth error", async () => {
     vi.stubGlobal(
       "fetch",

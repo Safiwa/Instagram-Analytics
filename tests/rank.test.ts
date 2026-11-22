@@ -4,6 +4,8 @@ import {
   rankFactorSimilarity,
   rankFactors,
   rankScore,
+  REGIONAL_AUTHENTICITY_WEIGHT,
+  regionalRankScore,
 } from "../src/core/analytics/rank";
 import type { CreatorProfile } from "../src/core/data/types";
 
@@ -103,5 +105,29 @@ describe("shared four-factor ranking", () => {
     expect(rankFactorSimilarity(targetFactors, closeFactors)).toBeGreaterThan(
       rankFactorSimilarity(targetFactors, distantFactors),
     );
+  });
+});
+
+describe("authenticity-aware regional ranking", () => {
+  const factors = {
+    followers: 100_000,
+    engagementRate: 1.1,
+    avgInteractions: 1_100,
+    followerChangePct: 11.11,
+  };
+
+  it("blends the four-factor score with authenticity", () => {
+    const base = rankScore(factors);
+
+    expect(REGIONAL_AUTHENTICITY_WEIGHT).toBe(0.1);
+    expect(regionalRankScore(factors, 100)).toBeCloseTo(base * 0.9 + 10, 2);
+    expect(regionalRankScore(factors, 0)).toBeCloseTo(base * 0.9, 2);
+    expect(regionalRankScore(factors, 100)).toBeGreaterThan(regionalRankScore(factors, 40));
+  });
+
+  it("treats a missing authenticity as zero and clamps out-of-range values", () => {
+    expect(regionalRankScore(factors, null)).toBe(regionalRankScore(factors, 0));
+    expect(regionalRankScore(factors, 200)).toBe(regionalRankScore(factors, 100));
+    expect(regionalRankScore(factors, -20)).toBe(regionalRankScore(factors, 0));
   });
 });

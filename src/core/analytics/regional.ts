@@ -1,8 +1,12 @@
 import { formatCompact, formatPercent } from "../format";
 import type { CreatorProfile } from "../data/types";
-import { inferPostActivity, isSimilarCategory } from "./category";
 import {
-  countryReason,
+  categoryGroup,
+  inferCategory,
+  inferPostActivity,
+  isSimilarCategory,
+} from "./category";
+import {
   countryRelationship,
   countryScore,
   inferCountrySignal,
@@ -16,7 +20,7 @@ import {
   isWithinFollowerLatency,
   rankFactorSimilarity,
   rankFactors,
-  rankScore,
+  regionalRankScore,
   type RankFactors,
 } from "./rank";
 
@@ -32,8 +36,8 @@ export type RegionalPeer = {
   metrics: ProfileMetrics;
   factors: RankFactors;
   matchScore: number;
-  // Post-derived activity (Reels/post captions and hashtags only), never the
-  // display name or biography.
+  // The visible category comes from the public profile label (display name/bio).
+  // Post-derived activity is supporting evidence, never the category gate.
   category: string;
   sharedActivity: string[];
   country: CountrySignal;
@@ -78,10 +82,10 @@ function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): 
   );
 }
 
-// The Middle East panel is deliberately stricter than the global peer pool:
-// every candidate must be inside the ±30% follower band AND share an activity
-// inferred only from public Reels/post captions and hashtags. The same filtered
-// set feeds the highlighted peer and the ranking table, so they never disagree.
+// The Middle East panel keeps the curated pool and the hard ±30% follower band.
+// Category labels decide similarity: both sides must be labelled creator accounts
+// in the same creator group. Public post activity only strengthens the match, so a
+// hotel or news account can no longer become a creator peer through its captions.
 function rankedCandidates(
   target: CreatorProfile,
   metrics: ProfileMetrics,
@@ -89,15 +93,23 @@ function rankedCandidates(
 ): RegionalPeer[] {
   const targetCountry = inferCountrySignal(target);
   const targetFactors = rankFactors(target, metrics);
+  const targetCategory = inferCategory(target);
 
-  const candidates = pool.filter(
-    (candidate) =>
+  if (categoryGroup(targetCategory) !== "creator") {
+    return [];
+  }
+
+  const candidates = pool.filter((candidate) => {
+    const candidateCategory = inferCategory(candidate);
+    return (
       candidate.username !== target.username &&
       candidate.followers > 0 &&
       candidate.recentPosts.length > 0 &&
       isWithinFollowerLatency(target.followers, candidate.followers) &&
-      sharedPostActivity(target, candidate).length > 0,
-  );
+      categoryGroup(candidateCategory) === "creator" &&
+      isSimilarCategory(targetCategory, candidateCategory)
+    );
+  });
 
   return candidates
     .map((candidate) => {
@@ -105,16 +117,16 @@ function rankedCandidates(
       const candidateFactors = rankFactors(candidate, candidateMetrics);
       const candidateCountry = inferCountrySignal(candidate);
       const relationship = countryRelationship(targetCountry, candidateCountry);
-      const activity = inferPostActivity(candidate);
+      const candidateCategory = inferCategory(candidate);
       const shared = sharedPostActivity(target, candidate);
       const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
-      const activityScore = clamp(75 + shared.length * 10, 0, 100);
-      const raw = factorScore * 0.4 + activityScore * 0.35 + countryScore(relationship) * 0.25;
+      const activityScore = shared.length > 0 ? clamp(80 + shared.length * 5, 0, 100) : 75;
+      const raw = factorScore * 0.55 + countryScore(relationship) * 0.3 + activityScore * 0.15;
 
       const matchReasons = [
-        `shared activity: ${shared.join(", ")}`,
-        countryReason(relationship, targetCountry, candidateCountry),
-        `four-factor fit ${Math.round(factorScore)}%`,
+        `same creator category: ${candidateCategory}`,
+        ...(shared.length > 0 ? [`shared activity: ${shared.join(", ")}`] : []),
+        `regional fit ${Math.round(factorScore)}%`,
       ];
 
       return {
@@ -122,7 +134,7 @@ function rankedCandidates(
         metrics: candidateMetrics,
         factors: candidateFactors,
         matchScore: clampRankScoreToMatch(raw),
-        category: activity.join(", "),
+        category: candidateCategory,
         sharedActivity: shared,
         country: candidateCountry,
         countryRelationship: relationship,
@@ -132,7 +144,8 @@ function rankedCandidates(
     .sort(
       (left, right) =>
         right.matchScore - left.matchScore ||
-        rankScore(right.factors) - rankScore(left.factors) ||
+        regionalRankScore(right.factors, right.metrics.authenticityPct) -
+          regionalRankScore(left.factors, left.metrics.authenticityPct) ||
         left.profile.username.localeCompare(right.profile.username),
     );
 }
@@ -159,12 +172,12 @@ function differenceInsight(
   return `${amount} ${higher ? "higher" : "lower"} for this profile`;
 }
 
-function changeValue(value: number, estimated: boolean): string {
+function changeValue(value: number | null, estimated: boolean): string {
   return `${formatPercent(value)}${estimated ? " est." : ""}`;
 }
 
-// The comparison table mirrors the four criteria used to rank the regional
-// leaderboard, including the disclosed follower-change estimate.
+// The comparison table mirrors the four public ranking criteria and adds
+// authenticity, the disclosed estimate that adjusts the regional rank.
 export function buildKeyComparisons(
   target: CreatorProfile,
   metrics: ProfileMetrics,
@@ -210,6 +223,17 @@ export function buildKeyComparisons(
         " pts",
       ),
     },
+    {
+      label: "Authenticity",
+      target: changeValue(metrics.authenticityPct, metrics.authenticityEstimated),
+      peer: changeValue(peer.metrics.authenticityPct, peer.metrics.authenticityEstimated),
+      insight: differenceInsight(
+        "authenticity",
+        metrics.authenticityPct ?? 0,
+        peer.metrics.authenticityPct ?? 0,
+        " pts",
+      ),
+    },
   ];
 }
 
@@ -219,10 +243,13 @@ export function buildRegionalRanking(
   pool: CreatorProfile[],
   limit = 10,
 ): RegionalRanking | null {
+  const targetFactors = rankFactors(target, metrics);
+  const targetRegionalScore = regionalRankScore(targetFactors, metrics.authenticityPct);
   const peers = [...rankedCandidates(target, metrics, pool)]
     .sort(
       (left, right) =>
-        rankScore(right.factors) - rankScore(left.factors) ||
+        regionalRankScore(right.factors, right.metrics.authenticityPct) -
+          regionalRankScore(left.factors, left.metrics.authenticityPct) ||
         right.profile.followers - left.profile.followers ||
         left.profile.username.localeCompare(right.profile.username),
     )
@@ -231,24 +258,23 @@ export function buildRegionalRanking(
     return null;
   }
 
-  const targetFactors = rankFactors(target, metrics);
   const rows: RegionalRankRow[] = [
     {
       profile: target,
       engagementRate: targetFactors.engagementRate,
-      rankScore: rankScore(targetFactors),
+      rankScore: targetRegionalScore,
       avgInteractions: targetFactors.avgInteractions,
       followerChangePct: targetFactors.followerChangePct,
       followerChangeEstimated: targetFactors.followerChangeEstimated,
       matchScore: null,
-      category: inferPostActivity(target).join(", "),
+      category: inferCategory(target),
       country: inferCountrySignal(target),
       isTarget: true,
     },
     ...peers.map((peer) => ({
       profile: peer.profile,
       engagementRate: peer.metrics.engagementRate,
-      rankScore: rankScore(peer.factors),
+      rankScore: regionalRankScore(peer.factors, peer.metrics.authenticityPct),
       avgInteractions: peer.factors.avgInteractions,
       followerChangePct: peer.factors.followerChangePct,
       followerChangeEstimated: peer.factors.followerChangeEstimated,
@@ -261,8 +287,10 @@ export function buildRegionalRanking(
 
   rows.sort((left, right) => compareRank(left, right));
 
-  const targetRankScore = rankScore(targetFactors);
-  const beaten = peers.filter((peer) => rankScore(peer.factors) < targetRankScore).length;
+  const beaten = peers.filter(
+    (peer) =>
+      regionalRankScore(peer.factors, peer.metrics.authenticityPct) < targetRegionalScore,
+  ).length;
 
   return {
     rows,

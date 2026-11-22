@@ -251,7 +251,7 @@ request plus a few embed requests.
 | Route | Purpose |
 |---|---|
 | `/` | Analysis dashboard: lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, Modash benchmark, sources, confidence |
-| `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and Middle East activity benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
+| `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and Middle East category benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region four-factor rank table and remaining comparable suggestions |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
@@ -291,8 +291,11 @@ Each signal is normalised to 0–100 against fixed anchors (followers: 200M ceil
 cap; average interactions: 2M ceiling; follower change: −5% to +15%) so scores stay stable across
 refreshes. Followers carry the most weight, so a large account is not outranked by a small one with
 exceptional engagement. Follower change is an estimate for real accounts and is labelled `est.` in
-the UI. The same scoring module powers the global boards, peer rankings, the Middle East peer ranking
-and the compare-page ranking, so "similar profile" and "rank" never use different definitions.
+the UI. The same scoring module powers the global boards, global peer rankings and the compare-page
+ranking, so those surfaces never disagree. The Middle East profile panel starts from that score but
+adds a disclosed 10% authenticity term via `regionalRankScore()` (90% four-factor rank + 10%
+authenticity), so a lower modeled fake-follower share ranks higher there. Global boards and compare
+ranks stay exactly four-factor.
 
 The four **country boards** are strict top-ten lists by follower count: entries are sorted by
 `followers` descending first, and the same `rankScore` only breaks ties. This keeps a small account
@@ -355,9 +358,10 @@ Profile pages now surface verification, growth, and regional comparison:
   `business_discovery` has no verification field, so live profiles get the real badge two ways: a
   fresh public HTML profile lookup (`fetchPublicIdentity()`, 30-minute cache) when the signed proxy
   bridge is reachable, and otherwise `VERIFIED_HANDLES` in `src/core/data/verified.ts` — a snapshot of
-  real public profile pages read on 2026-11-22 for the curated tracked pool. Unknown handles stay
-  "Not verified"; no badge is invented or modeled. The Middle East comparison panel focuses on the
-  four ranking criteria instead.
+  real public profile pages read on 2026-11-22 for the curated tracked pool, plus `rim.official__`
+  confirmed from a public creator directory sourced from Instagram on 2026-11-23. Unknown handles stay
+  "Not verified"; no badge is invented or modeled. The Middle East comparison panel uses creator
+  category labels and the authenticity-aware regional rank described below.
 - **Profile picture** (`profile-avatar`) shows the searched handle's real public avatar in the header
   (via `next/image`, with Instagram CDN hosts allow-listed in `next.config.ts`). If Instagram does
   not expose a picture or the image fails to load, the initials gradient remains as a fallback.
@@ -373,8 +377,9 @@ Profile pages now surface verification, growth, and regional comparison:
 - **Category-only matching** (`src/core/analytics/category.ts`) gates the global peer benchmarks.
   The live Instagram API only returns the generic label `Instagram Professional`, so the category is
   inferred from each account's public name and biography there. A profile is benchmarked only against
-  another in the same or a closely related category. The Middle East panel uses the separate
-  post-only activity inference described below. The twelve creator categories — Digital creator, Blogger,
+  another in the same or a closely related category. The Middle East panel applies the same
+  creator-group rule to the inferred public category label first; post-derived activity is only
+  supporting evidence. The twelve creator categories — Digital creator, Blogger,
   Personal blog, Public figure, Reel/Video creator, Content creator, Fashion model / Model, Fitness
   model, Beauty/cosmetic & personal care, Health/beauty, Travel blogger and Food blogger — are all
   mutually comparable (group `creator`). Airlines, hotels, malls, news outlets and other business or
@@ -390,9 +395,10 @@ Profile pages now surface verification, growth, and regional comparison:
   accounts still get a full five-profile rank group; those rows are ordered by `rankScore`.
 - **Middle East ±30% gate** (`isWithinFollowerLatency()` in `src/core/analytics/rank.ts`) is stricter
   and applies to both the highlighted Middle East peer and its ranking table. A candidate must have
-  between 70% and 130% of the searched profile's follower count, with no out-of-band fallback. The
-  panel copy intentionally stays concise; the gate is enforced in code and tests rather than spelled
-  out in the UI.
+  between 70% and 130% of the searched profile's follower count, with no out-of-band fallback.
+  Candidates must also carry a creator category label in the same creator group. The panel copy
+  intentionally stays concise; the gate is enforced in code and tests rather than spelled out in the
+  UI.
 - **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest category-compatible tracked
   real public profile. It first prefers the same inferred country (handle, then profile text, then
   promoted hashtags/captions), falling back to same region, unknown country and then different
@@ -408,21 +414,22 @@ Profile pages now surface verification, growth, and regional comparison:
   five-profile group. This table is not range-gated, so it stays complete for accounts at either
   audience extreme. If no tracked profile in a compatible category is available (for example,
   without API credentials) the panel shows an empty state rather than unrelated profiles.
-- **Middle East activity benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
+- **Middle East category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
   `src/core/data/regional.ts`) replaces the old UAE/GCC panel. Its pool is every tracked profile on
   the Middle East homepage board (`isInRegionBoard(username, "middle-east")`), which includes the
   UAE accounts and the other tracked Middle East countries. A candidate must (1) sit inside the
-  **±30% follower band** and (2) share a category or activity inferred **only from public Reel/post
-  captions and hashtags** — `inferPostActivity()` in `src/core/analytics/category.ts` never reads the
-  display name, bio or claimed category. The same filtered set feeds the highlighted peer and the
-  ranking table, so they cannot disagree. It shows an **80%+ relative activity match** (scaled
-  80–99, not an identity claim), the **four ranking comparisons** (Followers, Engagement rate, Avg
-  interactions, Follower change, labeled `est.` for real accounts), and a **Middle East rank** of up
-  to ten in-band peers ordered strictly by `rankScore` (followers 55%, engagement 20%, avg
-  interactions 15%, follower change 10%). Each row shows post-derived activity, the inferred
-  country, average interactions and follower change. If no tracked Middle East account is inside the
-  band with matching post activity, the panel shows an explicit empty state instead of substituting
-  an out-of-band account.
+  **±30% follower band**, (2) have a category label inferred from its public display name/bio via
+  `inferCategory()`, and (3) be in the same creator group under `isSimilarCategory()`. Post-derived
+  activity from `inferPostActivity()` is supporting evidence only and never a hard gate, so hotels,
+  airlines, malls and news outlets cannot become creator peers just because their captions mention
+  beauty or travel. The same filtered set feeds the highlighted peer and the ranking table, so they
+  cannot disagree. It shows an **80%+ relative match** (scaled 80–99, not an identity claim), key
+  comparisons (Followers, Engagement rate, Avg interactions, Follower change and Authenticity,
+  labeled `est.` for real accounts), and a **Middle East rank** of up to ten in-band peers ordered by
+  `regionalRankScore()` — 90% four-factor rank plus 10% authenticity, so lower modeled fake-follower
+  share ranks higher. Each row shows the inferred category label, country, average interactions and
+  follower change. If no tracked Middle East account is inside the band with a compatible creator
+  label, the panel shows a short empty state instead of substituting an out-of-band account.
 - **No repeated UAE lifestyle peer** (`src/core/analytics/exclusive.ts`) treats `ola.alqodmani`
   and `trending.vibz.uae` as a mutually exclusive curated group. After all profile-page benchmark
   surfaces are built, only the better-scoring member is kept; the other is removed from the
