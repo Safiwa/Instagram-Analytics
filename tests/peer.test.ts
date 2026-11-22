@@ -44,6 +44,21 @@ describe("closest public peer", () => {
     expect(match?.score).toBeGreaterThan(0);
   });
 
+  it("ignores fallback category labels when the target has an explicit label", () => {
+    const target = profile("rimo.style", 300_000, "Beauty skincare creator", 2_000);
+    const fallback = profile(
+      "qatar",
+      280_000,
+      "Qatar through the eyes of its people.",
+      1_900,
+    );
+    const explicit = profile("beauty.peer", 290_000, "Beauty makeup reviews", 2_100);
+
+    const match = findClosestPeer(target, computeMetrics(target), [fallback, explicit]);
+
+    expect(match?.profile.username).toBe("beauty.peer");
+  });
+
   it("excludes the target itself and handles an empty pool", () => {
     const target = profile("solo", 20_000, "Food blogger", 800);
 

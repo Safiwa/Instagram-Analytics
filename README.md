@@ -377,7 +377,9 @@ Profile pages now surface verification, growth, and regional comparison:
 - **Category-only matching** (`src/core/analytics/category.ts`) gates the global peer benchmarks.
   The live Instagram API only returns the generic label `Instagram Professional`, so the category is
   inferred from each account's public name and biography there. A profile is benchmarked only against
-  another in the same or a closely related category. The Middle East panel applies the same
+  another in the same or a closely related category. When the searched profile has an explicit
+  public label, candidates must also have explicit labels: fallback `Digital creator` / `Public
+  figure` guesses do not qualify as labeled peers. The Middle East panel applies the same
   creator-group rule to the inferred public category label first; post-derived activity is only
   supporting evidence. The twelve creator categories — Digital creator, Blogger,
   Personal blog, Public figure, Reel/Video creator, Content creator, Fashion model / Model, Fitness

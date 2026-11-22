@@ -1,5 +1,5 @@
 import type { CreatorProfile } from "../data/types";
-import { inferCategory, isSimilarCategory } from "./category";
+import { inferCategory, inferExplicitCategory, isSimilarCategory } from "./category";
 import {
   countryReason,
   countryRelationship,
@@ -86,7 +86,9 @@ function scorePeers(
 ): PeerMatch[] {
   const requireComparableRange = options.requireComparableRange !== false;
   const fillCountryTiers = options.fillCountryTiers === true;
-  const targetCategory = inferCategory(target);
+  const explicitTargetCategory = inferExplicitCategory(target);
+  const targetCategory = explicitTargetCategory ?? inferCategory(target);
+  const requireExplicitCandidate = explicitTargetCategory !== null;
   const targetCountry = inferCountrySignal(target);
   const targetTopics = profileTopics(target);
   const targetFactors = rankFactors(target, metrics);
@@ -95,6 +97,7 @@ function scorePeers(
       candidate.username !== target.username &&
       candidate.followers > 0 &&
       candidate.recentPosts.length > 0 &&
+      (!requireExplicitCandidate || inferExplicitCategory(candidate) !== null) &&
       isSimilarCategory(targetCategory, inferCategory(candidate)),
   );
 
