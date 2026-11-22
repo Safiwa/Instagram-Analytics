@@ -94,10 +94,11 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
             Same country or region for @{rows[0].profile.username}
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Other real public profiles in the same country or wider region, ordered by the same four
-            factors: 55% followers, 20% engagement rate, 15% average interactions and 10% follower
-            change. Country is inferred from the handle, profile text and promoted locations;
-            Instagram does not publish account country.
+            Other real public profiles in the same country or wider region. Same-country profiles
+            lead and same-region profiles fill the remaining rows; each group is ordered by the same
+            four factors: 55% followers, 20% engagement rate, 15% average interactions and 10%
+            follower change. Country is inferred from the handle, profile text and promoted
+            locations; Instagram does not publish account country.
           </p>
           {compareRanking.length > 0 ? (
             <ol className="mt-5 space-y-2">
