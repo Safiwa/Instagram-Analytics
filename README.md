@@ -445,7 +445,9 @@ Profile pages now surface verification, growth, and regional comparison:
   surfaces are built, only the better-scoring member is kept; the other is removed from the
   closest-peer card, both ranking tables and the regional comparison, with ranks and totals
   recomputed. When the searched profile is itself one of the two, that profile is the row we keep
-  and the other account is removed from every peer surface.
+  and the other account is removed from every peer surface. The profile page removes the duplicate
+  from the tracked and regional candidate pools *before* building the benchmarks, so the fifth row
+  is backfilled from the next eligible peer instead of being lost.
 
 - **Compare rank and suggestions** (`src/app/compare/page.tsx`) use the first selected profile as
   the benchmark anchor. `buildCompareRanking()` in `src/core/analytics/compare.ts` lists other real

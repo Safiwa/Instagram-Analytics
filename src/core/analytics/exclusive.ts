@@ -114,10 +114,11 @@ function filterRanking<T extends RankRow>(
   };
 }
 
-// Applies the exclusivity rule after all four benchmark surfaces are built, so
-// the closest-peer card, both ranking tables and the regional comparison never
-// disagree by keeping a different member of the same group.
-export function dedupeProfileBenchmarks(input: ProfileBenchmarks): ProfileBenchmarks {
+// Returns the exclusive-group members that must not appear on this profile page.
+// Exposed so the caller can remove them from the candidate pools *before* the
+// rankings are built; otherwise a five-row panel loses its fifth row when the
+// duplicate is removed afterwards.
+export function excludedExclusiveHandles(input: ProfileBenchmarks): Set<string> {
   const candidates: Candidate[] = [
     ...(input.peer ? [{ profile: input.peer.profile, score: input.peer.score }] : []),
     ...(input.ranking?.rows ?? [])
@@ -145,7 +146,13 @@ export function dedupeProfileBenchmarks(input: ProfileBenchmarks): ProfileBenchm
       .filter((row) => row.isTarget)
       .map((row) => normalize(row.profile.username)),
   );
-  const excluded = excludedHandles(candidates, targets);
+  return excludedHandles(candidates, targets);
+}
+
+// Safety net for callers that can only filter already-built surfaces. The
+// profile page prefers excludedExclusiveHandles() so the panel can be refilled.
+export function dedupeProfileBenchmarks(input: ProfileBenchmarks): ProfileBenchmarks {
+  const excluded = excludedExclusiveHandles(input);
   if (excluded.size === 0) {
     return input;
   }

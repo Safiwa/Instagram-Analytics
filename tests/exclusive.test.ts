@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { inferCountrySignal, type CountryRelationship } from "../src/core/analytics/country";
-import { dedupeProfileBenchmarks, type ProfileBenchmarks } from "../src/core/analytics/exclusive";
+import {
+  dedupeProfileBenchmarks,
+  excludedExclusiveHandles,
+  type ProfileBenchmarks,
+} from "../src/core/analytics/exclusive";
 import { computeMetrics } from "../src/core/analytics/metrics";
 import { rankFactors } from "../src/core/analytics/rank";
 import type { PeerMatch, PeerRankingRow } from "../src/core/analytics/peer";
-import type { RegionalPeer, RegionalRankRow } from "../src/core/analytics/regional";
+import { buildRegionalRanking, type RegionalPeer, type RegionalRankRow } from "../src/core/analytics/regional";
 import type { CreatorProfile, Post } from "../src/core/data/types";
 
 const NOW = new Date("2026-11-22T12:00:00.000Z");
@@ -207,6 +211,51 @@ describe("exclusive peer groups", () => {
       "donya_esmailiii",
     ]);
     expect(result.regionalRanking?.total).toBe(2);
+  });
+
+  it("removes the duplicate before ranking so the panel keeps five rows", () => {
+    const target = profile("ola.alqodmani", 51_557);
+    target.displayName = "Ola Al Qodmani";
+    target.bio = "Travel Creator";
+    const duplicate = profile("trending.vibz.uae", 58_980);
+    duplicate.displayName = "Hadia Nashed";
+    duplicate.bio = "Content Creator";
+    // Make the duplicate the strongest regional peer so it lands in the top four.
+    duplicate.recentPosts = [post("duplicate-1"), post("duplicate-2")].map((item) => ({
+      ...item,
+      likes: 8_000,
+      comments: 800,
+    }));
+
+    const peers = [
+      profile("dina_h_ussien", 59_963),
+      profile("poojaabis", 58_197),
+      profile("dina.ak", 60_264),
+      profile("anshi_pandyala_official", 65_744),
+    ];
+    const pool = [target, duplicate, ...peers];
+    const initial = buildRegionalRanking(target, computeMetrics(target), pool);
+
+    expect(initial?.total).toBe(5);
+    expect(initial?.rows.some((row) => row.profile.username === "trending.vibz.uae")).toBe(true);
+
+    const excluded = excludedExclusiveHandles({
+      peer: null,
+      ranking: null,
+      regionalPeer: null,
+      regionalRanking: initial,
+    });
+    expect(excluded.has("trending.vibz.uae")).toBe(true);
+
+    const rebuilt = buildRegionalRanking(
+      target,
+      computeMetrics(target),
+      pool.filter((item) => !excluded.has(item.username.toLowerCase())),
+    );
+
+    expect(rebuilt?.total).toBe(5);
+    expect(rebuilt?.rows.some((row) => row.profile.username === "trending.vibz.uae")).toBe(false);
+    expect(rebuilt?.rows.filter((row) => row.isTarget)).toHaveLength(1);
   });
 
   it("recomputes ranking totals after removing the duplicate", () => {
