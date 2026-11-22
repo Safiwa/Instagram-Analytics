@@ -1,6 +1,6 @@
 import { log } from "../logging/logger";
 import { fetchLiveProfile, isLiveConfigured, LiveProfileError } from "./live";
-import { fetchPublicProfile, PublicProfileError } from "./public";
+import { fetchPublicIdentity, fetchPublicProfile, PublicProfileError } from "./public";
 import { seedProfiles } from "./seed";
 import type { CreatorProfile } from "./types";
 
@@ -62,7 +62,21 @@ export async function resolveProfile(handle: string): Promise<ProfileResolution>
 
   if (isLiveConfigured()) {
     try {
-      return { status: "found", profile: await fetchLiveProfile(key) };
+      const live = await fetchLiveProfile(key);
+      // Business Discovery has no verification field. A lightweight public web
+      // lookup supplies the real badge (and a high-resolution picture when
+      // available); if the bridge is unavailable the live profile still stands.
+      const identity = await fetchPublicIdentity(key);
+      return {
+        status: "found",
+        profile: identity
+          ? {
+              ...live,
+              isVerified: identity.isVerified,
+              profilePictureUrl: identity.profilePictureUrl ?? live.profilePictureUrl,
+            }
+          : live,
+      };
     } catch (error) {
       const liveFailure = mapLiveFailure(error, key);
       const fallback = await tryPublicProfile(key);

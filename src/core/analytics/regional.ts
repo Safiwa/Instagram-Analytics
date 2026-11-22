@@ -15,6 +15,7 @@ import { profileTopics } from "./peer";
 import {
   clampRankScoreToMatch,
   compareRank,
+  isComparableRange,
   rankFactorSimilarity,
   rankFactors,
   rankScore,
@@ -90,43 +91,51 @@ function rankedCandidates(
       isSimilarCategory(targetCategory, inferCategory(candidate)),
   );
 
-  const scored = candidates.map((candidate) => {
-    const candidateCategory = inferCategory(candidate);
-    const candidateMetrics = computeMetrics(candidate);
-    const candidateFactors = rankFactors(candidate, candidateMetrics);
-    const candidateCountry = inferCountrySignal(candidate);
-    const relationship = countryRelationship(targetCountry, candidateCountry);
-    const shared = sharedTopics(target, candidate);
-    const topicScore = shared.length > 0 ? clamp(70 + shared.length * 10, 0, 100) : 45;
-    const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
-    const exactCategory = candidateCategory === targetCategory;
-    const raw =
-      factorScore * 0.35 +
-      topicScore * 0.15 +
-      countryScore(relationship) * 0.25 +
-      (exactCategory ? 100 : 75) * 0.25;
+  const scored = candidates
+    .map((candidate) => {
+      const candidateCategory = inferCategory(candidate);
+      const candidateMetrics = computeMetrics(candidate);
+      const candidateFactors = rankFactors(candidate, candidateMetrics);
+      return { candidate, candidateCategory, candidateMetrics, candidateFactors };
+    })
+    // Keep UAE/GCC benchmarks inside one audience band: a micro account must not
+    // be compared with a million-follower regional brand just because both are local.
+    .filter(({ candidateFactors }) => isComparableRange(targetFactors, candidateFactors))
+    .map(({ candidate, candidateCategory, candidateMetrics, candidateFactors }) => {
+      const candidateCountry = inferCountrySignal(candidate);
+      const relationship = countryRelationship(targetCountry, candidateCountry);
+      const shared = sharedTopics(target, candidate);
+      const topicScore = shared.length > 0 ? clamp(70 + shared.length * 10, 0, 100) : 45;
+      const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
+      const exactCategory = candidateCategory === targetCategory;
+      const raw =
+        factorScore * 0.35 +
+        topicScore * 0.15 +
+        countryScore(relationship) * 0.25 +
+        (exactCategory ? 100 : 75) * 0.25;
 
-    const matchReasons = [
-      countryReason(relationship, targetCountry, candidateCountry),
-      `four-factor fit ${Math.round(factorScore)}% (followers, engagement, interactions, follower change)`,
-      exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`,
-    ];
-    if (shared.length > 0) {
-      matchReasons.push(`shares ${shared.slice(0, 2).join(" and ")} themes`);
-    }
+      const matchReasons = [
+        countryReason(relationship, targetCountry, candidateCountry),
+        "similar audience size and engagement range",
+        `four-factor fit ${Math.round(factorScore)}% (followers, engagement, interactions, follower change)`,
+        exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`,
+      ];
+      if (shared.length > 0) {
+        matchReasons.push(`shares ${shared.slice(0, 2).join(" and ")} themes`);
+      }
 
-    return {
-      profile: candidate,
-      metrics: candidateMetrics,
-      factors: candidateFactors,
-      matchScore: clampRankScoreToMatch(raw),
-      category: candidateCategory,
-      sharedBusiness: shared,
-      country: candidateCountry,
-      countryRelationship: relationship,
-      matchReasons,
-    };
-  });
+      return {
+        profile: candidate,
+        metrics: candidateMetrics,
+        factors: candidateFactors,
+        matchScore: clampRankScoreToMatch(raw),
+        category: candidateCategory,
+        sharedBusiness: shared,
+        country: candidateCountry,
+        countryRelationship: relationship,
+        matchReasons,
+      };
+    });
 
   const bestTier = Math.min(...scored.map((match) => countryTier(match.countryRelationship)));
   return scored

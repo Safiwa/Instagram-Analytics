@@ -35,6 +35,17 @@ const WEB_PROFILE_HEADERS = {
 
 const cache = new Map<string, { expiresAt: number; profile: CreatorProfile }>();
 
+export type PublicIdentity = {
+  isVerified: boolean;
+  profilePictureUrl?: string;
+};
+
+// The Graph API's business_discovery does not expose the verified badge, so the
+// profile page asks the public web profile for that single field. Keep it in a
+// small, separate cache so each lookup costs at most one lightweight request.
+const identityCache = new Map<string, { expiresAt: number; identity: PublicIdentity }>();
+const IDENTITY_CACHE_TTL_MS = 30 * 60 * 1000;
+
 function proxyEndpoint(): string {
   return process.env.INSTAGRAM_PROXY_URL?.trim() ?? "";
 }
@@ -632,8 +643,43 @@ function preferredCategory(user: PublicUser | null): string {
   return category || "Instagram creator";
 }
 
+// Best-effort identity enrichment for live profiles. Business Discovery cannot
+// return verification, so this reads only the public badge/picture. A failed or
+// offline bridge simply leaves the live profile unchanged.
+export async function fetchPublicIdentity(username: string): Promise<PublicIdentity | null> {
+  const key = username.trim().replace(/^@/, "").toLowerCase();
+  if (!key) {
+    return null;
+  }
+
+  const cached = identityCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.identity;
+  }
+
+  const result = await fetchWebProfile(key);
+  const user = result?.user;
+  if (!user) {
+    return null;
+  }
+
+  const identity: PublicIdentity = {
+    isVerified: Boolean(user.is_verified),
+    profilePictureUrl: user.profile_pic_url_hd?.trim() || user.profile_pic_url?.trim() || undefined,
+  };
+  identityCache.set(key, { expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS, identity });
+  if (identityCache.size > CACHE_MAX) {
+    const oldest = identityCache.keys().next().value;
+    if (oldest) {
+      identityCache.delete(oldest);
+    }
+  }
+  return identity;
+}
+
 export function clearPublicCache(): void {
   cache.clear();
+  identityCache.clear();
 }
 
 type ParsedProfileHtml = {

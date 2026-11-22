@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { ArrowUpRight, Flame, Gauge, Globe2, MapPin } from "lucide-react";
+import { ArrowUpRight, Flame, Gauge, MapPin } from "lucide-react";
 import {
   getLeaderboard,
   TRENDING_WINDOW_DAYS,
   type LeaderboardEntry,
 } from "../../core/data/leaderboard";
 import { REGION_BOARDS } from "../../core/data/regions";
-import { formatCompact, formatDate, formatPercent } from "../../core/format";
+import { formatCompact, formatPercent } from "../../core/format";
 
 function followerChange(entry: LeaderboardEntry): string {
   const sign = entry.followerChangePct > 0 ? "+" : "";
@@ -162,15 +162,13 @@ export async function GlobalPulse() {
           />
           <RankCard
             title="High engagement"
-            subtitle="Highest engagement rate across up to 12 recent public posts"
+            subtitle={`Public engagement across up to 12 recent posts. ${RANK_SUBTITLE}.`}
             icon={Gauge}
             entries={board.engaged}
             emptyMessage="Engagement data is not available right now. Check back shortly."
-            valueFor={(entry) => formatPercent(entry.engagementRate)}
-            label="Engagement"
-            metaFor={(entry) =>
-              `${formatCompact(entry.avgInteractions)} avg interactions · ${followerChange(entry)}`
-            }
+            valueFor={(entry) => entry.rankScore.toFixed(0)}
+            label="Rank score"
+            metaFor={(entry) => signalMeta(entry)}
             testId="engagement-list"
           />
         </div>
@@ -200,19 +198,6 @@ export async function GlobalPulse() {
           })}
         </div>
       </div>
-
-      <p className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <Globe2 className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
-        Ranked among a curated tracked pool, not every account on Instagram, using followers (55%),
-        engagement rate (20%), average interactions (15%) and 30-day follower change (10%). Country
-        is assigned from our curated account list because Instagram does not publish account
-        location; the Middle East board covers Qatar, Saudi Arabia, Jordan, Egypt, Kuwait, UAE,
-        Syria, Lebanon, Iraq, Palestine, Bahrain, Oman, Tunisia and Morocco, with UAE accounts also
-        highlighted separately. Engagement and average interactions are measured from public likes
-        and comments (saves only when exposed for every post). Follower change is an estimate for
-        real accounts. Updated{" "}
-        {formatDate(board.generatedAt)}.
-      </p>
     </section>
   );
 }

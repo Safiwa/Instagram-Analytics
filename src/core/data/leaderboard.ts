@@ -204,11 +204,11 @@ export function rankProfiles(profiles: CreatorProfile[], now = new Date()): Lead
     .map((profile) => toEntry(profile, now.getTime()))
     .filter((entry): entry is LeaderboardEntry => entry !== null);
 
-  const engaged = [...entries]
-    .sort((left, right) =>
-      right.engagementRate - left.engagementRate || right.followers - left.followers,
-    )
-    .slice(0, LEADERBOARD_SIZE);
+  // High engagement still measures engagement across up to 12 recent public
+  // posts, but followers are considered first (55%), then engagement rate (20%),
+  // average interactions (15%) and 30-day follower change (10%). It therefore
+  // uses the same rank order as the trending and country boards.
+  const engaged = [...entries].sort(byRank).slice(0, LEADERBOARD_SIZE);
 
   // Trending still requires posts in the 15-day window, but the order is now the
   // four-factor rank score rather than the window engagement rate alone.

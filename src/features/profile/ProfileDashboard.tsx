@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 import {
   ArrowUpRight,
   BadgeCheck,
@@ -151,6 +153,8 @@ export function ProfileDashboard({
       .join("")
       .slice(0, 2)
       .toUpperCase() || profile.username.slice(0, 2).toUpperCase();
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  const avatarUrl = failedAvatarUrl === profile.profilePictureUrl ? undefined : profile.profilePictureUrl;
 
   return (
     <div className="space-y-6">
@@ -186,8 +190,26 @@ export function ProfileDashboard({
         className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
       >
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-xl font-bold text-white">
-            {initials}
+          <div
+            data-testid="profile-avatar"
+            className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600"
+          >
+            {avatarUrl ? (
+              <Image
+                key={avatarUrl}
+                src={avatarUrl}
+                alt={`${profile.displayName} profile picture`}
+                fill
+                sizes="64px"
+                className="object-cover"
+                referrerPolicy="no-referrer"
+                onError={() => setFailedAvatarUrl(profile.profilePictureUrl ?? null)}
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-xl font-bold text-white">
+                {initials}
+              </span>
+            )}
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -692,7 +714,7 @@ export function ProfileDashboard({
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-slate-950">
-                  Rank #{ranking.targetRank} of {ranking.total} among comparable profiles
+                  Rank #{ranking.targetRank} of {ranking.total} profiles
                 </p>
                 <p className="text-xs text-slate-500">
                   Rank score: 55% followers, 20% engagement, 15% avg interactions, 10% follower
@@ -876,8 +898,7 @@ export function ProfileDashboard({
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-slate-950">
-                  Rank #{regionalRanking.targetRank} of {regionalRanking.total} among top UAE/GCC
-                  peers
+                  Rank #{regionalRanking.targetRank} of {regionalRanking.total} UAE/GCC profiles
                 </p>
                 <p className="text-xs text-slate-500">
                   Rank score: 55% followers, 20% engagement, 15% avg interactions, 10% follower

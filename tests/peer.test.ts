@@ -53,7 +53,7 @@ describe("closest public peer", () => {
 });
 
 describe("country-aware peer suggestions", () => {
-  it("prefers same-country profiles and orders them by four-factor fit", () => {
+  it("prefers same-country profiles and rejects out-of-range followers", () => {
     const target = profile("dubai.style", 60_000, "Fashion and beauty", 2_000);
     const closeFit = profile("uae.close", 70_000, "Fashion and beauty", 2_200);
     const weakFit = profile("uae.weak", 2_000, "Fashion and beauty", 100);
@@ -65,11 +65,22 @@ describe("country-aware peer suggestions", () => {
       closeFit,
     ]);
 
-    expect(suggestions.map((match) => match.profile.username)).toEqual(["uae.close", "uae.weak"]);
+    expect(suggestions.map((match) => match.profile.username)).toEqual(["uae.close"]);
     expect(suggestions.every((match) => match.country.country === "United Arab Emirates")).toBe(
       true,
     );
+    expect(suggestions[0].reasons.join(" ")).toContain("similar audience size and engagement range");
     expect(suggestions[0].reasons.join(" ")).toContain("four-factor fit");
+  });
+
+  it("never benchmarks thousands of followers against millions", () => {
+    const target = profile("small.style", 50_000, "Fashion and beauty", 1_500);
+    const mega = profile("mega.style", 5_000_000, "Fashion and beauty", 100_000);
+    const hugeEngagement = profile("viral.style", 55_000, "Fashion and beauty", 60_000);
+
+    const suggestions = findSimilarPeers(target, computeMetrics(target), [mega, hugeEngagement]);
+
+    expect(suggestions).toEqual([]);
   });
 
   it("uses promoted-location hashtags when the handle has no country word", () => {
@@ -93,8 +104,8 @@ describe("country-aware peer suggestions", () => {
 describe("peer ranking for the searched profile", () => {
   it("includes the searched profile and ranks the group by four-factor score", () => {
     const target = profile("searched", 60_000, "Fashion and skincare boutique", 2_000);
-    const low = profile("low.peer", 62_000, "Fashion and beauty", 500);
-    const high = profile("high.peer", 58_000, "Fashion and style", 8_000);
+    const low = profile("low.peer", 62_000, "Fashion and beauty", 1_600);
+    const high = profile("high.peer", 58_000, "Fashion and style", 2_600);
     const pool = [target, low, high];
 
     const ranking = buildPeerRanking(target, computeMetrics(target), pool);
@@ -116,6 +127,20 @@ describe("peer ranking for the searched profile", () => {
     expect(ranking!.rows.filter((row) => !row.isTarget).every((row) => row.matchScore !== null)).toBe(
       true,
     );
+  });
+
+  it("shows the searched profile in a five-profile group", () => {
+    const target = profile("searched", 60_000, "Fashion and beauty", 2_000);
+    const pool = [target];
+    for (let index = 1; index <= 6; index += 1) {
+      pool.push(profile(`peer.${index}`, 58_000 + index * 1_000, "Fashion and beauty", 1_900 + index * 20));
+    }
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), pool);
+
+    expect(ranking!.rows).toHaveLength(5); // target + four closest peers
+    expect(ranking!.total).toBe(5);
+    expect(ranking!.rows.filter((row) => row.isTarget)).toHaveLength(1);
   });
 
   it("returns null when no comparable peer is available", () => {

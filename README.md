@@ -266,8 +266,9 @@ Graph API path. Each entry links to a full profile analysis.
 **Worldwide**
 
 - **Trending · last 15 days** — accounts with a public post in the last 15 days.
-- **High engagement** — ranked by engagement rate across up to 12 recent public posts (this card is
-  deliberately engagement-rate-only because that is what it is named).
+- **High engagement** — engagement across up to 12 recent public posts ranked by the same four
+  factors as every other board: followers first, then engagement rate, average interactions and
+  30-day follower change.
 
 **By country** (top 10 each, added alongside the worldwide cards)
 
@@ -277,8 +278,9 @@ Graph API path. Each entry links to a full profile analysis.
 
 ### Four-factor ranking
 
-"Trending" and the four country boards no longer rank by engagement rate alone — that promoted
-small accounts with one viral post above million-follower accounts. They now use a weighted rank
+Every homepage board — Trending, High engagement and the four country boards — no longer ranks by
+engagement rate alone, which promoted small accounts with one viral post above million-follower
+accounts. They all use one weighted rank
 score (`rankScore()` in `src/core/analytics/rank.ts`, re-exported by `leaderboard.ts`) built from
 four signals, in priority order:
 
@@ -346,8 +348,13 @@ file convention), so no external icon asset is required.
 Profile pages now surface verification, growth, and regional comparison:
 
 - **Verification badge** (`verification-badge`) sits beside the profile name in the header and shows
-  **Verified** or **Not verified** from the account's public Instagram badge. The UAE/GCC comparison
-  panel now focuses on the four ranking criteria instead of verification.
+  **Verified** or **Not verified** from the account's public Instagram badge. Meta's
+  `business_discovery` has no verification field, so live profiles are enriched by a lightweight
+  public web identity lookup (`fetchPublicIdentity()`), cached for 30 minutes and skipped quietly if
+  the bridge is offline. The UAE/GCC comparison panel focuses on the four ranking criteria instead.
+- **Profile picture** (`profile-avatar`) shows the searched handle's real public avatar in the header
+  (via `next/image`, with Instagram CDN hosts allow-listed in `next.config.ts`). If Instagram does
+  not expose a picture or the image fails to load, the initials gradient remains as a fallback.
 - **30-day growth card** was moved up into the main metric grid (`metric-grid`), right beside the
   12-month growth card, with an **Est.** badge and the same disclosure as the growth analysis below.
   The full **30-day growth analysis** (`growth-analysis`) section was also moved directly beneath
@@ -367,6 +374,11 @@ Profile pages now surface verification, growth, and regional comparison:
   media accounts stay in their own isolated groups and are never used as peers for a creator. This
   means searching a beauty creator no longer surfaces an airline, a newspaper or a shopping mall as
   a "similar" profile.
+- **Audience-range gate** (`isComparableRange()` in `src/core/analytics/rank.ts`) is applied to every
+  benchmark in `peer.ts` and `regional.ts`: follower counts must be within 3x of each other and
+  engagement rates within roughly 2x plus a 0.5-point allowance. A profile with thousands of
+  followers is never benchmarked against one with millions, whatever their category or country.
+  Match reasons now include "similar audience size and engagement range".
 - **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest category-compatible tracked
   real public profile. It first prefers the same inferred country (handle, then profile text, then
   promoted hashtags/captions), falling back to same region, unknown country and then different
@@ -375,9 +387,9 @@ Profile pages now surface verification, growth, and regional comparison:
   category and shared themes. Each peer row shows its inferred category and country badges,
   match score, followers, engagement, average interactions and estimated follower change, why it
   matched, and how this profile compares, with a link to a side-by-side comparison. The same
-  matched set powers a small ranking table (`peer-ranking`) that includes the searched profile,
-  orders it and its closest peers by `rankScore`, and shows the searched profile's rank (for
-  example, "Rank #2 of 6") plus the share of peers it outperforms. If no tracked profile in a
+  matched set powers a five-profile ranking table (`peer-ranking`): the searched profile plus its
+  four closest peers, ordered by `rankScore`, with the searched profile's rank (for example,
+  "Rank #2 of 5") and the share of peers it outperforms. If no tracked profile in a
   compatible category is available (for example, without API credentials) the panel shows an empty
   state rather than unrelated profiles.
 - **UAE/GCC category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +

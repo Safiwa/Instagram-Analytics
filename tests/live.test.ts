@@ -53,6 +53,7 @@ describe("live Instagram adapter", () => {
     vi.stubEnv("IG_ACCESS_TOKEN", "test-token");
     vi.stubEnv("IG_BUSINESS_ACCOUNT_ID", "17841400000000000");
     vi.stubEnv("IG_GRAPH_VERSION", "v27.0");
+    vi.stubEnv("INSTAGRAM_PROXY_URL", "");
   });
 
   afterEach(() => {
@@ -102,6 +103,52 @@ describe("live Instagram adapter", () => {
 
     const options = fetchMock.mock.calls[0][1] as RequestInit;
     expect((options.headers as Record<string, string>).Authorization).toBe("Bearer test-token");
+  });
+
+  it("enriches a live profile with the real public verification badge", async () => {
+    const discovery = {
+      business_discovery: {
+        ...discoveryPayload.business_discovery,
+        username: "verified.test",
+      },
+    };
+    const identityPayload = {
+      data: {
+        user: {
+          username: "verified.test",
+          full_name: "Verified Test",
+          is_verified: true,
+          edge_followed_by: { count: 15_000 },
+          profile_pic_url_hd: "https://example.com/hd-avatar.jpg",
+        },
+      },
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("graph.facebook.com")) {
+        return jsonResponse(discovery);
+      }
+      if (url.includes("web_profile_info")) {
+        return new Response(JSON.stringify(identityPayload), {
+          status: 200,
+          headers: { "Content-Type": "application/json", "X-Instagram-Proxy": "ok" },
+        });
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = await resolveProfile("verified.test");
+    expect(first.status).toBe("found");
+    if (first.status !== "found") {
+      throw new Error("expected a live profile");
+    }
+    expect(first.profile.isVerified).toBe(true);
+    expect(first.profile.profilePictureUrl).toBe("https://example.com/hd-avatar.jpg");
+
+    // Both the live profile and the identity lookup are cached per handle.
+    await resolveProfile("verified.test");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("maps an invalid token to an auth error", async () => {

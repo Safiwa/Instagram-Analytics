@@ -3,6 +3,7 @@ import { computeMetrics } from "../src/core/analytics/metrics";
 import { resolveProfile } from "../src/core/data/adapter";
 import {
   clearPublicCache,
+  fetchPublicIdentity,
   fetchPublicProfile,
   postedAtFromPk,
   shortcodeFromPk,
@@ -204,6 +205,41 @@ describe("public Instagram reader", () => {
     expect(shortcodeFromPk("4033038341586285853")).toBe("Df4OwDzx_Ud");
     expect(shortcodeFromPk("4031892735966066362")).toBe("Df0KRTbvDa6");
     expect(postedAtFromPk("4033038341586285853")).toBe("2026-11-18T09:54:17.152Z");
+  });
+
+  it("reads the public verification badge and picture for live enrichment", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("web_profile_info")) {
+        return new Response(
+          JSON.stringify({
+            data: {
+              user: {
+                username: "public.test",
+                is_verified: true,
+                edge_followed_by: { count: 1_000 },
+                profile_pic_url: "https://example.com/avatar.jpg",
+                profile_pic_url_hd: "https://example.com/hd-avatar.jpg",
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json", "X-Instagram-Proxy": "ok" },
+          },
+        );
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const identity = await fetchPublicIdentity("@Public.Test");
+
+    expect(identity).toEqual({
+      isVerified: true,
+      profilePictureUrl: "https://example.com/hd-avatar.jpg",
+    });
+    await fetchPublicIdentity("public.test");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("maps a public profile and its recent posts", async () => {

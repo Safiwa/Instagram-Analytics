@@ -23,6 +23,39 @@ export type RankFactors = RankFactorInput & {
   followerChangeEstimated: boolean;
 };
 
+// Benchmarks must stay inside a believable audience band. Without this gate a
+// profile with thousands of followers could be "benchmarked" against an account
+// with millions, which is misleading even though both are real public profiles.
+export const COMPARABLE_FOLLOWER_RATIO = 3;
+export const COMPARABLE_ENGAGEMENT_MULTIPLIER = 2;
+export const COMPARABLE_ENGAGEMENT_PADDING_PCT = 0.5;
+
+export type ComparableRangeInput = Pick<RankFactorInput, "followers" | "engagementRate">;
+
+export function isComparableRange(
+  target: ComparableRangeInput,
+  candidate: ComparableRangeInput,
+): boolean {
+  const targetFollowers = Math.max(0, target.followers);
+  const candidateFollowers = Math.max(0, candidate.followers);
+  if (targetFollowers <= 0 || candidateFollowers <= 0) {
+    return false;
+  }
+
+  const higherFollowers = Math.max(targetFollowers, candidateFollowers);
+  const lowerFollowers = Math.min(targetFollowers, candidateFollowers);
+  if (higherFollowers / lowerFollowers > COMPARABLE_FOLLOWER_RATIO) {
+    return false;
+  }
+
+  const targetRate = Math.max(0, target.engagementRate);
+  const candidateRate = Math.max(0, candidate.engagementRate);
+  const higherRate = Math.max(targetRate, candidateRate);
+  const lowerRate = Math.min(targetRate, candidateRate);
+
+  return higherRate <= lowerRate * COMPARABLE_ENGAGEMENT_MULTIPLIER + COMPARABLE_ENGAGEMENT_PADDING_PCT;
+}
+
 export function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }

@@ -12,6 +12,7 @@ import {
 import { computeMetrics, type ProfileMetrics } from "./metrics";
 import {
   compareRank,
+  isComparableRange,
   rankFactorSimilarity,
   rankFactors,
   rankScore,
@@ -89,48 +90,58 @@ function scorePeers(
     return [];
   }
 
-  const scored = candidates.map((candidate) => {
-    const candidateCategory = inferCategory(candidate);
-    const candidateMetrics = computeMetrics(candidate);
-    const candidateFactors = rankFactors(candidate, candidateMetrics);
-    const candidateCountry = inferCountrySignal(candidate);
-    const relationship = countryRelationship(targetCountry, candidateCountry);
-    const sharedTopics = overlap(targetTopics, profileTopics(candidate));
-    const topicScore = sharedTopics.length > 0 ? clamp(60 + sharedTopics.length * 20, 0, 100) : 0;
-    const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
-    const exactCategory = candidateCategory === targetCategory;
+  const scored = candidates
+    .map((candidate) => {
+      const candidateCategory = inferCategory(candidate);
+      const candidateMetrics = computeMetrics(candidate);
+      const candidateFactors = rankFactors(candidate, candidateMetrics);
+      return { candidate, candidateCategory, candidateMetrics, candidateFactors };
+    })
+    // A peer is only a benchmark if it sits in the same audience-size and
+    // engagement band. Category and country fit cannot excuse a 1K vs 10M gap.
+    .filter(({ candidateFactors }) => isComparableRange(targetFactors, candidateFactors))
+    .map(({ candidate, candidateCategory, candidateMetrics, candidateFactors }) => {
+      const candidateCountry = inferCountrySignal(candidate);
+      const relationship = countryRelationship(targetCountry, candidateCountry);
+      const sharedTopics = overlap(targetTopics, profileTopics(candidate));
+      const topicScore = sharedTopics.length > 0 ? clamp(60 + sharedTopics.length * 20, 0, 100) : 0;
+      const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
+      const exactCategory = candidateCategory === targetCategory;
 
-    // Four-factor fit, category fit, country fit and themes all contribute. The
-    // country tier filter below makes same-country candidates win whenever they
-    // exist; the score then orders them by the same criteria as the ranking.
-    const score = round2(
-      factorScore * 0.35 +
-        topicScore * 0.15 +
-        countryScore(relationship) * 0.25 +
-        (exactCategory ? 100 : 75) * 0.25,
-    );
-    const reasons: string[] = [];
+      // Four-factor fit, category fit, country fit and themes all contribute. The
+      // country tier filter below makes same-country candidates win whenever they
+      // exist; the score then orders them by the same criteria as the ranking.
+      const score = round2(
+        factorScore * 0.35 +
+          topicScore * 0.15 +
+          countryScore(relationship) * 0.25 +
+          (exactCategory ? 100 : 75) * 0.25,
+      );
+      const reasons: string[] = [];
 
-    reasons.push(exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`);
-    reasons.push(countryReason(relationship, targetCountry, candidateCountry));
-    reasons.push(
-      `four-factor fit ${Math.round(factorScore)}% (followers, engagement, interactions, follower change)`,
-    );
-    if (sharedTopics.length > 0) {
-      reasons.push(`shares ${sharedTopics.slice(0, 2).join(" and ")} themes`);
-    }
+      reasons.push(
+        exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`,
+      );
+      reasons.push(countryReason(relationship, targetCountry, candidateCountry));
+      reasons.push("similar audience size and engagement range");
+      reasons.push(
+        `four-factor fit ${Math.round(factorScore)}% (followers, engagement, interactions, follower change)`,
+      );
+      if (sharedTopics.length > 0) {
+        reasons.push(`shares ${sharedTopics.slice(0, 2).join(" and ")} themes`);
+      }
 
-    return {
-      profile: candidate,
-      metrics: candidateMetrics,
-      factors: candidateFactors,
-      score,
-      category: candidateCategory,
-      country: candidateCountry,
-      countryRelationship: relationship,
-      reasons,
-    };
-  });
+      return {
+        profile: candidate,
+        metrics: candidateMetrics,
+        factors: candidateFactors,
+        score,
+        category: candidateCategory,
+        country: candidateCountry,
+        countryRelationship: relationship,
+        reasons,
+      };
+    });
 
   // A same-country match is always preferred over a merely similar region, an
   // unknown country, or a clearly different country. If none exists, fall back
@@ -180,13 +191,14 @@ export type PeerRanking = {
   outperformedPercent: number | null;
 };
 
-// Builds a small leaderboard from the searched profile plus its closest comparable
-// peers, so the searched profile can see its rank rather than a single reference point.
+// Builds a five-profile leaderboard: the searched profile plus its four closest
+// comparable peers. Rank is therefore always "1 of 5" when the pool has enough
+// in-range candidates, rather than a six-profile group.
 export function buildPeerRanking(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
-  limit = 5,
+  limit = 4,
 ): PeerRanking | null {
   const peers = scorePeers(target, metrics, pool).slice(0, limit);
   if (peers.length === 0) {

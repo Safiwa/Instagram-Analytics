@@ -96,6 +96,18 @@ describe("four-factor leaderboard ranking", () => {
 
     expect(board.trending.map((entry) => entry.username)).toEqual(["big", "small"]);
     expect(board.trending[0].rankScore).toBeGreaterThan(board.trending[1].rankScore);
+    // High engagement now applies the same four factors, followers first.
+    expect(board.engaged.map((entry) => entry.username)).toEqual(["big", "small"]);
+    expect(board.engaged[0].engagementRate).toBeLessThan(board.engaged[1].engagementRate);
+  });
+
+  it("ranks every country board by four factors too", () => {
+    const big = profile("emirates", 10_000_000, [post("a", 2, 100_000)]);
+    const small = profile("flydubai", 5_000, [post("b", 2, 4_000)]);
+    const board = rankProfiles([small, big], NOW);
+
+    expect(board.regional.uae.map((entry) => entry.username)).toEqual(["emirates", "flydubai"]);
+    expect(board.regional.uae[0].rankScore).toBeGreaterThan(board.regional.uae[1].rankScore);
   });
 
   it("lets every one of the four signals raise the rank score", () => {

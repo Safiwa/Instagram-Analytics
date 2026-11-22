@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { rankFactorSimilarity, rankFactors, rankScore } from "../src/core/analytics/rank";
+import {
+  isComparableRange,
+  rankFactorSimilarity,
+  rankFactors,
+  rankScore,
+} from "../src/core/analytics/rank";
 import type { CreatorProfile } from "../src/core/data/types";
 
 function profile(followers: number): CreatorProfile {
@@ -63,6 +68,15 @@ describe("shared four-factor ranking", () => {
     expect(factors.followerChangePct).toBeCloseTo(11.11, 2);
     expect(factors.followerChangeEstimated).toBe(false);
     expect(rankScore(factors)).toBeGreaterThan(0);
+  });
+
+  it("keeps benchmarks inside a similar follower and engagement range", () => {
+    const target = { followers: 100_000, engagementRate: 1.5 };
+
+    expect(isComparableRange(target, { followers: 220_000, engagementRate: 2.4 })).toBe(true);
+    expect(isComparableRange(target, { followers: 2_000_000, engagementRate: 2.4 })).toBe(false);
+    expect(isComparableRange(target, { followers: 90_000, engagementRate: 12 })).toBe(false);
+    expect(isComparableRange(target, { followers: 0, engagementRate: 1.5 })).toBe(false);
   });
 
   it("scores a close four-factor profile above a distant one", () => {
