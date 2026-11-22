@@ -83,6 +83,7 @@ async function fetchInstagram(
       proxied = await fetch(url.toString(), {
         headers: {
           Authorization: `Bearer ${process.env.PROXY_SECRET?.trim() ?? ""}`,
+          "x-proxy-key": process.env.PROXY_KEY?.trim() ?? "",
           Accept: "text/html,application/xhtml+xml,application/json",
         },
         cache: "no-store",
