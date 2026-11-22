@@ -395,10 +395,11 @@ Profile pages now surface verification, growth, and regional comparison:
   matched, and how this profile compares, with a link to a side-by-side comparison. The same
   matched set powers a five-profile ranking table (`peer-ranking`): the searched profile plus its
   four closest category peers, ordered by `rankScore`, with the searched profile's rank (for example,
-  "Rank #2 of 5") and the share of peers it outperforms. This table is not range-gated, so it stays
-  complete for accounts at either audience extreme. If no tracked profile in a compatible category
-  is available (for example, without API credentials) the panel shows an empty state rather than
-  unrelated profiles.
+  "Rank #2 of 5") and the share of peers it outperforms. Country matches lead the selection and any
+  remaining rows are filled from the next country tiers, so a thin local tier cannot shorten the
+  five-profile group. This table is not range-gated, so it stays complete for accounts at either
+  audience extreme. If no tracked profile in a compatible category is available (for example,
+  without API credentials) the panel shows an empty state rather than unrelated profiles.
 - **UAE/GCC category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
   `src/core/data/regional.ts`) applies the same category gate inside the regional pool: the searched
   profile is matched only to real public UAE/GCC accounts in the same or a closely related category,

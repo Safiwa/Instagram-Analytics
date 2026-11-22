@@ -143,6 +143,24 @@ describe("peer ranking for the searched profile", () => {
     expect(ranking!.rows.filter((row) => row.isTarget)).toHaveLength(1);
   });
 
+  it("fills five rows from other country tiers when local peers are scarce", () => {
+    const target = profile("dubai.target", 60_000, "Fashion and beauty", 2_000);
+    const pool = [
+      target,
+      profile("uae.peer1", 61_000, "Fashion and beauty", 2_100),
+      profile("uae.peer2", 62_000, "Fashion and beauty", 2_200),
+      profile("london.peer1", 58_000, "Fashion and beauty", 1_900),
+      profile("paris.peer1", 59_000, "Fashion and beauty", 2_050),
+      profile("tokyo.peer1", 57_000, "Fashion and beauty", 1_800),
+    ];
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), pool);
+
+    expect(ranking!.rows).toHaveLength(5);
+    expect(ranking!.rows.some((row) => row.profile.username === "uae.peer1")).toBe(true);
+    expect(ranking!.rows.some((row) => row.profile.username === "london.peer1")).toBe(true);
+  });
+
   it("returns null when no comparable peer is available", () => {
     const target = profile("solo", 20_000, "Food blogger", 800);
     expect(buildPeerRanking(target, computeMetrics(target), [])).toBeNull();

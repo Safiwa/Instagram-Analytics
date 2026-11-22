@@ -73,6 +73,9 @@ type ScoreOptions = {
   // Suggestions/benchmarks enforce a believable audience band. Ranking tables
   // opt out so the searched profile always appears in a full five-profile group.
   requireComparableRange?: boolean;
+  // Suggestions keep only the best country tier. Rank tables keep same-country
+  // peers first, then fill remaining rows from the next tiers.
+  fillCountryTiers?: boolean;
 };
 
 function scorePeers(
@@ -82,6 +85,7 @@ function scorePeers(
   options: ScoreOptions = {},
 ): PeerMatch[] {
   const requireComparableRange = options.requireComparableRange !== false;
+  const fillCountryTiers = options.fillCountryTiers === true;
   const targetCategory = inferCategory(target);
   const targetCountry = inferCountrySignal(target);
   const targetTopics = profileTopics(target);
@@ -161,9 +165,19 @@ function scorePeers(
   // unknown country, or a clearly different country. If none exists, fall back
   // through those tiers instead of returning no suggestions.
   const bestTier = Math.min(...scored.map((match) => countryTier(match.countryRelationship)));
-  return scored
-    .filter((match) => countryTier(match.countryRelationship) === bestTier)
-    .sort((left, right) => right.score - left.score || left.profile.username.localeCompare(right.profile.username));
+  const sorted = scored.sort(
+    (left, right) => right.score - left.score || left.profile.username.localeCompare(right.profile.username),
+  );
+  if (!fillCountryTiers) {
+    return sorted.filter((match) => countryTier(match.countryRelationship) === bestTier);
+  }
+
+  // Same-country peers lead the five-profile table, but a thin local tier must
+  // not shorten it. Remaining rows come from the next country tiers in order.
+  return [
+    ...sorted.filter((match) => countryTier(match.countryRelationship) === bestTier),
+    ...sorted.filter((match) => countryTier(match.countryRelationship) !== bestTier),
+  ];
 }
 
 export function findClosestPeer(
@@ -214,7 +228,10 @@ export function buildPeerRanking(
   pool: CreatorProfile[],
   limit = 4,
 ): PeerRanking | null {
-  const peers = scorePeers(target, metrics, pool, { requireComparableRange: false }).slice(0, limit);
+  const peers = scorePeers(target, metrics, pool, {
+    requireComparableRange: false,
+    fillCountryTiers: true,
+  }).slice(0, limit);
   if (peers.length === 0) {
     return null;
   }
