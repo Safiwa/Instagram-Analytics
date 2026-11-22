@@ -87,7 +87,7 @@ describe("global leaderboard ranking", () => {
   });
 });
 
-describe("four-factor leaderboard ranking", () => {
+describe("weighted leaderboard ranking", () => {
   it("puts a large account ahead of a small one even with lower engagement", () => {
     const big = profile("big", 10_000_000, [post("a", 2, 100_000), post("b", 4, 100_000)]);
     const small = profile("small", 5_000, [post("c", 2, 400), post("d", 4, 400)]);
@@ -96,12 +96,12 @@ describe("four-factor leaderboard ranking", () => {
 
     expect(board.trending.map((entry) => entry.username)).toEqual(["big", "small"]);
     expect(board.trending[0].rankScore).toBeGreaterThan(board.trending[1].rankScore);
-    // High engagement now applies the same four factors, followers first.
+    // High engagement now applies the same weighted signals, followers first.
     expect(board.engaged.map((entry) => entry.username)).toEqual(["big", "small"]);
     expect(board.engaged[0].engagementRate).toBeLessThan(board.engaged[1].engagementRate);
   });
 
-  it("ranks country boards by follower count before the four-factor score", () => {
+  it("ranks country boards by follower count before the weighted score", () => {
     const big = profile("emirates", 10_000_000, [post("a", 2, 100_000)]);
     const small = profile("flydubai", 5_000, [post("b", 2, 4_000)]);
     const board = rankProfiles([small, big], NOW);
@@ -124,18 +124,20 @@ describe("four-factor leaderboard ranking", () => {
     );
   });
 
-  it("lets every one of the four signals raise the rank score", () => {
+  it("lets every one of the five signals raise the rank score", () => {
     const base = {
       followers: 1_000_000,
       engagementRate: 1,
-      avgInteractions: 10_000,
+      avgLikes: 10_000,
+      avgComments: 500,
       followerChangePct: 2,
     };
     const score = rankScore(base);
 
     expect(rankScore({ ...base, followers: 10_000_000 })).toBeGreaterThan(score);
     expect(rankScore({ ...base, engagementRate: 2 })).toBeGreaterThan(score);
-    expect(rankScore({ ...base, avgInteractions: 20_000 })).toBeGreaterThan(score);
+    expect(rankScore({ ...base, avgLikes: 20_000 })).toBeGreaterThan(score);
+    expect(rankScore({ ...base, avgComments: 1_000 })).toBeGreaterThan(score);
     expect(rankScore({ ...base, followerChangePct: 8 })).toBeGreaterThan(score);
   });
 
@@ -143,7 +145,8 @@ describe("four-factor leaderboard ranking", () => {
     const board = rankProfiles([profile("natgeo", 1_000_000, [post("a", 2, 10_000)])], NOW);
     const entry = board.trending[0];
 
-    expect(entry.avgInteractions).toBe(10_000);
+    expect(entry.avgLikes).toBe(10_000);
+    expect(entry.avgComments).toBe(0);
     expect(entry.followerChangeEstimated).toBe(true);
     expect(entry.rankScore).toBeGreaterThan(0);
   });

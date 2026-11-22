@@ -2,25 +2,27 @@ import type { CreatorProfile } from "../data/types";
 import { analyzeGrowth } from "./growth";
 import type { ProfileMetrics } from "./metrics";
 
-// Followers carry the most weight, then engagement rate, average interactions and
-// 30-day follower change. Fixed anchors keep scores comparable across refreshes,
-// regions and every ranking surface in the product.
+// Followers carry the most weight, then engagement rate, average likes, average
+// comments and 30-day follower change. Fixed anchors keep scores comparable
+// across refreshes, regions and every ranking surface in the product.
 export const RANK_WEIGHTS = {
   followers: 0.55,
   engagement: 0.2,
-  interactions: 0.15,
+  avgLikes: 0.1,
+  avgComments: 0.05,
   followerChange: 0.1,
 } as const;
 
 // The regional profile panel adds a disclosed authenticity term so a profile
 // with fewer estimated fake followers can outrank a nearly identical account
-// with a weaker audience. Global boards and compare rankings stay four-factor.
+// with a weaker audience. Global boards and compare rankings stay five-signal.
 export const REGIONAL_AUTHENTICITY_WEIGHT = 0.1;
 
 export type RankFactorInput = {
   followers: number;
   engagementRate: number;
-  avgInteractions: number;
+  avgLikes: number;
+  avgComments: number;
   followerChangePct: number;
 };
 
@@ -101,13 +103,15 @@ function logScore(value: number, ceiling: number): number {
 export function rankScore(entry: RankFactorInput): number {
   const followers = logScore(entry.followers, 200_000_000);
   const engagement = clamp((entry.engagementRate / 5) * 100, 0, 100);
-  const interactions = logScore(entry.avgInteractions, 2_000_000);
+  const avgLikes = logScore(entry.avgLikes, 2_000_000);
+  const avgComments = logScore(entry.avgComments, 200_000);
   const followerChange = clamp(((entry.followerChangePct + 5) / 20) * 100, 0, 100);
 
   return round2(
     followers * RANK_WEIGHTS.followers +
       engagement * RANK_WEIGHTS.engagement +
-      interactions * RANK_WEIGHTS.interactions +
+      avgLikes * RANK_WEIGHTS.avgLikes +
+      avgComments * RANK_WEIGHTS.avgComments +
       followerChange * RANK_WEIGHTS.followerChange,
   );
 }
@@ -129,20 +133,18 @@ export function rankFactors(
   now = new Date(),
 ): RankFactors {
   const growth = analyzeGrowth(profile, now);
-  const avgInteractions = round2(
-    metrics.avgLikes + metrics.avgComments + (metrics.avgSaves ?? 0),
-  );
 
   return {
     followers: profile.followers,
     engagementRate: metrics.engagementRate,
-    avgInteractions,
+    avgLikes: round2(metrics.avgLikes),
+    avgComments: round2(metrics.avgComments),
     followerChangePct: growth.monthGrowthPct ?? 0,
     followerChangeEstimated: growth.growthEstimated,
   };
 }
 
-// Similarity for "bring comparable profiles" uses the same four factors and the
+// Similarity for "bring comparable profiles" uses the same five signals and the
 // same weights as the visible ranking, so the suggested peers and their rank
 // never disagree about what "comparable" means.
 export function rankFactorSimilarity(target: RankFactors, candidate: RankFactors): number {
@@ -159,7 +161,8 @@ export function rankFactorSimilarity(target: RankFactors, candidate: RankFactors
     0,
     100,
   );
-  const interactions = logGapScore(target.avgInteractions, candidate.avgInteractions, 45);
+  const avgLikes = logGapScore(target.avgLikes, candidate.avgLikes, 45);
+  const avgComments = logGapScore(target.avgComments, candidate.avgComments, 45);
   const followerChange = clamp(
     100 - Math.abs(target.followerChangePct - candidate.followerChangePct) * 5,
     0,
@@ -169,7 +172,8 @@ export function rankFactorSimilarity(target: RankFactors, candidate: RankFactors
   const weighted =
     followers * RANK_WEIGHTS.followers +
     engagement * RANK_WEIGHTS.engagement +
-    interactions * RANK_WEIGHTS.interactions +
+    avgLikes * RANK_WEIGHTS.avgLikes +
+    avgComments * RANK_WEIGHTS.avgComments +
     followerChange * RANK_WEIGHTS.followerChange;
 
   const overallGap = Math.abs(rankScore(target) - rankScore(candidate));
@@ -192,7 +196,7 @@ function comparableFollowers(row: RankComparable): number {
 }
 
 // Regional match scores are deliberately relative: 80 means "in this curated
-// pool", 99 means an almost identical four-factor profile and niche.
+// pool", 99 means an almost identical five-signal profile and niche.
 export function clampRankScoreToMatch(rawScore: number): number {
   return 80 + Math.round((19 * clamp(rawScore, 0, 100)) / 100);
 }

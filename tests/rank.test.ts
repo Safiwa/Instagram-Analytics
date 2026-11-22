@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isComparableRange,
+  RANK_WEIGHTS,
   rankFactorSimilarity,
   rankFactors,
   rankScore,
@@ -44,8 +45,8 @@ function profile(followers: number): CreatorProfile {
   };
 }
 
-describe("shared four-factor ranking", () => {
-  it("derives followers, engagement, interactions and measured follower change", () => {
+describe("shared weighted ranking", () => {
+  it("derives followers, engagement, likes, comments and measured follower change", () => {
     const target = profile(100_000);
     const factors = rankFactors(target, {
       avgLikes: 1_000,
@@ -66,10 +67,21 @@ describe("shared four-factor ranking", () => {
 
     expect(factors.followers).toBe(100_000);
     expect(factors.engagementRate).toBe(1.1);
-    expect(factors.avgInteractions).toBe(1_100);
+    expect(factors.avgLikes).toBe(1_000);
+    expect(factors.avgComments).toBe(100);
     expect(factors.followerChangePct).toBeCloseTo(11.11, 2);
     expect(factors.followerChangeEstimated).toBe(false);
     expect(rankScore(factors)).toBeGreaterThan(0);
+  });
+
+  it("splits the former interaction weight into separate likes and comments weights", () => {
+    expect(RANK_WEIGHTS).toEqual({
+      followers: 0.55,
+      engagement: 0.2,
+      avgLikes: 0.1,
+      avgComments: 0.05,
+      followerChange: 0.1,
+    });
   });
 
   it("keeps benchmarks inside a similar follower and engagement range", () => {
@@ -81,7 +93,7 @@ describe("shared four-factor ranking", () => {
     expect(isComparableRange(target, { followers: 0, engagementRate: 1.5 })).toBe(false);
   });
 
-  it("scores a close four-factor profile above a distant one", () => {
+  it("scores a close five-signal profile above a distant one", () => {
     const target = profile(100_000);
     const targetFactors = rankFactors(target, {
       avgLikes: 1_000,
@@ -99,8 +111,13 @@ describe("shared four-factor ranking", () => {
       estimateSignals: [],
       estimateMethodology: null,
     });
-    const closeFactors = { ...targetFactors, followers: 120_000, avgInteractions: 1_300 };
-    const distantFactors = { ...targetFactors, followers: 10, avgInteractions: 20 };
+    const closeFactors = {
+      ...targetFactors,
+      followers: 120_000,
+      avgLikes: 1_300,
+      avgComments: 130,
+    };
+    const distantFactors = { ...targetFactors, followers: 10, avgLikes: 20, avgComments: 2 };
 
     expect(rankFactorSimilarity(targetFactors, closeFactors)).toBeGreaterThan(
       rankFactorSimilarity(targetFactors, distantFactors),
@@ -112,11 +129,12 @@ describe("authenticity-aware regional ranking", () => {
   const factors = {
     followers: 100_000,
     engagementRate: 1.1,
-    avgInteractions: 1_100,
+    avgLikes: 1_000,
+    avgComments: 100,
     followerChangePct: 11.11,
   };
 
-  it("blends the four-factor score with authenticity", () => {
+  it("blends the weighted score with authenticity", () => {
     const base = rankScore(factors);
 
     expect(REGIONAL_AUTHENTICITY_WEIGHT).toBe(0.1);

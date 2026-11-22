@@ -58,7 +58,8 @@ export type RegionalRankRow = {
   profile: CreatorProfile;
   engagementRate: number;
   rankScore: number;
-  avgInteractions: number;
+  avgLikes: number;
+  avgComments: number;
   followerChangePct: number;
   followerChangeEstimated: boolean;
   matchScore: number | null;
@@ -186,7 +187,7 @@ function changeValue(value: number | null, estimated: boolean): string {
   return `${formatPercent(value)}${estimated ? " est." : ""}`;
 }
 
-// The comparison table mirrors the four public ranking criteria and adds
+// The comparison table mirrors the five public ranking signals and adds
 // authenticity, the disclosed estimate that adjusts the regional rank.
 export function buildKeyComparisons(
   target: CreatorProfile,
@@ -213,13 +214,19 @@ export function buildKeyComparisons(
       insight: differenceInsight("engagement", metrics.engagementRate, peer.metrics.engagementRate, " pts"),
     },
     {
-      label: "Avg interactions",
-      target: formatCompact(targetFactors.avgInteractions),
-      peer: formatCompact(peer.factors.avgInteractions),
+      label: "Avg likes",
+      target: formatCompact(targetFactors.avgLikes),
+      peer: formatCompact(peer.factors.avgLikes),
+      insight: differenceInsight("average likes", targetFactors.avgLikes, peer.factors.avgLikes),
+    },
+    {
+      label: "Avg comments",
+      target: formatCompact(targetFactors.avgComments),
+      peer: formatCompact(peer.factors.avgComments),
       insight: differenceInsight(
-        "average interactions",
-        targetFactors.avgInteractions,
-        peer.factors.avgInteractions,
+        "average comments",
+        targetFactors.avgComments,
+        peer.factors.avgComments,
       ),
     },
     {
@@ -274,7 +281,8 @@ export function buildRegionalRanking(
       profile: target,
       engagementRate: targetFactors.engagementRate,
       rankScore: targetRegionalScore,
-      avgInteractions: targetFactors.avgInteractions,
+      avgLikes: targetFactors.avgLikes,
+      avgComments: targetFactors.avgComments,
       followerChangePct: targetFactors.followerChangePct,
       followerChangeEstimated: targetFactors.followerChangeEstimated,
       matchScore: null,
@@ -286,7 +294,8 @@ export function buildRegionalRanking(
       profile: peer.profile,
       engagementRate: peer.metrics.engagementRate,
       rankScore: regionalRankScore(peer.factors, peer.metrics.authenticityPct),
-      avgInteractions: peer.factors.avgInteractions,
+      avgLikes: peer.factors.avgLikes,
+      avgComments: peer.factors.avgComments,
       followerChangePct: peer.factors.followerChangePct,
       followerChangeEstimated: peer.factors.followerChangeEstimated,
       matchScore: peer.matchScore,

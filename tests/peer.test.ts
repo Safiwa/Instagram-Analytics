@@ -85,7 +85,7 @@ describe("country-aware peer suggestions", () => {
       true,
     );
     expect(suggestions[0].reasons.join(" ")).toContain("similar audience size and engagement range");
-    expect(suggestions[0].reasons.join(" ")).toContain("four-factor fit");
+    expect(suggestions[0].reasons.join(" ")).toContain("five-factor fit");
   });
 
   it("never benchmarks thousands of followers against millions", () => {
@@ -117,7 +117,7 @@ describe("country-aware peer suggestions", () => {
 });
 
 describe("peer ranking for the searched profile", () => {
-  it("includes the searched profile and ranks the group by four-factor score", () => {
+  it("includes the searched profile and ranks the group by weighted score", () => {
     const target = profile("searched", 60_000, "Fashion and skincare boutique", 2_000);
     const low = profile("low.peer", 62_000, "Fashion and beauty", 1_600);
     const high = profile("high.peer", 58_000, "Fashion and style", 2_600);
@@ -136,7 +136,8 @@ describe("peer ranking for the searched profile", () => {
     expect(ranking!.outperformedPercent).toBe(50);
     const scores = ranking!.rows.map((row) => row.rankScore);
     expect([...scores].sort((a, b) => b - a)).toEqual(scores);
-    expect(ranking!.rows.every((row) => typeof row.avgInteractions === "number")).toBe(true);
+    expect(ranking!.rows.every((row) => typeof row.avgLikes === "number")).toBe(true);
+    expect(ranking!.rows.every((row) => typeof row.avgComments === "number")).toBe(true);
     expect(ranking!.rows.every((row) => typeof row.followerChangePct === "number")).toBe(true);
     expect(ranking!.rows.find((row) => row.isTarget)?.matchScore).toBeNull();
     expect(ranking!.rows.filter((row) => !row.isTarget).every((row) => row.matchScore !== null)).toBe(

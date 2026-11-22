@@ -33,7 +33,7 @@ function profile(username: string, displayName: string, bio: string, followers: 
 const beautyBio = "Beauty creator with makeup, skincare and fashion tips";
 
 describe("compare ranking", () => {
-  it("ranks same-country then same-region benchmarks by the four factors", () => {
+  it("ranks same-country then same-region benchmarks by the weighted signals", () => {
     const target = profile("hudabeauty", "Huda Beauty", beautyBio, 60_000);
     const highSameCountry = profile("the.matis", "The Mati's", beautyBio, 90_000);
     const lowSameCountry = profile("trending.vibz.uae", "UAE Beauty", beautyBio, 50_000);
@@ -65,7 +65,8 @@ describe("compare ranking", () => {
     expect(ranking.every((row) => row.country.label !== "Country not published")).toBe(true);
     const scores = ranking.map((row) => row.rankScore);
     expect([...scores].sort((a, b) => b - a)).toEqual(scores);
-    expect(ranking.every((row) => typeof row.avgInteractions === "number")).toBe(true);
+    expect(ranking.every((row) => typeof row.avgLikes === "number")).toBe(true);
+    expect(ranking.every((row) => typeof row.avgComments === "number")).toBe(true);
     expect(ranking.every((row) => typeof row.followerChangePct === "number")).toBe(true);
   });
 

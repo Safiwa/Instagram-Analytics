@@ -27,7 +27,6 @@ import {
   YAxis,
 } from "recharts";
 import { MetricCard } from "../../components/MetricCard";
-import { modashBenchmark, MODASH_SOURCE_LABEL } from "../../core/analytics/benchmark";
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
 import type { GrowthAnalysis } from "../../core/analytics/growth";
 import { round2, type ProfileMetrics } from "../../core/analytics/metrics";
@@ -130,10 +129,6 @@ export function ProfileDashboard({
   const hasViews = profile.recentPosts.some((post) => typeof post.viewCount === "number");
   const noPublicPosts =
     profile.source !== "demo" && !profile.isPrivate && profile.recentPosts.length === 0;
-  const tier = modashBenchmark(profile.followers);
-  const benchmarkHint = tier
-    ? ` ${MODASH_SOURCE_LABEL}: ${tier.label} ${tier.followers} typically ${tier.range}.`
-    : "";
   const momentumLabel =
     growth.momentum === "unknown" ? "Not enough data" : growth.momentum.charAt(0).toUpperCase() + growth.momentum.slice(1);
   const peerDelta = peer ? round2(metrics.engagementRate - peer.metrics.engagementRate) : null;
@@ -286,17 +281,17 @@ export function ProfileDashboard({
         </div>
       ) : null}
 
-      <section data-testid="metric-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <section data-testid="metric-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard
           label="Engagement rate"
           value={profile.isPrivate || noPublicPosts ? "—" : formatPercent(metrics.engagementRate)}
-          hint={`${
+          hint={
             profile.isPrivate || noPublicPosts
               ? "No public posts available"
               : metrics.engagementBasis === "likes+comments"
                 ? "Public likes + comments / followers"
-                : "Avg interactions / followers"
-          }${benchmarkHint}`}
+                : "Avg likes + comments + saves / followers"
+          }
         />
         <MetricCard
           label="12-month growth"
@@ -335,19 +330,18 @@ export function ProfileDashboard({
           }
         />
         <MetricCard
-          label="Avg interactions"
+          label="Avg likes"
           value={
-            profile.isPrivate || noPublicPosts
-              ? "—"
-              : formatCompact(metrics.avgLikes + metrics.avgComments + (metrics.avgSaves ?? 0))
+            profile.isPrivate || noPublicPosts ? "—" : formatCompact(metrics.avgLikes)
           }
-          hint={
-            profile.isPrivate || noPublicPosts
-              ? "No public posts available"
-              : metrics.engagementBasis === "likes+comments"
-                ? "Likes + comments"
-                : "Likes + comments + saves"
+          hint={profile.isPrivate || noPublicPosts ? "No public posts available" : "Average per public post"}
+        />
+        <MetricCard
+          label="Avg comments"
+          value={
+            profile.isPrivate || noPublicPosts ? "—" : formatCompact(metrics.avgComments)
           }
+          hint={profile.isPrivate || noPublicPosts ? "No public posts available" : "Average per public post"}
         />
       </section>
 
@@ -632,8 +626,8 @@ export function ProfileDashboard({
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
               We match this profile only to real public accounts in the same or a closely related
               category (for example Digital creator, Blogger, Public figure, or Beauty), prefer the
-              same country, then rank the group by followers, engagement rate, average interactions
-              and follower change. Country is inferred from the handle first, then profile text,
+              same country, then rank the group by followers, engagement rate, average likes, average
+              comments and follower change. Country is inferred from the handle first, then profile text,
               hashtags and promoted locations; Instagram does not publish account country. This is
               a curated reference set, not an exhaustive niche search.
             </p>
@@ -706,8 +700,8 @@ export function ProfileDashboard({
                   Rank #{ranking.targetRank} of {ranking.total} profiles
                 </p>
                 <p className="text-xs text-slate-500">
-                  Rank score: 55% followers, 20% engagement, 15% avg interactions, 10% follower
-                  change
+                  Rank score: 55% followers, 20% engagement, 10% avg likes, 5% avg comments, 10%
+                  follower change
                 </p>
               </div>
               {ranking.outperformedPercent !== null ? (
@@ -753,7 +747,8 @@ export function ProfileDashboard({
                       {row.matchScore !== null ? ` · ${row.matchScore.toFixed(0)}% match` : ""}
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
-                      {row.country.label} · {formatCompact(row.avgInteractions)} avg interactions ·{" "}
+                      {row.country.label} · {formatCompact(row.avgLikes)} avg likes ·{" "}
+                      {formatCompact(row.avgComments)} avg comments ·{" "}
                       {formatPercent(row.followerChangePct)}
                       {row.followerChangeEstimated ? " est." : ""} follower change
                     </p>
@@ -926,7 +921,8 @@ export function ProfileDashboard({
                       {row.matchScore !== null ? ` · ${row.matchScore}% match` : ""}
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
-                      {row.country.label} · {formatCompact(row.avgInteractions)} avg interactions ·{" "}
+                      {row.country.label} · {formatCompact(row.avgLikes)} avg likes ·{" "}
+                      {formatCompact(row.avgComments)} avg comments ·{" "}
                       {formatPercent(row.followerChangePct)}
                       {row.followerChangeEstimated ? " est." : ""} follower change
                     </p>

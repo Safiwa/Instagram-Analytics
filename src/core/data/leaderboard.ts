@@ -147,7 +147,8 @@ export type LeaderboardEntry = {
   engagementRate: number;
   windowRate: number;
   postsInWindow: number;
-  avgInteractions: number;
+  avgLikes: number;
+  avgComments: number;
   followerChangePct: number;
   followerChangeEstimated: boolean;
   rankScore: number;
@@ -164,13 +165,13 @@ export type Leaderboard = {
 };
 
 // Ranking math lives in analytics/rank so homepage boards, profile benchmarks
-// and compare suggestions all use exactly the same four-factor score.
+// and compare suggestions all use exactly the same five-signal score.
 function byRank(left: LeaderboardEntry, right: LeaderboardEntry): number {
   return right.rankScore - left.rankScore || right.followers - left.followers;
 }
 
 // Country boards are "top ten" lists, so follower count is the primary key. The
-// four-factor score only breaks ties; a small account with a viral post cannot
+// weighted score only breaks ties; a small account with a viral post cannot
 // take a top-ten slot from a materially larger account in the same region.
 function byFollowersFirst(left: LeaderboardEntry, right: LeaderboardEntry): number {
   return (
@@ -222,7 +223,8 @@ function toEntry(profile: CreatorProfile, now: number): LeaderboardEntry | null 
     engagementRate: factors.engagementRate,
     windowRate: window.rate,
     postsInWindow: window.count,
-    avgInteractions: factors.avgInteractions,
+    avgLikes: factors.avgLikes,
+    avgComments: factors.avgComments,
     followerChangePct: factors.followerChangePct,
     followerChangeEstimated: factors.followerChangeEstimated,
     rankScore: rankScore(factors),
@@ -248,12 +250,12 @@ export function rankProfiles(profiles: CreatorProfile[], now = new Date()): Lead
 
   // High engagement still measures engagement across up to 12 recent public
   // posts, but followers are considered first (55%), then engagement rate (20%),
-  // average interactions (15%) and 30-day follower change (10%). It therefore
-  // uses the same rank order as the trending and country boards.
+  // average likes (10%), average comments (5%) and 30-day follower change (10%).
+  // It therefore uses the same rank order as the trending and country boards.
   const engaged = [...entries].sort(byRank).slice(0, LEADERBOARD_SIZE);
 
   // Trending still requires posts in the 15-day window, but the order is now the
-  // four-factor rank score rather than the window engagement rate alone.
+  // weighted rank score rather than the window engagement rate alone.
   const trending = entries
     .filter((entry) => entry.postsInWindow > 0)
     .sort(byRank)

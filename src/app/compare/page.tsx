@@ -96,8 +96,8 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
             Other real public profiles in the same country or wider region. Same-country profiles
             lead and same-region profiles fill the remaining rows; each group is ordered by the same
-            four factors: 55% followers, 20% engagement rate, 15% average interactions and 10%
-            follower change. Country is inferred from the handle, profile text and promoted
+            five signals: 55% followers, 20% engagement rate, 10% average likes, 5% average comments
+            and 10% follower change. Country is inferred from the handle, profile text and promoted
             locations; Instagram does not publish account country.
           </p>
           {compareRanking.length > 0 ? (
@@ -124,8 +124,8 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
                       {formatCompact(row.profile.followers)} followers ·{" "}
-                      {formatCompact(row.avgInteractions)} avg interactions ·{" "}
-                      {formatPercent(row.followerChangePct)}
+                      {formatCompact(row.avgLikes)} avg likes · {formatCompact(row.avgComments)} avg
+                      comments · {formatPercent(row.followerChangePct)}
                       {row.followerChangeEstimated ? " est." : ""} follower change
                     </p>
                   </div>
@@ -165,8 +165,8 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
             Picked from the same creator category, with the same country preferred. Country is
             inferred from the handle first, then profile text, hashtags and promoted locations;
-            Instagram does not publish account country. Peers are ordered by the same four factors:
-            followers, engagement rate, average interactions and follower change.
+            Instagram does not publish account country. Peers are ordered by the same five signals:
+            followers, engagement rate, average likes, average comments and follower change.
           </p>
           <ul className="mt-5 grid gap-3 sm:grid-cols-2">
             {suggestions.map((match) => {

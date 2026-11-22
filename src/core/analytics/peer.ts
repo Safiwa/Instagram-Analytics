@@ -127,9 +127,9 @@ function scorePeers(
       const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
       const exactCategory = candidateCategory === targetCategory;
 
-      // Four-factor fit, category fit, country fit and themes all contribute. The
-      // country tier filter below makes same-country candidates win whenever they
-      // exist; the score then orders them by the same criteria as the ranking.
+      // Weighted signal fit, category fit, country fit and themes all contribute.
+      // The country tier filter below makes same-country candidates win whenever
+      // they exist; the score then orders them by the same criteria as the ranking.
       const score = round2(
         factorScore * 0.35 +
           topicScore * 0.15 +
@@ -146,7 +146,7 @@ function scorePeers(
         reasons.push("similar audience size and engagement range");
       }
       reasons.push(
-        `four-factor fit ${Math.round(factorScore)}% (followers, engagement, interactions, follower change)`,
+        `five-factor fit ${Math.round(factorScore)}% (followers, engagement, likes, comments, follower change)`,
       );
       if (sharedTopics.length > 0) {
         reasons.push(`shares ${sharedTopics.slice(0, 2).join(" and ")} themes`);
@@ -206,7 +206,8 @@ export type PeerRankingRow = {
   profile: CreatorProfile;
   engagementRate: number;
   rankScore: number;
-  avgInteractions: number;
+  avgLikes: number;
+  avgComments: number;
   followerChangePct: number;
   followerChangeEstimated: boolean;
   matchScore: number | null;
@@ -245,7 +246,8 @@ export function buildPeerRanking(
       profile: target,
       engagementRate: targetFactors.engagementRate,
       rankScore: rankScore(targetFactors),
-      avgInteractions: targetFactors.avgInteractions,
+      avgLikes: targetFactors.avgLikes,
+      avgComments: targetFactors.avgComments,
       followerChangePct: targetFactors.followerChangePct,
       followerChangeEstimated: targetFactors.followerChangeEstimated,
       matchScore: null,
@@ -257,7 +259,8 @@ export function buildPeerRanking(
       profile: peer.profile,
       engagementRate: peer.metrics.engagementRate,
       rankScore: rankScore(peer.factors),
-      avgInteractions: peer.factors.avgInteractions,
+      avgLikes: peer.factors.avgLikes,
+      avgComments: peer.factors.avgComments,
       followerChangePct: peer.factors.followerChangePct,
       followerChangeEstimated: peer.factors.followerChangeEstimated,
       matchScore: peer.score,

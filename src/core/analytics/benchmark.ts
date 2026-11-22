@@ -6,7 +6,6 @@ export type BenchmarkTier = {
   maximum: number | null;
 };
 
-export const MODASH_SOURCE_LABEL = "Modash engagement benchmarks";
 
 // Published by Modash (updated 21 Oct 2026). Ranges describe typical Instagram
 // engagement by audience size and are context, not a pass/fail grade.

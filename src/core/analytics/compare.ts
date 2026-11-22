@@ -12,12 +12,13 @@ import { compareRank, rankFactors, rankScore } from "./rank";
 
 // Other real public profiles in the first compared account's country or wider
 // region. Unlike audience-matched suggestions these rows are not range-gated:
-// they are a ranking, ordered with the same four factors as every other board.
+// they are a ranking, ordered with the same five signals as every other board.
 export type CompareRankRow = {
   profile: CreatorProfile;
   rankScore: number;
   engagementRate: number;
-  avgInteractions: number;
+  avgLikes: number;
+  avgComments: number;
   followerChangePct: number;
   followerChangeEstimated: boolean;
   category: string;
@@ -62,7 +63,8 @@ export function buildCompareRanking(
         profile: candidate,
         rankScore: rankScore(factors),
         engagementRate: factors.engagementRate,
-        avgInteractions: factors.avgInteractions,
+        avgLikes: factors.avgLikes,
+        avgComments: factors.avgComments,
         followerChangePct: factors.followerChangePct,
         followerChangeEstimated: factors.followerChangeEstimated,
         category: inferCategory(candidate),
@@ -76,7 +78,7 @@ export function buildCompareRanking(
     );
 
   // Same-country benchmarks lead; same-region profiles fill the remaining rows.
-  // Within each tier the shared four-factor score decides the order.
+  // Within each tier the shared weighted score decides the order.
   rows.sort(
     (left, right) =>
       countryTier(left.countryRelationship) - countryTier(right.countryRelationship) ||

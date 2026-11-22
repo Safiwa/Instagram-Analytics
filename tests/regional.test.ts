@@ -198,7 +198,7 @@ describe("Middle East category peer", () => {
 });
 
 describe("key regional comparisons", () => {
-  it("covers the four public criteria plus the authenticity estimate", () => {
+  it("covers the five public signals plus the authenticity estimate", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
     const peer = profile("peer", 1_100_000, ["festival poetry"], { likes: 1_800 });
     const match = findRegionalCategoryPeer(target, computeMetrics(target), [peer])!;
@@ -208,13 +208,14 @@ describe("key regional comparisons", () => {
     expect(comparisons.map((row) => row.label)).toEqual([
       "Followers",
       "Engagement rate",
-      "Avg interactions",
+      "Avg likes",
+      "Avg comments",
       "Follower change",
       "Authenticity",
     ]);
     expect(comparisons[0].target).toBe("1M");
-    expect(comparisons[3].target).toContain("est.");
     expect(comparisons[4].target).toContain("est.");
+    expect(comparisons[5].target).toContain("est.");
   });
 });
 

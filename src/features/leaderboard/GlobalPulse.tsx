@@ -16,7 +16,8 @@ function followerChange(entry: LeaderboardEntry): string {
 function signalMeta(entry: LeaderboardEntry, window = false): string {
   const parts = [
     `${formatPercent(entry.engagementRate)} ER`,
-    `${formatCompact(entry.avgInteractions)} avg interactions`,
+    `${formatCompact(entry.avgLikes)} avg likes`,
+    `${formatCompact(entry.avgComments)} avg comments`,
     followerChange(entry),
   ];
   if (window) {
@@ -122,9 +123,9 @@ function RankCard({
 }
 
 const RANK_SUBTITLE =
-  "Ranked by followers (55%), engagement rate (20%), average interactions (15%) and 30-day follower change (10%)";
+  "Ranked by followers (55%), engagement rate (20%), average likes (10%), average comments (5%) and 30-day follower change (10%)";
 const REGION_RANK_SUBTITLE =
-  "Ranked by follower count first, with the same four-factor score breaking ties";
+  "Ranked by follower count first, with the same weighted score breaking ties";
 
 export async function GlobalPulse() {
   const board = await getLeaderboard();
@@ -139,9 +140,9 @@ export async function GlobalPulse() {
           Top public profiles, ranked by real data
         </h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
-          Four-factor leaderboards from the {board.tracked} public Creator and Business accounts we
+          Weighted leaderboards from the {board.tracked} public Creator and Business accounts we
           track. Country boards are ordered strictly by follower count; worldwide boards still use
-          the four-factor score with followers carrying the most weight. Rankings refresh every 15
+          the weighted score with followers carrying the most weight. Rankings refresh every 15
           minutes and every number links back to a full analysis.
         </p>
       </div>

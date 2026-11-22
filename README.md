@@ -252,7 +252,7 @@ request plus a few embed requests.
 |---|---|
 | `/` | Analysis dashboard: lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, Modash benchmark, sources, confidence |
 | `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and Middle East category benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
-| `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region four-factor rank table and remaining comparable suggestions |
+| `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region weighted rank table and remaining comparable suggestions |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
 | `/api/digest/send` | Cron-only weekly digest sender |
@@ -266,9 +266,9 @@ Graph API path. Each entry links to a full profile analysis.
 **Worldwide**
 
 - **Trending · last 15 days** — accounts with a public post in the last 15 days.
-- **High engagement** — engagement across up to 12 recent public posts ranked by the same four
-  factors as every other board: followers first, then engagement rate, average interactions and
-  30-day follower change.
+- **High engagement** — engagement across up to 12 recent public posts ranked by the same five
+  signals as every other board: followers first, then engagement rate, average likes, average
+  comments and 30-day follower change.
 
 **By country** (top 10 each, added alongside the worldwide cards)
 
@@ -276,26 +276,28 @@ Graph API path. Each entry links to a full profile analysis.
   East board covers Qatar, Saudi Arabia, Jordan, Egypt, Kuwait, UAE, Syria, Lebanon, Iraq, Palestine,
   Bahrain, Oman, Tunisia and Morocco; UAE accounts are also highlighted on their own board.
 
-### Four-factor ranking
+### Five-signal ranking
 
 Trending and High engagement use one weighted rank score
-(`rankScore()` in `src/core/analytics/rank.ts`, re-exported by `leaderboard.ts`) built from four
+(`rankScore()` in `src/core/analytics/rank.ts`, re-exported by `leaderboard.ts`) built from five
 signals, in priority order:
 
 1. **Followers** — 55%
 2. **Engagement rate** — 20%
-3. **Average interactions** — 15%
-4. **30-day follower change** — 10%
+3. **Average likes** — 10%
+4. **Average comments** — 5%
+5. **30-day follower change** — 10%
 
 Each signal is normalised to 0–100 against fixed anchors (followers: 200M ceiling; engagement: 5%
-cap; average interactions: 2M ceiling; follower change: −5% to +15%) so scores stay stable across
-refreshes. Followers carry the most weight, so a large account is not outranked by a small one with
-exceptional engagement. Follower change is an estimate for real accounts and is labelled `est.` in
-the UI. The same scoring module powers the global boards, global peer rankings and the compare-page
-ranking, so those surfaces never disagree. The Middle East profile panel starts from that score but
-adds a disclosed 10% authenticity term via `regionalRankScore()` (90% four-factor rank + 10%
-authenticity), so a lower modeled fake-follower share ranks higher there. Global boards and compare
-ranks stay exactly four-factor.
+cap; average likes: 2M ceiling; average comments: 200K ceiling; follower change: −5% to +15%) so
+scores stay stable across refreshes. Saves still count toward engagement rate, but the two
+average-interaction weights use likes and comments separately. Followers carry the most weight, so
+a large account is not outranked by a small one with exceptional engagement. Follower change is an
+estimate for real accounts and is labelled `est.` in the UI. The same scoring module powers the
+global boards, global peer rankings and the compare-page ranking, so those surfaces never disagree.
+The Middle East profile panel starts from that score but adds a disclosed 10% authenticity term via
+`regionalRankScore()` (90% weighted rank + 10% authenticity), so a lower modeled fake-follower share
+ranks higher there. Global boards and compare ranks stay exactly five-signal.
 
 The four **country boards** are strict top-ten lists by follower count: entries are sorted by
 `followers` descending first, and the same `rankScore` only breaks ties. This keeps a small account
@@ -405,9 +407,9 @@ Profile pages now surface verification, growth, and regional comparison:
   real public profile. It first prefers the same inferred country (handle, then profile text, then
   promoted hashtags/captions), falling back to same region, unknown country and then different
   country only if no better tier exists. Within that tier, candidates are scored by the shared
-  four-factor fit (followers, engagement rate, average interactions, 30-day follower change), exact
-  category and shared themes. Each peer row shows its inferred category and country badges,
-  match score, followers, engagement, average interactions and estimated follower change, why it
+  weighted fit (followers, engagement rate, average likes, average comments, 30-day follower
+  change), exact category and shared themes. Each peer row shows its inferred category and country
+  badges, match score, followers, engagement, average likes, average comments and estimated follower change, why it
   matched, and how this profile compares, with a link to a side-by-side comparison. The same
   matched set powers a five-profile ranking table (`peer-ranking`): the searched profile plus its
   four closest category peers, ordered by `rankScore`, with the searched profile's rank (for example,
@@ -433,11 +435,11 @@ Profile pages now surface verification, growth, and regional comparison:
   airlines, malls and news outlets cannot become creator peers just because their captions mention
   beauty or travel. The same filtered set feeds the highlighted peer and the ranking table, so they
   cannot disagree. It shows an **80%+ relative match** (scaled 80–99, not an identity claim), key
-  comparisons (Followers, Engagement rate, Avg interactions, Follower change and Authenticity,
-  labeled `est.` for real accounts), and a **Middle East rank** of five profiles — the searched
-  account plus its four best in-band peers — ordered by `regionalRankScore()` — 90% four-factor rank
-  plus 10% authenticity, so lower modeled fake-follower share ranks higher. Each row shows the
-  inferred category label, country, average interactions and
+  comparisons (Followers, Engagement rate, Avg likes, Avg comments, Follower change and
+  Authenticity, labeled `est.` for real accounts), and a **Middle East rank** of five profiles — the
+  searched account plus its four best in-band peers — ordered by `regionalRankScore()` — 90% weighted
+  rank plus 10% authenticity, so lower modeled fake-follower share ranks higher. Each row shows the
+  inferred category label, country, average likes, average comments and
   follower change. If no tracked Middle East account is inside the band with a compatible creator
   label, the panel shows a short empty state instead of substituting an out-of-band account.
 - **No repeated UAE lifestyle peer** (`src/core/analytics/exclusive.ts`) treats `ola.alqodmani`
@@ -453,7 +455,7 @@ Profile pages now surface verification, growth, and regional comparison:
   the benchmark anchor. `buildCompareRanking()` in `src/core/analytics/compare.ts` lists other real
   public profiles from the same inferred country first and then the same wider region, keeps the
   category gate, removes every handle already in the comparison, and orders the rows by the shared
-  four-factor `rankScore` (`compare-rank`). This replaces recently viewed handles being recycled as
+  five-signal `rankScore` (`compare-rank`). This replaces recently viewed handles being recycled as
   "suggested peers": `findSimilarPeers()` suggestions now exclude the ranked handles too, and only
   the remaining comparables are shown. Each suggestion links to a profile or adds it to the current
   comparison, so benchmarking and the PDF report can be extended with relevant peers rather than
@@ -642,7 +644,7 @@ src/
 ├─ app/                         # routes: home, profile, compare, report API, local Instagram proxy
 ├─ components/                  # MetricCard, EmptyState
 ├─ core/
-│  ├─ analytics/compare.ts      # same-country/region four-factor compare ranking
+│  ├─ analytics/compare.ts      # same-country/region weighted compare ranking
 │  ├─ analytics/exclusive.ts    # mutually exclusive curated peer groups per profile page
 │  ├─ analytics/estimates.ts    # public-signal fake/authenticity/growth models
 │  ├─ analytics/metrics.ts      # measured metrics + disclosed estimate fallback
