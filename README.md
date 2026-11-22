@@ -419,13 +419,16 @@ Profile pages now surface verification, growth, and regional comparison:
 - **Middle East category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
   `src/core/data/regional.ts`) replaces the old UAE/GCC panel. Its pool is every tracked profile on
   the Middle East homepage board (`isInRegionBoard(username, "middle-east")`), which includes the
-  UAE accounts and the other tracked Middle East countries. The curated pool includes six real,
-  publicly discoverable creator accounts in the same follower band — `alisha_sajjal`, `alitofique`,
-  `hinaashh`, `jexmi`, `najet.dh` and `elsakahwaji` — so a five-profile rank can appear without
-  relaxing any gate. A candidate must (1) sit inside the
+  UAE accounts and the other tracked Middle East countries. The curated pool includes real,
+  publicly discoverable creator accounts in the relevant follower bands: `alisha_sajjal`,
+  `alitofique`, `hinaashh`, `jexmi`, `najet.dh` and `elsakahwaji` around 250–327K, plus
+  `donya_esmailiii`, `aiamwa`, `dina_h_ussien`, `poojaabis`, `taranum_sshahin`, `dina.ak`,
+  `anshi_pandyala_official` and `zeniamk` around 46–72K. These fill five-profile ranks at both the
+  larger and smaller UAE creator accounts without relaxing any gate. A candidate must (1) sit inside the
   **±30% follower band**, (2) have an explicit category label inferred from its public display
   name/bio via `inferExplicitCategory()` (fallback `Digital creator` / `Public figure` labels do not
-  qualify), and (3) be in the same creator group under `isSimilarCategory()`. Post-derived
+  qualify), and (3) be in the same creator group under `isSimilarCategory()`. An exact explicit
+  label match is preferred over another creator label in the same group. Post-derived
   activity from `inferPostActivity()` is supporting evidence only and never a hard gate, so hotels,
   airlines, malls and news outlets cannot become creator peers just because their captions mention
   beauty or travel. The same filtered set feeds the highlighted peer and the ranking table, so they
@@ -441,7 +444,8 @@ Profile pages now surface verification, growth, and regional comparison:
   and `trending.vibz.uae` as a mutually exclusive curated group. After all profile-page benchmark
   surfaces are built, only the better-scoring member is kept; the other is removed from the
   closest-peer card, both ranking tables and the regional comparison, with ranks and totals
-  recomputed.
+  recomputed. When the searched profile is itself one of the two, that profile is the row we keep
+  and the other account is removed from every peer surface.
 
 - **Compare rank and suggestions** (`src/app/compare/page.tsx`) use the first selected profile as
   the benchmark anchor. `buildCompareRanking()` in `src/core/analytics/compare.ts` lists other real

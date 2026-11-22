@@ -40,6 +40,9 @@ export type RegionalPeer = {
   // The visible category comes from the public profile label (display name/bio).
   // Post-derived activity is supporting evidence, never the category gate.
   category: string;
+  // True when the candidate's explicit label exactly matches the searched
+  // profile's label; otherwise it is only in the same broader creator group.
+  sameCategoryLabel: boolean;
   sharedActivity: string[];
   country: CountrySignal;
   countryRelationship: CountryRelationship;
@@ -85,7 +88,8 @@ function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): 
 
 // The Middle East panel keeps the curated pool and the hard ±30% follower band.
 // Category labels decide similarity: both sides must have an explicit public
-// creator label in the same creator group. Fallback labels do not qualify. Public
+// creator label in the same creator group, and an exact label match is preferred
+// over a merely compatible creator label. Fallback labels do not qualify. Public
 // post activity only strengthens the match, so a hotel or news account can no
 // longer become a creator peer through its captions.
 function rankedCandidates(
@@ -121,13 +125,14 @@ function rankedCandidates(
       const candidateCountry = inferCountrySignal(candidate);
       const relationship = countryRelationship(targetCountry, candidateCountry);
       const candidateCategory = inferExplicitCategory(candidate) ?? inferCategory(candidate);
+      const sameCategoryLabel = inferExplicitCategory(candidate) === targetCategory;
       const shared = sharedPostActivity(target, candidate);
       const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
       const activityScore = shared.length > 0 ? clamp(80 + shared.length * 5, 0, 100) : 75;
       const raw = factorScore * 0.55 + countryScore(relationship) * 0.3 + activityScore * 0.15;
 
       const matchReasons = [
-        `same creator category: ${candidateCategory}`,
+        `${sameCategoryLabel ? "same category label" : "same creator category group"}: ${candidateCategory}`,
         ...(shared.length > 0 ? [`shared activity: ${shared.join(", ")}`] : []),
         `regional fit ${Math.round(factorScore)}%`,
       ];
@@ -138,6 +143,7 @@ function rankedCandidates(
         factors: candidateFactors,
         matchScore: clampRankScoreToMatch(raw),
         category: candidateCategory,
+        sameCategoryLabel,
         sharedActivity: shared,
         country: candidateCountry,
         countryRelationship: relationship,
@@ -146,6 +152,7 @@ function rankedCandidates(
     })
     .sort(
       (left, right) =>
+        Number(right.sameCategoryLabel) - Number(left.sameCategoryLabel) ||
         right.matchScore - left.matchScore ||
         regionalRankScore(right.factors, right.metrics.authenticityPct) -
           regionalRankScore(left.factors, left.metrics.authenticityPct) ||

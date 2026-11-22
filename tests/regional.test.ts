@@ -99,6 +99,28 @@ describe("Middle East category peer", () => {
     expect(match?.category).toBe("Digital creator");
   });
 
+  it("prefers an exact category label over another compatible creator label", () => {
+    const target = profile("target", 60_000, ["festival poetry"], {
+      displayName: "Daily Posts",
+      bio: "Content creator sharing more",
+    });
+    const exact = profile("exact", 60_000, ["festival poetry"], {
+      displayName: "Exact Creator",
+      bio: "Content creator with honest reviews",
+      likes: 100,
+    });
+    const related = profile("related", 60_000, ["festival poetry"], {
+      displayName: "Digital Creator",
+      bio: "Digital creator",
+      likes: 5_000,
+    });
+
+    const match = findRegionalCategoryPeer(target, computeMetrics(target), [related, exact]);
+
+    expect(match?.profile.username).toBe("exact");
+    expect(match?.sameCategoryLabel).toBe(true);
+  });
+
   it("rejects fallback labels that are not explicit public categories", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
     const fallback = profile("qatar", 1_100_000, ["travel destination"], {
@@ -160,7 +182,7 @@ describe("Middle East category peer", () => {
     const match = findRegionalCategoryPeer(target, computeMetrics(target), [peer])!;
     const reasons = match.matchReasons.join(" ");
 
-    expect(reasons).toContain("same creator category: Digital creator");
+    expect(reasons).toContain("same category label: Digital creator");
     expect(reasons).toContain("shared activity:");
     expect(reasons).not.toContain("±30%");
     expect(reasons).not.toContain("Reels/post captions and hashtags only");
@@ -267,6 +289,51 @@ describe("Middle East authenticity-aware ranking", () => {
     expect(ranking?.rows).toHaveLength(5); // target + top 4 peers
     expect(ranking?.total).toBe(5);
     expect(ranking!.rows.filter((row) => row.isTarget)).toHaveLength(1);
+  });
+
+  it("fills the panel for a small UAE content creator with real-label peers", () => {
+    const target = profile("target", 58_940, ["lifestyle spots in UAE"], {
+      displayName: "Hadia Nashed",
+      bio: "Content Creator UGC Brand Storyteller",
+      likes: 400,
+    });
+    const peers = [
+      profile("wide.content", 71_457, ["skincare and beauty"], {
+        displayName: "Aika",
+        bio: "UAE Content Creator | Beauty",
+      }),
+      profile("content.one", 59_963, ["skincare and makeup"], {
+        displayName: "Dina Hussien",
+        bio: "Content creator and UGC Creator",
+      }),
+      profile("content.two", 58_197, ["beauty and makeup"], {
+        displayName: "Pooja Biswas",
+        bio: "Content Creator and makeup artist",
+      }),
+      profile("beauty.one", 61_982, ["beauty and skincare"], {
+        displayName: "Taranum",
+        bio: "Beauty and Skincare creator",
+      }),
+      profile("beauty.two", 60_264, ["fashion and beauty"], {
+        displayName: "Dina Abdul",
+        bio: "Fashion and Beauty lifestyle",
+      }),
+      profile("model.one", 65_744, ["fashion and modelling"], {
+        displayName: "Anshi Aneesh",
+        bio: "Model in UAE",
+      }),
+      profile("small.beauty", 46_091, ["beauty and travel"], {
+        displayName: "Zenia Khan",
+        bio: "Dubai Creator | Beauty and Travel",
+      }),
+    ];
+
+    const ranking = buildRegionalRanking(target, computeMetrics(target), [target, ...peers]);
+
+    expect(ranking?.total).toBe(5);
+    expect(ranking?.rows.filter((row) => row.isTarget)).toHaveLength(1);
+    expect(ranking!.rows.every((row) => row.profile.followers >= 41_258)).toBe(true);
+    expect(ranking!.rows.every((row) => row.profile.followers <= 76_622)).toBe(true);
   });
 
   it("still supports an explicit top-10 limit after the filters", () => {

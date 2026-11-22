@@ -59,6 +59,7 @@ function regionalPeer(candidate: CreatorProfile, score: number): RegionalPeer {
     factors: rankFactors(candidate, metrics, NOW),
     matchScore: score,
     category: "Content creator",
+    sameCategoryLabel: true,
     sharedActivity: [],
     country: inferCountrySignal(candidate),
     countryRelationship: "same-country" as CountryRelationship,
@@ -164,6 +165,48 @@ describe("exclusive peer groups", () => {
     expect(allVisibleHandles(result)).not.toContain("trending.vibz.uae");
     expect(allVisibleHandles(result)).toContain("ola.alqodmani");
     expect(result.regionalPeer).toBeNull();
+  });
+
+  it("drops the other exclusive member when the searched profile is in the group", () => {
+    const target = profile("trending.vibz.uae", 58_900);
+    const duplicate = profile("ola.alqodmani", 51_500);
+    const independent = profile("donya_esmailiii", 70_000);
+    const input: ProfileBenchmarks = {
+      peer: peerMatch(duplicate, 95),
+      ranking: {
+        rows: [
+          peerRow(target, true, null, 50),
+          peerRow(duplicate, false, 95, 40),
+          peerRow(independent, false, 80, 45),
+        ],
+        targetRank: 2,
+        total: 3,
+        outperformedPercent: 50,
+      },
+      regionalPeer: regionalPeer(duplicate, 95),
+      regionalRanking: {
+        rows: [
+          regionalRow(target, true, null, 50),
+          regionalRow(duplicate, false, 95, 40),
+          regionalRow(independent, false, 80, 45),
+        ],
+        targetRank: 2,
+        total: 3,
+        outperformedPercent: 50,
+      },
+    };
+
+    const result = dedupeProfileBenchmarks(input);
+
+    expect(allVisibleHandles(result)).not.toContain("ola.alqodmani");
+    expect(allVisibleHandles(result)).toContain("trending.vibz.uae");
+    expect(result.peer).toBeNull();
+    expect(result.regionalPeer).toBeNull();
+    expect(result.ranking?.rows.map((row) => row.profile.username)).toEqual([
+      "trending.vibz.uae",
+      "donya_esmailiii",
+    ]);
+    expect(result.regionalRanking?.total).toBe(2);
   });
 
   it("recomputes ranking totals after removing the duplicate", () => {

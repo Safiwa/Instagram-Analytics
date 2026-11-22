@@ -112,6 +112,14 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   alitofique: "uae",
   hinaashh: "uae",
   jexmi: "uae",
+  donya_esmailiii: "uae",
+  aiamwa: "uae",
+  dina_h_ussien: "uae",
+  poojaabis: "uae",
+  taranum_sshahin: "uae",
+  "dina.ak": "uae",
+  anshi_pandyala_official: "uae",
+  zeniamk: "uae",
 
   // Other Middle East creators (Lebanon and a creator without a published country)
   elsakahwaji: "middle-east",

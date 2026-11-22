@@ -140,6 +140,14 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   alitofique: "United Arab Emirates",
   hinaashh: "United Arab Emirates",
   jexmi: "United Arab Emirates",
+  donya_esmailiii: "United Arab Emirates",
+  aiamwa: "United Arab Emirates",
+  dina_h_ussien: "United Arab Emirates",
+  poojaabis: "United Arab Emirates",
+  taranum_sshahin: "United Arab Emirates",
+  "dina.ak": "United Arab Emirates",
+  anshi_pandyala_official: "United Arab Emirates",
+  zeniamk: "United Arab Emirates",
   elsakahwaji: "Lebanon",
 };
 

@@ -94,6 +94,17 @@ export const LEADERBOARD_HANDLES = [
   "jexmi",
   "najet.dh",
   "elsakahwaji",
+  // Real, explicitly labeled UAE creators in the 46–72K Middle East band. They
+  // fill the five-profile regional rank for the smaller UAE creator accounts
+  // without widening the ±30% gate or accepting fallback category labels.
+  "donya_esmailiii",
+  "aiamwa",
+  "dina_h_ussien",
+  "poojaabis",
+  "taranum_sshahin",
+  "dina.ak",
+  "anshi_pandyala_official",
+  "zeniamk",
 ] as const;
 
 // Real, public UAE/GCC accounts verified through the live Instagram Business Discovery
@@ -119,6 +130,14 @@ export const UAE_GCC_HANDLES = [
   "alitofique",
   "hinaashh",
   "jexmi",
+  "donya_esmailiii",
+  "aiamwa",
+  "dina_h_ussien",
+  "poojaabis",
+  "taranum_sshahin",
+  "dina.ak",
+  "anshi_pandyala_official",
+  "zeniamk",
 ] as const;
 
 export type LeaderboardEntry = {

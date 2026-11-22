@@ -33,7 +33,7 @@ function groupKey(group: ReadonlySet<string>): string {
   return [...group].sort().join("|");
 }
 
-function excludedHandles(candidates: Candidate[]): Set<string> {
+function excludedHandles(candidates: Candidate[], targets: ReadonlySet<string>): Set<string> {
   const groups = new Map<
     string,
     { group: ReadonlySet<string>; best: Candidate | null }
@@ -42,10 +42,27 @@ function excludedHandles(candidates: Candidate[]): Set<string> {
     groups.set(groupKey(group), { group, best: null });
   }
 
+  const excluded = new Set<string>();
+
+  // When the searched profile itself belongs to an exclusive group, it is the
+  // row we must keep. Every other member is a duplicate on that page, even if
+  // it scored better as a candidate peer.
+  for (const group of EXCLUSIVE_PEER_GROUPS) {
+    const targetMember = [...group].find((member) => targets.has(member));
+    if (!targetMember) {
+      continue;
+    }
+    for (const member of group) {
+      if (member !== targetMember) {
+        excluded.add(member);
+      }
+    }
+  }
+
   for (const candidate of candidates) {
     const username = normalize(candidate.profile.username);
     const group = EXCLUSIVE_PEER_GROUPS.find((entry) => entry.has(username));
-    if (!group) {
+    if (!group || excluded.has(username)) {
       continue;
     }
     const current = groups.get(groupKey(group));
@@ -62,7 +79,6 @@ function excludedHandles(candidates: Candidate[]): Set<string> {
     }
   }
 
-  const excluded = new Set<string>();
   for (const { group, best } of groups.values()) {
     if (!best) {
       continue;
@@ -121,7 +137,15 @@ export function dedupeProfileBenchmarks(input: ProfileBenchmarks): ProfileBenchm
       })),
   ];
 
-  const excluded = excludedHandles(candidates);
+  const targets = new Set(
+    [
+      ...(input.ranking?.rows ?? []),
+      ...(input.regionalRanking?.rows ?? []),
+    ]
+      .filter((row) => row.isTarget)
+      .map((row) => normalize(row.profile.username)),
+  );
+  const excluded = excludedHandles(candidates, targets);
   if (excluded.size === 0) {
     return input;
   }
