@@ -415,6 +415,11 @@ Profile pages now surface verification, growth, and regional comparison:
   interactions and follower change. The regional pool (`UAE_GCC_HANDLES` in `leaderboard.ts`)
   consists of real public accounts verified through the live Business Discovery path; it is a
   curated reference set, not a complete directory of every regional account.
+- **No repeated UAE lifestyle peer** (`src/core/analytics/exclusive.ts`) treats `ola.alqodmani`
+  and `trending.vibz.uae` as a mutually exclusive curated group. After all profile-page benchmark
+  surfaces are built, only the better-scoring member is kept; the other is removed from the
+  closest-peer card, both ranking tables and the regional comparison, with ranks and totals
+  recomputed.
 
 - **Compare rank and suggestions** (`src/app/compare/page.tsx`) use the first selected profile as
   the benchmark anchor. `buildCompareRanking()` in `src/core/analytics/compare.ts` lists other real
@@ -610,6 +615,7 @@ src/
 ├─ components/                  # MetricCard, EmptyState
 ├─ core/
 │  ├─ analytics/compare.ts      # same-country/region four-factor compare ranking
+│  ├─ analytics/exclusive.ts    # mutually exclusive curated peer groups per profile page
 │  ├─ analytics/estimates.ts    # public-signal fake/authenticity/growth models
 │  ├─ analytics/metrics.ts      # measured metrics + disclosed estimate fallback
 │  ├─ data/adapter.ts           # demo, public, and optional official resolution

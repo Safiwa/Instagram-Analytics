@@ -147,6 +147,7 @@ src/
 │  ├─ data/public.ts                     # public-page reader, proxy bridge, parsers, pk helpers, cache, error kinds
 │  ├─ data/live.ts                       # optional Business Discovery fetch, mapping, cache, error kinds
 │  ├─ analytics/compare.ts               # same-country/region four-factor compare ranking
+│  ├─ analytics/exclusive.ts             # mutually exclusive curated peer groups per profile page
 │  ├─ analytics/estimates.ts             # public-signal models + confidence/signals/methodology
 │  ├─ analytics/metrics.ts               # measured metrics + disclosed estimate fallback
 │  ├─ digest/validation.ts               # signup validation, normalization, 30-day trial end
@@ -169,6 +170,7 @@ src/
    ├─ public.test.ts
    ├─ proxy.test.ts
    ├─ compare.test.ts
+   ├─ exclusive.test.ts
    └─ digest.test.ts
 ```
 
@@ -183,6 +185,7 @@ src/
 - Any failure (unknown handle, >4 handles, rate limit, network, PDF build error) becomes an `EmptyState`, `400`, or `500` **and** is logged — never an unhandled throw.
 - `core/data/public.ts` owns every public-page selector and embed parser; UI and metrics never parse HTML.
 - Country homepage boards sort by follower count descending first; `rankScore()` only breaks ties. Worldwide boards keep the weighted four-factor order with followers at 55%.
+- Profile-page benchmarks treat `ola.alqodmani` and `trending.vibz.uae` as a mutually exclusive curated UAE lifestyle group: only the better-scoring member appears across the closest-peer card, peer rank table, regional peer card and regional rank table.
 - Compare pages rank other tracked public profiles from the anchor account's inferred country first, then the same wider region, using `rankScore()`. Handles already in the comparison are excluded from both the `compare-rank` table and the remaining `compare-suggestions`.
 - No placeholders, no `TODO`, no speculative abstraction.
 
