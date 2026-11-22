@@ -138,6 +138,17 @@ function byRank(left: LeaderboardEntry, right: LeaderboardEntry): number {
   return right.rankScore - left.rankScore || right.followers - left.followers;
 }
 
+// Country boards are "top ten" lists, so follower count is the primary key. The
+// four-factor score only breaks ties; a small account with a viral post cannot
+// take a top-ten slot from a materially larger account in the same region.
+function byFollowersFirst(left: LeaderboardEntry, right: LeaderboardEntry): number {
+  return (
+    right.followers - left.followers ||
+    right.rankScore - left.rankScore ||
+    left.username.localeCompare(right.username)
+  );
+}
+
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const WINDOW_MS = TRENDING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 const FETCH_CHUNK = 10;
@@ -193,7 +204,7 @@ function regionalBoards(entries: LeaderboardEntry[]): Record<Region, Leaderboard
   for (const board of REGION_BOARDS) {
     boards[board.id] = entries
       .filter((entry) => isInRegionBoard(entry.username, board.id))
-      .sort(byRank)
+      .sort(byFollowersFirst)
       .slice(0, LEADERBOARD_SIZE);
   }
   return boards;

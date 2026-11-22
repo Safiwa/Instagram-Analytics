@@ -278,11 +278,9 @@ Graph API path. Each entry links to a full profile analysis.
 
 ### Four-factor ranking
 
-Every homepage board — Trending, High engagement and the four country boards — no longer ranks by
-engagement rate alone, which promoted small accounts with one viral post above million-follower
-accounts. They all use one weighted rank
-score (`rankScore()` in `src/core/analytics/rank.ts`, re-exported by `leaderboard.ts`) built from
-four signals, in priority order:
+Trending and High engagement use one weighted rank score
+(`rankScore()` in `src/core/analytics/rank.ts`, re-exported by `leaderboard.ts`) built from four
+signals, in priority order:
 
 1. **Followers** — 55%
 2. **Engagement rate** — 20%
@@ -293,8 +291,13 @@ Each signal is normalised to 0–100 against fixed anchors (followers: 200M ceil
 cap; average interactions: 2M ceiling; follower change: −5% to +15%) so scores stay stable across
 refreshes. Followers carry the most weight, so a large account is not outranked by a small one with
 exceptional engagement. Follower change is an estimate for real accounts and is labelled `est.` in
-the UI. The same scoring module powers the global peer ranking, the UAE/GCC peer ranking and the
-compare-page suggestions, so "similar profile" and "rank" never use different definitions.
+the UI. The same scoring module powers the global boards, peer rankings, the UAE/GCC peer ranking
+and the compare-page ranking, so "similar profile" and "rank" never use different definitions.
+
+The four **country boards** are strict top-ten lists by follower count: entries are sorted by
+`followers` descending first, and the same `rankScore` only breaks ties. This keeps a small account
+with one viral post from taking a UAE or Middle East top-ten slot from a materially larger account.
+Their subtitles disclose the followers-first order.
 
 Country is **curated, not inferred from Instagram demographics**: Instagram does not publish an
 account's country, so `src/core/data/regions.ts` maps each tracked handle to a board from its public

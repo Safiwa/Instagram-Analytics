@@ -101,13 +101,27 @@ describe("four-factor leaderboard ranking", () => {
     expect(board.engaged[0].engagementRate).toBeLessThan(board.engaged[1].engagementRate);
   });
 
-  it("ranks every country board by four factors too", () => {
+  it("ranks country boards by follower count before the four-factor score", () => {
     const big = profile("emirates", 10_000_000, [post("a", 2, 100_000)]);
     const small = profile("flydubai", 5_000, [post("b", 2, 4_000)]);
     const board = rankProfiles([small, big], NOW);
 
     expect(board.regional.uae.map((entry) => entry.username)).toEqual(["emirates", "flydubai"]);
-    expect(board.regional.uae[0].rankScore).toBeGreaterThan(board.regional.uae[1].rankScore);
+    expect(board.regional.uae[0].followers).toBeGreaterThan(board.regional.uae[1].followers);
+  });
+
+  it("does not let a small high-engagement account take a country top-ten slot", () => {
+    const larger = profile("visitbahrain", 100_000, [post("a", 2, 1_000)]);
+    const viralSmall = profile("visitlebanon", 1_000, [post("b", 2, 50_000)]);
+    const board = rankProfiles([viralSmall, larger], NOW);
+
+    expect(board.regional["middle-east"].map((entry) => entry.username)).toEqual([
+      "visitbahrain",
+      "visitlebanon",
+    ]);
+    expect(board.regional["middle-east"][1].rankScore).toBeGreaterThan(
+      board.regional["middle-east"][0].rankScore,
+    );
   });
 
   it("lets every one of the four signals raise the rank score", () => {

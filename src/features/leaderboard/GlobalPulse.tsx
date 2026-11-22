@@ -123,6 +123,8 @@ function RankCard({
 
 const RANK_SUBTITLE =
   "Ranked by followers (55%), engagement rate (20%), average interactions (15%) and 30-day follower change (10%)";
+const REGION_RANK_SUBTITLE =
+  "Ranked by follower count first, with the same four-factor score breaking ties";
 
 export async function GlobalPulse() {
   const board = await getLeaderboard();
@@ -138,9 +140,9 @@ export async function GlobalPulse() {
         </h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
           Four-factor leaderboards from the {board.tracked} public Creator and Business accounts we
-          track. Followers come first so million-follower accounts are not pushed down by a small
-          account with one viral post. Rankings refresh every 15 minutes and every number links back
-          to a full analysis.
+          track. Country boards are ordered strictly by follower count; worldwide boards still use
+          the four-factor score with followers carrying the most weight. Rankings refresh every 15
+          minutes and every number links back to a full analysis.
         </p>
       </div>
 
@@ -185,7 +187,7 @@ export async function GlobalPulse() {
               <RankCard
                 key={definition.id}
                 title={definition.label}
-                subtitle={`${definition.description}. ${RANK_SUBTITLE}.`}
+                subtitle={`${definition.description}. ${REGION_RANK_SUBTITLE}.`}
                 icon={MapPin}
                 entries={entries}
                 emptyMessage={`No tracked account in ${definition.label.replace(" · top 10", "")} yet. Check back shortly.`}
