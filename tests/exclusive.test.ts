@@ -59,7 +59,7 @@ function regionalPeer(candidate: CreatorProfile, score: number): RegionalPeer {
     factors: rankFactors(candidate, metrics, NOW),
     matchScore: score,
     category: "Content creator",
-    sharedBusiness: [],
+    sharedActivity: [],
     country: inferCountrySignal(candidate),
     countryRelationship: "same-country" as CountryRelationship,
     matchReasons: [],

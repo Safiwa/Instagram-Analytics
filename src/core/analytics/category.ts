@@ -193,3 +193,85 @@ export function categoryGroup(category: string): string {
 export function isSimilarCategory(left: string, right: string): boolean {
   return left === right || categoryGroup(left) === categoryGroup(right);
 }
+
+// The Middle East profile benchmark deliberately ignores display names and
+// bios. These rules read only Reel/post captions and hashtags, so an account's
+// claimed category cannot make it look similar; its actual public posts must.
+const POST_ACTIVITY_RULES: Rule[] = [
+  {
+    label: "News & media",
+    keywords: ["news", "media", "headlines", "magazine", "breaking", "press"],
+  },
+  {
+    label: "Travel & tourism",
+    keywords: ["airline", "airways", "fly better", "flight", "hotel", "tourism", "landmark"],
+  },
+  {
+    label: "Business & brand",
+    keywords: ["brand", "mall", "retail", "shop", "store", "company", "product"],
+  },
+  { label: "Sport", keywords: ["football", "soccer", "cricket", "nba", "f1", "sport"] },
+  {
+    label: "Public figure",
+    keywords: [
+      "actor",
+      "acting",
+      "movie",
+      "film",
+      "cinema",
+      "award",
+      "grammy",
+      "red carpet",
+      "celebrity",
+      "interview",
+      "poetry",
+      "poem",
+      "festival",
+      "concert",
+      "شعر",
+      "فيلم",
+      "مهرجان",
+      "حفل",
+      "جائزة",
+      "غرامي",
+    ],
+  },
+  {
+    label: "Beauty, cosmetic & personal care",
+    keywords: ["beauty", "makeup", "cosmetic", "skincare", "clarins", "product review"],
+  },
+  {
+    label: "Music",
+    keywords: ["music", "song", "singer", "band", "dj", "غناء", "موسيقى"],
+  },
+  { label: "Fashion model / Model", keywords: ["fashion", "style", "outfit", "runway"] },
+  {
+    label: "Travel blogger",
+    keywords: ["travel", "trip", "wander", "destination", "سفر", "رحلة"],
+  },
+  { label: "Food blogger", keywords: ["food", "chef", "recipe", "cooking", "restaurant", "cafe"] },
+  { label: "Fitness model", keywords: ["fitness", "gym", "workout", "training"] },
+  { label: "Digital creator", keywords: ["creator", "vlog", "reel", "video"] },
+];
+
+function matchesPostKeyword(text: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|\\W)${escaped}`, "iu").test(text);
+}
+
+export function postActivityText(profile: CreatorProfile): string {
+  return profile.recentPosts
+    .flatMap((post) => [post.caption ?? "", ...(post.hashtags ?? [])])
+    .join(" ");
+}
+
+// Returns every activity inferred from public Reels/posts. Falling back to
+// "Digital creator" keeps creator accounts comparable when they do not use any
+// of the tracked keywords, while business/news/travel accounts stay isolated.
+export function inferPostActivity(profile: CreatorProfile): string[] {
+  const text = postActivityText(profile);
+  const labels = POST_ACTIVITY_RULES.filter((rule) =>
+    rule.keywords.some((keyword) => matchesPostKeyword(text, keyword)),
+  ).map((rule) => rule.label);
+  return labels.length > 0 ? [...new Set(labels)] : ["Digital creator"];
+}

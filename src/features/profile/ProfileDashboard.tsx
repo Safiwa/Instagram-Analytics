@@ -801,19 +801,19 @@ export function ProfileDashboard({
           </span>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
-              UAE &amp; GCC category benchmark
+              Middle East activity benchmark
             </p>
             <h3 className="mt-1 text-base font-semibold text-slate-950">
-              Closest regional category profile and where this account sits
+              Closest Middle East profile and where this account sits
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              We match this profile only to real public UAE/GCC accounts in the same or a closely
-              related category (for example Digital creator, Blogger, Public figure, or Beauty),
-              prefer the same inferred country, then rank that group by followers, engagement rate,
-              average interactions and follower change. Match scores are relative to this curated
-              regional pool, not an absolute identity claim. Instagram does not publish account
-              country, so country is inferred from the handle, profile text, hashtags and promoted
-              locations.
+              We compare only with real public Middle East accounts whose followers are within ±30%
+              of this profile ({formatCompact(Math.round(profile.followers * 0.7))}–
+              {formatCompact(Math.round(profile.followers * 1.3))}). Similar category or activity is
+              inferred only from public Reel/post captions and hashtags — never the display name or
+              bio. The group is ranked by followers 55%, engagement 20%, average interactions 15% and
+              follower change 10%. Instagram does not publish account country, so the country badge is
+              inferred.
             </p>
           </div>
         </div>
@@ -839,14 +839,20 @@ export function ProfileDashboard({
                   <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
                     {regionalPeer.category}
                   </span>
+                  <span
+                    data-testid="regional-follower-band"
+                    className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700"
+                  >
+                    ±30% follower band
+                  </span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                     {regionalPeer.country.label}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500">@{regionalPeer.profile.username}</p>
-                {regionalPeer.sharedBusiness.length > 0 ? (
+                {regionalPeer.sharedActivity.length > 0 ? (
                   <p className="text-xs text-slate-500">
-                    Shared business themes: {regionalPeer.sharedBusiness.join(", ")}
+                    Shared activity from Reels/posts: {regionalPeer.sharedActivity.join(", ")}
                   </p>
                 ) : null}
                 <p className="text-xs leading-relaxed text-slate-600">
@@ -889,7 +895,10 @@ export function ProfileDashboard({
           </>
         ) : (
           <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No comparable UAE/GCC profile is available right now. Check back shortly.
+            No comparable Middle East profile is available right now. We only compare accounts with{" "}
+            {formatCompact(Math.round(profile.followers * 0.7))}–
+            {formatCompact(Math.round(profile.followers * 1.3))} followers (±30%) and matching activity
+            inferred from Reels/posts and hashtags.
           </p>
         )}
 
@@ -898,7 +907,7 @@ export function ProfileDashboard({
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-slate-950">
-                  Rank #{regionalRanking.targetRank} of {regionalRanking.total} UAE/GCC profiles
+                  Rank #{regionalRanking.targetRank} of {regionalRanking.total} Middle East profiles
                 </p>
                 <p className="text-xs text-slate-500">
                   Rank score: 55% followers, 20% engagement, 15% avg interactions, 10% follower
@@ -945,7 +954,7 @@ export function ProfileDashboard({
                     <p className="truncate text-xs text-slate-500">
                       @{row.profile.username} · {row.category} ·{" "}
                       {formatCompact(row.profile.followers)} followers
-                      {row.matchScore !== null ? ` · ${row.matchScore}% category match` : ""}
+                      {row.matchScore !== null ? ` · ${row.matchScore}% activity match` : ""}
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
                       {row.country.label} · {formatCompact(row.avgInteractions)} avg interactions ·{" "}
@@ -970,7 +979,8 @@ export function ProfileDashboard({
           </div>
         ) : (
           <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No UAE/GCC account in a similar category is available right now. Check back shortly.
+            No Middle East account in a similar activity band is available right now. Check back
+            shortly.
           </p>
         )}
       </section>

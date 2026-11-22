@@ -1,21 +1,20 @@
 import { formatCompact, formatPercent } from "../format";
 import type { CreatorProfile } from "../data/types";
-import { inferCategory, isSimilarCategory } from "./category";
+import { inferPostActivity, isSimilarCategory } from "./category";
 import {
   countryReason,
   countryRelationship,
   countryScore,
-  countryTier,
   inferCountrySignal,
   type CountryRelationship,
   type CountrySignal,
 } from "./country";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
-import { profileTopics } from "./peer";
 import {
   clampRankScoreToMatch,
   compareRank,
-  isComparableRange,
+  FOLLOWER_LATENCY,
+  isWithinFollowerLatency,
   rankFactorSimilarity,
   rankFactors,
   rankScore,
@@ -34,8 +33,10 @@ export type RegionalPeer = {
   metrics: ProfileMetrics;
   factors: RankFactors;
   matchScore: number;
+  // Post-derived activity (Reels/post captions and hashtags only), never the
+  // display name or biography.
   category: string;
-  sharedBusiness: string[];
+  sharedActivity: string[];
   country: CountrySignal;
   countryRelationship: CountryRelationship;
   matchReasons: string[];
@@ -70,88 +71,72 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-function sharedTopics(target: CreatorProfile, candidate: CreatorProfile): string[] {
-  const candidateTopics = profileTopics(candidate);
-  return [...profileTopics(target)].filter((topic) => candidateTopics.has(topic));
+function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): string[] {
+  const targetActivity = inferPostActivity(target);
+  const candidateActivity = inferPostActivity(candidate);
+  return targetActivity.filter((activity) =>
+    candidateActivity.some((other) => isSimilarCategory(activity, other)),
+  );
 }
 
-type RankOptions = {
-  // The highlighted UAE/GCC benchmark is range-gated; the leaderboard table is
-  // not, so it always has enough peers to show a meaningful rank.
-  requireComparableRange?: boolean;
-};
+function followerBand(followers: number): string {
+  return `${formatCompact(Math.round(followers * (1 - FOLLOWER_LATENCY)))}–${formatCompact(
+    Math.round(followers * (1 + FOLLOWER_LATENCY)),
+  )}`;
+}
 
+// The Middle East panel is deliberately stricter than the global peer pool:
+// every candidate must be inside the ±30% follower band AND share an activity
+// inferred only from public Reels/post captions and hashtags. The same filtered
+// set feeds the highlighted peer and the ranking table, so they never disagree.
 function rankedCandidates(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
-  options: RankOptions = {},
 ): RegionalPeer[] {
-  const requireComparableRange = options.requireComparableRange !== false;
-  const targetCategory = inferCategory(target);
   const targetCountry = inferCountrySignal(target);
   const targetFactors = rankFactors(target, metrics);
+
   const candidates = pool.filter(
     (candidate) =>
       candidate.username !== target.username &&
       candidate.followers > 0 &&
       candidate.recentPosts.length > 0 &&
-      isSimilarCategory(targetCategory, inferCategory(candidate)),
+      isWithinFollowerLatency(target.followers, candidate.followers) &&
+      sharedPostActivity(target, candidate).length > 0,
   );
 
-  const scored = candidates
+  return candidates
     .map((candidate) => {
-      const candidateCategory = inferCategory(candidate);
       const candidateMetrics = computeMetrics(candidate);
       const candidateFactors = rankFactors(candidate, candidateMetrics);
-      return { candidate, candidateCategory, candidateMetrics, candidateFactors };
-    })
-    // Keep the highlighted UAE/GCC benchmark inside one audience band: a micro
-    // account must not be compared with a million-follower regional brand just
-    // because both are local. The ranking table opts out to stay fully populated.
-    .filter(
-      ({ candidateFactors }) =>
-        !requireComparableRange || isComparableRange(targetFactors, candidateFactors),
-    )
-    .map(({ candidate, candidateCategory, candidateMetrics, candidateFactors }) => {
       const candidateCountry = inferCountrySignal(candidate);
       const relationship = countryRelationship(targetCountry, candidateCountry);
-      const shared = sharedTopics(target, candidate);
-      const topicScore = shared.length > 0 ? clamp(70 + shared.length * 10, 0, 100) : 45;
+      const activity = inferPostActivity(candidate);
+      const shared = sharedPostActivity(target, candidate);
       const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
-      const exactCategory = candidateCategory === targetCategory;
-      const raw =
-        factorScore * 0.35 +
-        topicScore * 0.15 +
-        countryScore(relationship) * 0.25 +
-        (exactCategory ? 100 : 75) * 0.25;
+      const activityScore = clamp(75 + shared.length * 10, 0, 100);
+      const raw = factorScore * 0.4 + activityScore * 0.35 + countryScore(relationship) * 0.25;
 
       const matchReasons = [
+        `followers within ±${Math.round(FOLLOWER_LATENCY * 100)}% of this profile (${followerBand(target.followers)})`,
+        `activity from Reels/post captions and hashtags only: ${shared.join(", ")}`,
         countryReason(relationship, targetCountry, candidateCountry),
-        ...(requireComparableRange ? ["similar audience size and engagement range"] : []),
-        `four-factor fit ${Math.round(factorScore)}% (followers, engagement, interactions, follower change)`,
-        exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`,
+        "ranked by 55% followers, 20% engagement, 15% avg interactions, 10% follower change",
       ];
-      if (shared.length > 0) {
-        matchReasons.push(`shares ${shared.slice(0, 2).join(" and ")} themes`);
-      }
 
       return {
         profile: candidate,
         metrics: candidateMetrics,
         factors: candidateFactors,
         matchScore: clampRankScoreToMatch(raw),
-        category: candidateCategory,
-        sharedBusiness: shared,
+        category: activity.join(", "),
+        sharedActivity: shared,
         country: candidateCountry,
         countryRelationship: relationship,
         matchReasons,
       };
-    });
-
-  const bestTier = Math.min(...scored.map((match) => countryTier(match.countryRelationship)));
-  return scored
-    .filter((match) => countryTier(match.countryRelationship) === bestTier)
+    })
     .sort(
       (left, right) =>
         right.matchScore - left.matchScore ||
@@ -242,9 +227,7 @@ export function buildRegionalRanking(
   pool: CreatorProfile[],
   limit = 10,
 ): RegionalRanking | null {
-  // The leaderboard itself is a top-ten by the four-factor score, not by the
-  // softer "closest profile" match score used for the single highlighted peer.
-  const peers = [...rankedCandidates(target, metrics, pool, { requireComparableRange: false })]
+  const peers = [...rankedCandidates(target, metrics, pool)]
     .sort(
       (left, right) =>
         rankScore(right.factors) - rankScore(left.factors) ||
@@ -266,7 +249,7 @@ export function buildRegionalRanking(
       followerChangePct: targetFactors.followerChangePct,
       followerChangeEstimated: targetFactors.followerChangeEstimated,
       matchScore: null,
-      category: inferCategory(target),
+      category: inferPostActivity(target).join(", "),
       country: inferCountrySignal(target),
       isTarget: true,
     },

@@ -30,6 +30,28 @@ export const COMPARABLE_FOLLOWER_RATIO = 3;
 export const COMPARABLE_ENGAGEMENT_MULTIPLIER = 2;
 export const COMPARABLE_ENGAGEMENT_PADDING_PCT = 0.5;
 
+// The profile-page Middle East benchmark uses a tighter, hard gate: the peer's
+// follower count must sit within ±30% of the searched profile. Unlike
+// isComparableRange(), there is no fallback outside this band.
+export const FOLLOWER_LATENCY = 0.3;
+
+export function isWithinFollowerLatency(
+  targetFollowers: number,
+  candidateFollowers: number,
+  latency = FOLLOWER_LATENCY,
+): boolean {
+  if (!Number.isFinite(targetFollowers) || !Number.isFinite(candidateFollowers)) {
+    return false;
+  }
+  if (targetFollowers <= 0 || candidateFollowers <= 0) {
+    return false;
+  }
+  return (
+    candidateFollowers >= targetFollowers * (1 - latency) &&
+    candidateFollowers <= targetFollowers * (1 + latency)
+  );
+}
+
 export type ComparableRangeInput = Pick<RankFactorInput, "followers" | "engagementRate">;
 
 export function isComparableRange(

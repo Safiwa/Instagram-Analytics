@@ -111,10 +111,28 @@ describe("categoryGroup and isSimilarCategory", () => {
 });
 
 describe("benchmark filtering by category", () => {
-  const creator = profile("creators.style", "Beauty and skincare routines", 2_000);
-  const creatorPeer = profile("peer.beauty", "Beauty and makeup reviews", 2_100, "peerbeauty");
-  const airline = profile("Emirates", "Fly Better airline", 5_000, "emirates");
-  const news = profile("Gulf News", "The no.1 news brand in the UAE", 4_000, "gulfnews");
+  // The Middle East panel reads only Reel/post captions, so give these fixtures
+  // post activity that matches their public bios.
+  const withCaptions = (entry: CreatorProfile, caption: string): CreatorProfile => ({
+    ...entry,
+    recentPosts: entry.recentPosts.map((item) => ({ ...item, caption })),
+  });
+  const creator = withCaptions(
+    profile("creators.style", "Beauty and skincare routines", 2_000),
+    "Beauty and skincare routines",
+  );
+  const creatorPeer = withCaptions(
+    profile("peer.beauty", "Beauty and makeup reviews", 2_100, "peerbeauty"),
+    "Beauty and makeup reviews",
+  );
+  const airline = withCaptions(
+    profile("Emirates", "Fly Better airline", 5_000, "emirates"),
+    "Fly Better airline flight",
+  );
+  const news = withCaptions(
+    profile("Gulf News", "The no.1 news brand in the UAE", 4_000, "gulfnews"),
+    "UAE news headlines",
+  );
   const media = [creatorPeer, airline, news];
 
   it("never benchmarks a creator against a business or media account", () => {
@@ -129,7 +147,10 @@ describe("benchmark filtering by category", () => {
   });
 
   it("keeps a business account inside its own category group", () => {
-    const mall = profile("Dubai Mall", "Shopping mall and retail", 5_000, "dubaimall");
+    const mall = withCaptions(
+      profile("Dubai Mall", "Shopping mall and retail", 5_000, "dubaimall"),
+      "Shopping mall and retail products",
+    );
     const pool = [mall, creator, creatorPeer];
 
     expect(findClosestPeer(mall, computeMetrics(mall), pool)).toBeNull();

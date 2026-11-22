@@ -1,9 +1,14 @@
-import { getTrackedProfiles, UAE_GCC_HANDLES } from "./leaderboard";
+import { getTrackedProfiles } from "./leaderboard";
+import { isInRegionBoard } from "./regions";
 import type { CreatorProfile } from "./types";
 
-const HANDLE_SET = new Set<string>(UAE_GCC_HANDLES);
+// The profile-page regional benchmark covers the full Middle East board, which
+// includes the dedicated UAE accounts as well as the other tracked countries.
+export function isMiddleEastProfile(username: string): boolean {
+  return isInRegionBoard(username, "middle-east");
+}
 
 export async function getRegionalProfiles(): Promise<CreatorProfile[]> {
   const profiles = await getTrackedProfiles();
-  return profiles.filter((profile) => HANDLE_SET.has(profile.username.toLowerCase()));
+  return profiles.filter((profile) => isMiddleEastProfile(profile.username));
 }
