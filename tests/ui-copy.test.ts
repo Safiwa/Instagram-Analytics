@@ -66,6 +66,50 @@ describe("no-post profile disclosure", () => {
   });
 });
 
+describe("Instagram direct links in ranking rows", () => {
+  const globalPulse = source("src/features/leaderboard/GlobalPulse.tsx");
+  const dashboard = source("src/features/profile/ProfileDashboard.tsx");
+  const instagramLink = source("src/components/InstagramLink.tsx");
+  const format = source("src/core/format.ts");
+
+  it("builds direct links from the account username", () => {
+    expect(format).toContain(
+      'return `https://www.instagram.com/${encodeURIComponent(username)}/`;',
+    );
+    expect(instagramLink).toContain("target=\"_blank\"");
+    expect(instagramLink).toContain('rel="noopener noreferrer"');
+  });
+
+  it("adds an Instagram link beside the arrow on homepage leaderboard rows", () => {
+    expect(globalPulse).toContain("<InstagramLink");
+    expect(globalPulse).toContain("username={entry.username}");
+  });
+
+  it("adds Instagram links beside the arrows in both profile ranking tables", () => {
+    expect(dashboard.match(/<InstagramLink/g)).toHaveLength(3);
+    expect(dashboard).toContain("username={regionalPeer.profile.username}");
+    expect(dashboard).toContain("username={row.profile.username}");
+  });
+});
+
+describe("Middle East board country labels", () => {
+  const globalPulse = source("src/features/leaderboard/GlobalPulse.tsx");
+  const leaderboard = source("src/core/data/leaderboard.ts");
+
+  it("shows the inferred country in Middle East top 10 rows", () => {
+    expect(leaderboard).toContain(
+      'countryLabel: inferCountrySignal(profile).country ?? "Country not published"',
+    );
+    expect(globalPulse).toContain("showCountry={definition.id === \"middle-east\"}");
+    expect(globalPulse).toContain("{showCountry ? ` · ${entry.countryLabel}` : \"\"}");
+  });
+
+  it("discloses that Instagram does not publish account country", () => {
+    expect(globalPulse).toContain("Instagram does not");
+    expect(globalPulse).toContain("publish account country");
+  });
+});
+
 describe("same-country peer benchmark", () => {
   const dashboard = source("src/features/profile/ProfileDashboard.tsx");
   const peer = source("src/core/analytics/peer.ts");

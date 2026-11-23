@@ -26,6 +26,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { InstagramLink } from "../../components/InstagramLink";
 import { MetricCard } from "../../components/MetricCard";
 import { inferCountrySignal } from "../../core/analytics/country";
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
@@ -799,21 +800,27 @@ export function ProfileDashboard({
                     {String(index + 1).padStart(2, "0")}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/profile/${row.profile.username}`}
-                      className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-indigo-600"
-                    >
-                      <span className="truncate">{row.profile.displayName}</span>
-                      <ArrowUpRight
-                        className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-indigo-600"
-                        aria-hidden="true"
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <Link
+                        href={`/profile/${row.profile.username}`}
+                        className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-indigo-600"
+                      >
+                        <span className="truncate">{row.profile.displayName}</span>
+                        <ArrowUpRight
+                          className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-indigo-600"
+                          aria-hidden="true"
+                        />
+                        {row.isTarget ? (
+                          <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-indigo-700">
+                            This profile
+                          </span>
+                        ) : null}
+                      </Link>
+                      <InstagramLink
+                        username={row.profile.username}
+                        className="text-slate-400 hover:text-indigo-600"
                       />
-                      {row.isTarget ? (
-                        <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-indigo-700">
-                          This profile
-                        </span>
-                      ) : null}
-                    </Link>
+                    </div>
                     <p className="truncate text-xs text-slate-500">
                       @{row.profile.username} · {row.category} ·{" "}
                       {formatCompact(row.profile.followers)} followers
@@ -887,6 +894,10 @@ export function ProfileDashboard({
                       aria-hidden="true"
                     />
                   </Link>
+                  <InstagramLink
+                    username={regionalPeer.profile.username}
+                    className="text-emerald-600 hover:text-emerald-800"
+                  />
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
                     {regionalPeer.matchScore}% regional match
                   </span>
@@ -1005,21 +1016,27 @@ export function ProfileDashboard({
                     {String(index + 1).padStart(2, "0")}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/profile/${row.profile.username}`}
-                      className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
-                    >
-                      <span className="truncate">{row.profile.displayName}</span>
-                      <ArrowUpRight
-                        className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-emerald-600"
-                        aria-hidden="true"
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <Link
+                        href={`/profile/${row.profile.username}`}
+                        className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
+                      >
+                        <span className="truncate">{row.profile.displayName}</span>
+                        <ArrowUpRight
+                          className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-emerald-600"
+                          aria-hidden="true"
+                        />
+                        {row.isTarget ? (
+                          <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-emerald-700">
+                            This profile
+                          </span>
+                        ) : null}
+                      </Link>
+                      <InstagramLink
+                        username={row.profile.username}
+                        className="text-emerald-600 hover:text-emerald-800"
                       />
-                      {row.isTarget ? (
-                        <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-emerald-700">
-                          This profile
-                        </span>
-                      ) : null}
-                    </Link>
+                    </div>
                     <p className="truncate text-xs text-slate-500">
                       @{row.profile.username} · {row.category} ·{" "}
                       {formatCompact(row.profile.followers)} followers

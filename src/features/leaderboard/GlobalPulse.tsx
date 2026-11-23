@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, Flame, Gauge, MapPin } from "lucide-react";
+import { InstagramLink } from "../../components/InstagramLink";
 import {
   getLeaderboard,
   TRENDING_WINDOW_DAYS,
@@ -32,12 +33,14 @@ function EntryRow({
   value,
   label,
   meta,
+  showCountry,
 }: {
   entry: LeaderboardEntry;
   rank: number;
   value: string;
   label: string;
   meta: string;
+  showCountry: boolean;
 }) {
   return (
     <li className="flex items-center gap-3 border-t border-slate-100 py-3 first:border-0 first:pt-0">
@@ -45,18 +48,25 @@ function EntryRow({
         {String(rank).padStart(2, "0")}
       </span>
       <div className="min-w-0 flex-1">
-        <Link
-          href={`/profile/${entry.username}`}
-          className="group inline-flex max-w-full items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-indigo-600"
-        >
-          <span className="truncate">{entry.displayName}</span>
-          <ArrowUpRight
-            className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-indigo-600"
-            aria-hidden="true"
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Link
+            href={`/profile/${entry.username}`}
+            className="group inline-flex max-w-full items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-indigo-600"
+          >
+            <span className="truncate">{entry.displayName}</span>
+            <ArrowUpRight
+              className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-indigo-600"
+              aria-hidden="true"
+            />
+          </Link>
+          <InstagramLink
+            username={entry.username}
+            className="text-slate-400 hover:text-indigo-600"
           />
-        </Link>
+        </div>
         <p className="truncate text-xs text-slate-500">
-          @{entry.username} · {formatCompact(entry.followers)} followers
+          @{entry.username}
+          {showCountry ? ` · ${entry.countryLabel}` : ""} · {formatCompact(entry.followers)} followers
         </p>
         <p className="truncate text-[11px] text-slate-400">{meta}</p>
       </div>
@@ -78,6 +88,7 @@ function RankCard({
   label,
   metaFor,
   testId,
+  showCountry = false,
 }: {
   title: string;
   subtitle: string;
@@ -88,6 +99,7 @@ function RankCard({
   label: string;
   metaFor: (entry: LeaderboardEntry) => string;
   testId: string;
+  showCountry?: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -110,6 +122,7 @@ function RankCard({
               value={valueFor(entry)}
               label={label}
               meta={metaFor(entry)}
+              showCountry={showCountry}
             />
           ))}
         </ol>
@@ -181,6 +194,10 @@ export async function GlobalPulse() {
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
           By country
         </h3>
+        <p className="text-xs leading-relaxed text-slate-500">
+          Country labels are inferred from public handle and profile signals. Instagram does not
+          publish account country, so unavailable values stay marked as not published.
+        </p>
         <div className="grid gap-4 lg:grid-cols-2">
           {REGION_BOARDS.map((definition) => {
             const entries = board.regional[definition.id];
@@ -196,6 +213,7 @@ export async function GlobalPulse() {
                 label="Rank score"
                 metaFor={(entry) => signalMeta(entry)}
                 testId={`region-${definition.id}-list`}
+                showCountry={definition.id === "middle-east"}
               />
             );
           })}

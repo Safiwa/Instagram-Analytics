@@ -1,3 +1,4 @@
+import { inferCountrySignal } from "../analytics/country";
 import { computeMetrics } from "../analytics/metrics";
 import { rankFactors, rankScore, round2 } from "../analytics/rank";
 import { log } from "../logging/logger";
@@ -183,6 +184,9 @@ export type LeaderboardEntry = {
   followerChangePct: number;
   followerChangeEstimated: boolean;
   rankScore: number;
+  // Editorial country signal from public handle/profile text. Instagram does
+  // not publish an account country field, so unavailable values stay explicit.
+  countryLabel: string;
   profilePictureUrl?: string;
 };
 
@@ -259,6 +263,7 @@ function toEntry(profile: CreatorProfile, now: number): LeaderboardEntry | null 
     followerChangePct: factors.followerChangePct,
     followerChangeEstimated: factors.followerChangeEstimated,
     rankScore: rankScore(factors),
+    countryLabel: inferCountrySignal(profile).country ?? "Country not published",
     profilePictureUrl: profile.profilePictureUrl,
   };
 }

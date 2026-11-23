@@ -28,3 +28,7 @@ export function formatDate(iso: string, includeYear = true): string {
   const date = new Date(iso);
   return includeYear ? dateFormatter.format(date) : shortDateFormatter.format(date);
 }
+
+export function instagramProfileUrl(username: string): string {
+  return `https://www.instagram.com/${encodeURIComponent(username)}/`;
+}
