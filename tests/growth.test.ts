@@ -4,10 +4,10 @@ import type { CreatorProfile, MonthlyPoint, Post } from "../src/core/data/types"
 
 const NOW = new Date("2026-11-21T12:00:00.000Z");
 
-function post(daysAgo: number, likes: number): Post {
+function post(daysAgo: number, likes: number, type: Post["type"] = "Reel"): Post {
   return {
-    id: `p-${daysAgo}`,
-    type: "Reel",
+    id: `p-${daysAgo}-${type}`,
+    type,
     caption: "",
     postedAt: new Date(NOW.getTime() - daysAgo * 24 * 60 * 60 * 1000).toISOString(),
     likes,
@@ -54,7 +54,7 @@ describe("30-day growth analysis", () => {
     expect(result.monthGrowthPct).not.toBeNull();
     expect(result.monthGrowthPct!).toBeGreaterThanOrEqual(-8);
     expect(result.monthGrowthPct!).toBeLessThanOrEqual(12);
-    expect(result.postsLast30Days).toBe(4);
+    expect(result.reelsLast30Days).toBe(4);
     expect(result.postsPerWeek).not.toBeNull();
     expect(result.engagementTrendPct).not.toBeNull();
   });
@@ -63,10 +63,24 @@ describe("30-day growth analysis", () => {
     const posts = Array.from({ length: 12 }, (_, index) => post(index + 1, 2_000 + index));
     const result = analyzeGrowth(profile({ recentPosts: posts }), NOW);
 
-    expect(result.postsLast30Days).toBe(12);
+    expect(result.reelsLast30Days).toBe(12);
     expect(result.postsInWindowCapped).toBe(true);
     expect(result.basis).toContain("12 recent posts");
     expect(result.basis).toContain("minimum");
+  });
+
+  it("counts only reels inside the 30-day window", () => {
+    const posts = [
+      post(2, 3_000),
+      post(4, 2_000, "Carousel"),
+      post(6, 2_500),
+      post(8, 1_800, "Photo"),
+      post(32, 1_500),
+    ];
+    const result = analyzeGrowth(profile({ recentPosts: posts }), NOW);
+
+    expect(result.reelsLast30Days).toBe(2);
+    expect(result.postsInWindowCapped).toBe(false);
   });
 
   it("does not flag a partial window as capped", () => {
@@ -76,7 +90,7 @@ describe("30-day growth analysis", () => {
     ];
     const result = analyzeGrowth(profile({ recentPosts: posts }), NOW);
 
-    expect(result.postsLast30Days).toBe(11);
+    expect(result.reelsLast30Days).toBe(11);
     expect(result.postsInWindowCapped).toBe(false);
   });
 
@@ -86,7 +100,7 @@ describe("30-day growth analysis", () => {
     expect(result.monthGrowthPct).toBeNull();
     expect(result.monthGrowthFollowers).toBeNull();
     expect(result.momentum).toBe("unknown");
-    expect(result.postsLast30Days).toBe(0);
+    expect(result.reelsLast30Days).toBe(0);
     expect(result.postsInWindowCapped).toBe(false);
   });
 });

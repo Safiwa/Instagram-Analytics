@@ -78,6 +78,10 @@ type ScoreOptions = {
   // Suggestions/benchmarks enforce a believable audience band. Ranking tables
   // opt out so the searched profile always appears in a full five-profile group.
   requireComparableRange?: boolean;
+  // Restrict the closest-peer card and its ranking table to accounts with the
+  // same inferred country. When public data exposes no country signal there is
+  // nothing to match, so the best available tier is used instead.
+  requireSameCountry?: boolean;
   // Keep only the best country tier. Both suggestions and rank tables use this
   // so a thin local group never gets padded with weaker country matches.
   fillCountryTiers?: boolean;
@@ -93,15 +97,18 @@ function scorePeers(
   options: ScoreOptions = {},
 ): PeerMatch[] {
   const requireComparableRange = options.requireComparableRange !== false;
+  const targetCountry = inferCountrySignal(target);
+  const requireSameCountry =
+    options.requireSameCountry === true && targetCountry.country !== null;
   const fillCountryTiers = options.fillCountryTiers === true;
   const explicitTargetCategory = inferExplicitCategory(target);
   const targetCategory = explicitTargetCategory ?? inferCategory(target);
   const requireExplicitCandidate = explicitTargetCategory !== null && !options.allowInferredCandidates;
-  const targetCountry = inferCountrySignal(target);
   const targetTopics = profileTopics(target);
   const targetFactors = rankFactors(target, metrics);
   const candidates = pool.filter((candidate) => {
     const candidateCategory = inferCategory(candidate);
+    const candidateCountry = inferCountrySignal(candidate);
     const hasExplicitCandidate = inferExplicitCategory(candidate) !== null;
     const inferredCreatorFallback =
       options.allowInferredCandidates === true &&
@@ -113,7 +120,8 @@ function scorePeers(
       candidate.followers > 0 &&
       candidate.recentPosts.length > 0 &&
       (!requireExplicitCandidate || hasExplicitCandidate || inferredCreatorFallback) &&
-      isSimilarCategory(targetCategory, candidateCategory)
+      isSimilarCategory(targetCategory, candidateCategory) &&
+      (!requireSameCountry || candidateCountry.country === targetCountry.country)
     );
   });
 
@@ -200,12 +208,19 @@ function scorePeers(
   ];
 }
 
+// Used by the profile benchmark card. Unlike compare suggestions, the closest
+// peer must be in the searched profile's inferred country when one is known.
 export function findClosestPeer(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
 ): PeerMatch | null {
-  return findSimilarPeers(target, metrics, pool, 1)[0] ?? null;
+  return (
+    scorePeers(target, metrics, pool, {
+      requireComparableRange: true,
+      requireSameCountry: true,
+    })[0] ?? null
+  );
 }
 
 // Used by the compare page for same-country suggestions. The caller filters out
@@ -243,13 +258,19 @@ export type PeerRanking = {
 // Builds a five-profile leaderboard: the searched profile plus its four closest
 // category peers. Unlike the benchmark suggestions this table is not range-gated,
 // so the rank group stays visible even for unusually large or small accounts.
+// When the searched profile has an inferred country, every ranked peer must come
+// from that same country; the fallback tiers only apply when none is published.
 export function buildPeerRanking(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
   limit = 4,
 ): PeerRanking | null {
-  const options = { requireComparableRange: false, fillCountryTiers: false } as const;
+  const options = {
+    requireComparableRange: false,
+    requireSameCountry: true,
+    fillCountryTiers: false,
+  } as const;
   let peers = scorePeers(target, metrics, pool, options).slice(0, limit);
 
   // Explicit public labels remain the rule. Only when that leaves gaps do we

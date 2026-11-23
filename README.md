@@ -396,12 +396,12 @@ Profile pages now surface verification, growth, and regional comparison:
   12-month growth card, with an **Est.** badge and the same disclosure as the growth analysis below.
   The full **30-day growth analysis** (`growth-analysis`) section was also moved directly beneath
   the metric grid. It reports estimated follower change over 30 days, the median interaction trend
-  across recent vs older posts, posting cadence, and the number of public posts in the last 30 days,
-  plus a momentum label (accelerating / steady / cooling). Public sources expose only 12 recent
-  posts: when all 12 are inside the window the card shows the visible count (**12**) with "Latest 12
-  public posts checked; total may be higher" instead of a plus-count that reads like an exact total.
-  Business Discovery media without a valid timestamp is dropped, so undated posts never inflate the
-  cadence. For demo fixtures the
+  across recent vs older posts, posting cadence, and the number of **Reels in the last 30 days**,
+  plus a momentum label (accelerating / steady / cooling). Public sources expose at most 12 recent
+  posts, so the Reel count is counted only from visible Reels and is a minimum when the 12-post cap
+  is reached; the card says "Latest 12 public posts checked; total may be higher" instead of
+  presenting a capped figure as an exact total. Business Discovery media without a valid timestamp
+  is dropped, so undated posts never inflate the cadence. For demo fixtures the
   follower change is measured from the latest two monthly history points and never modeled. For
   real public/live accounts Instagram does not publish 30-day follower history, so the change is
   modeled from the same public signals as 12-month growth and is clearly labelled **Est.**
@@ -433,22 +433,24 @@ Profile pages now surface verification, growth, and regional comparison:
   intentionally stays concise; the gate is enforced in code and tests rather than spelled out in the
   UI.
 - **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest category-compatible tracked
-  real public profile. It first prefers the same inferred country (handle, then profile text, then
-  promoted hashtags/captions), falling back to same region, unknown country and then different
-  country only if no better tier exists. Within that tier, candidates are scored by the shared
-  weighted fit (followers, engagement rate, average likes, average comments, 30-day follower
-  change), exact category and shared themes. Each peer row shows its inferred category and country
-  badges, match score, followers, engagement, average likes, average comments and estimated follower change, why it
-  matched, and how this profile compares, with a link to a side-by-side comparison. The same
-  matched set powers a five-profile ranking table (`peer-ranking`): the searched profile plus its
-  four closest category peers, ordered by `rankScore`, with the searched profile's rank (for example,
-  "Rank #2 of 5") and the share of peers it outperforms. Only the best country tier is kept, so a
-  thin same-country group is never padded with weaker regional or unknown-country profiles. When
-  explicitly labeled peers are scarce, the ranking table alone may use inferred `creator`-group
-  labels to fill its remaining rows; benchmark suggestions never do. This table is not
-  range-gated, so it stays complete for accounts at either audience extreme. If no tracked profile
-  in a compatible category is available (for example, without API credentials) the panel shows an
-  empty state rather than unrelated profiles.
+  real public profile. Country is inferred from the handle first, then profile text, then promoted
+  hashtags/captions. When the searched profile has a country signal, both the closest-peer card and
+  its ranking table are limited to accounts with that same inferred country; there is no
+  cross-country fallback for a known-country profile. When no country signal is published, the best
+  available country/region tier is used and the UI discloses the fallback. Within that scope,
+  candidates are scored by the shared weighted fit (followers, engagement rate, average likes,
+  average comments, 30-day follower change), exact category and shared themes. Each peer row shows
+  its inferred category and country badges, match score, followers, engagement, average likes,
+  average comments and estimated follower change, why it matched, and how this profile compares,
+  with a link to a side-by-side comparison. The same matched set powers a five-profile ranking table
+  (`peer-ranking`): the searched profile plus its four closest category peers, ordered by
+  `rankScore`, with the searched profile's rank (for example, "Rank #2 of 5") and the share of peers
+  it outperforms. When explicitly labeled peers are scarce, the ranking table alone may use inferred
+  `creator`-group labels to fill its remaining rows; benchmark suggestions never do. This table is
+  not range-gated, so it stays complete for accounts at either audience extreme. Compare-page
+  suggestions (`findSimilarPeers()`) keep their separate best-tier behavior and are unchanged. If no
+  tracked profile in the required country/category scope is available (for example, without API
+  credentials) the panel shows an empty state rather than unrelated profiles.
 - **Middle East category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
   `src/core/data/regional.ts`) replaces the old UAE/GCC panel. Its pool is every tracked profile on
   the Middle East homepage board (`isInRegionBoard(username, "middle-east")`), which includes the

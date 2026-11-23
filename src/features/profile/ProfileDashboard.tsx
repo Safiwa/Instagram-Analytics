@@ -27,6 +27,7 @@ import {
   YAxis,
 } from "recharts";
 import { MetricCard } from "../../components/MetricCard";
+import { inferCountrySignal } from "../../core/analytics/country";
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
 import type { GrowthAnalysis } from "../../core/analytics/growth";
 import { round2, type ProfileMetrics } from "../../core/analytics/metrics";
@@ -129,6 +130,10 @@ export function ProfileDashboard({
   const hasViews = profile.recentPosts.some((post) => typeof post.viewCount === "number");
   const noPublicPosts =
     profile.source !== "demo" && !profile.isPrivate && profile.recentPosts.length === 0;
+  const benchmarkCountry = inferCountrySignal(profile).country;
+  const benchmarkScope = benchmarkCountry
+    ? `Both the closest peer and ranking table are limited to accounts with the same inferred country (${benchmarkCountry}).`
+    : "Instagram does not publish a country signal for this profile, so the closest available country or region tier is used instead.";
   // computeMetrics and rankFactors fall back to zero when Instagram exposes no
   // posts. That zero is a placeholder, not a measurement, so never present it as
   // a real value for the searched profile.
@@ -401,14 +406,14 @@ export function ProfileDashboard({
           </div>
           <div className="rounded-xl bg-slate-50 p-4">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
-              Posts in last 30 days
+              Reels in last 30 days
             </p>
             <p className="mt-2 text-xl font-semibold text-slate-950">
-              {noPublicPosts ? "—" : growth.postsLast30Days}
+              {noPublicPosts ? "—" : growth.reelsLast30Days}
             </p>
             <p className="mt-1 text-xs text-slate-500">
               {noPublicPosts
-                ? "Recent posts not exposed"
+                ? "Recent reels not exposed"
                 : growth.postsInWindowCapped
                   ? "Latest 12 public posts checked; total may be higher"
                   : "Visible public media only"}
@@ -639,11 +644,11 @@ export function ProfileDashboard({
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
               We match this profile only to real public accounts in the same or a closely related
-              category (for example Digital creator, Blogger, Public figure, or Beauty), prefer the
-              same country, then rank the group by followers, engagement rate, average likes, average
-              comments and follower change. Country is inferred from the handle first, then profile text,
-              hashtags and promoted locations; Instagram does not publish account country. This is
-              a curated reference set, not an exhaustive niche search.
+              category (for example Digital creator, Blogger, Public figure, or Beauty). {benchmarkScope}{" "}
+              The group is ranked by followers, engagement rate, average likes, average comments and
+              follower change. Country is inferred from the handle first, then profile text, hashtags
+              and promoted locations; Instagram does not publish account country. This is a curated
+              reference set, not an exhaustive niche search.
             </p>
           </div>
         </div>
@@ -790,7 +795,9 @@ export function ProfileDashboard({
           </div>
         ) : (
           <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No public account in a similar category is available right now. Check back shortly.
+            {benchmarkCountry
+              ? `No public account in the same country (${benchmarkCountry}) and a similar category is available right now. Check back shortly.`
+              : "No public account in a similar category is available right now. Check back shortly."}
           </p>
         )}
       </section>

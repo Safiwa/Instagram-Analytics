@@ -188,6 +188,8 @@ src/
 - Country homepage boards sort by follower count descending first; `rankScore()` only breaks ties. Worldwide boards keep the weighted four-factor order with followers at 55%.
 - Profile-page benchmarks treat `ola.alqodmani` and `trending.vibz.uae` as a mutually exclusive curated UAE lifestyle group: only the better-scoring member appears across the closest-peer card, peer rank table, regional peer card and regional rank table.
 - The profile-page regional panel is a Middle East activity benchmark: it draws from the full Middle East homepage board, hard-gates candidates to the searched profile's ±30% follower band, infers category/activity only from Reel/post captions and hashtags, and ranks the eligible set by the shared `rankScore()`. No out-of-band fallback is allowed.
+- The profile-page global peer card and peer ranking use only accounts with the same inferred country as the searched profile when one is known. The disclosed best-tier fallback applies only when no country signal is published. Compare-page suggestions keep their separate behavior.
+- The growth panel counts **Reels in the last 30 days** from visible public media only, not all post formats. When the 12-post public cap is reached the card discloses that the count is a minimum; when no posts are exposed it shows `—` rather than zero.
 - Compare pages rank other tracked public profiles from the anchor account's inferred country first, then the same wider region, using `rankScore()`. Handles already in the comparison are excluded from both the `compare-rank` table and the remaining `compare-suggestions`.
 - No placeholders, no `TODO`, no speculative abstraction.
 

@@ -8,9 +8,9 @@ export type GrowthAnalysis = {
   monthGrowthFollowers: number | null;
   engagementTrendPct: number | null;
   postsPerWeek: number | null;
-  postsLast30Days: number;
-  // Public sources expose at most 12 recent posts. When every visible post is
-  // inside the window, 12 is a minimum, not an exact count.
+  // Counts only Reels among the publicly exposed recent posts. Public sources
+  // expose at most 12 posts, so this is a minimum when the window is full.
+  reelsLast30Days: number;
   postsInWindowCapped: boolean;
   momentum: GrowthMomentum;
   growthEstimated: boolean;
@@ -30,19 +30,20 @@ function clamp(value: number, minimum: number, maximum: number): number {
 export function analyzeGrowth(profile: CreatorProfile, now = new Date()): GrowthAnalysis {
   const posts = profile.recentPosts;
   const cutoff = now.getTime() - 30 * 24 * 60 * 60 * 1000;
-  const postsLast30Days = posts.filter((post) => {
+  const inWindow = posts.filter((post) => {
     const posted = Date.parse(post.postedAt);
     return Number.isFinite(posted) && posted >= cutoff;
-  }).length;
+  });
+  const reelsLast30Days = inWindow.filter((post) => post.type === "Reel").length;
   const postsInWindowCapped =
-    posts.length >= VISIBLE_POST_LIMIT && postsLast30Days === posts.length;
+    posts.length >= VISIBLE_POST_LIMIT && inWindow.length === posts.length;
 
   const unavailable: GrowthAnalysis = {
     monthGrowthPct: null,
     monthGrowthFollowers: null,
     engagementTrendPct: null,
     postsPerWeek: null,
-    postsLast30Days,
+    reelsLast30Days,
     postsInWindowCapped,
     momentum: "unknown",
     growthEstimated: false,
@@ -91,7 +92,7 @@ export function analyzeGrowth(profile: CreatorProfile, now = new Date()): Growth
     monthGrowthFollowers,
     engagementTrendPct: trend === null ? null : round2(trend),
     postsPerWeek: cadence === null ? null : round2(cadence),
-    postsLast30Days,
+    reelsLast30Days,
     postsInWindowCapped,
     momentum,
     growthEstimated,
@@ -100,7 +101,7 @@ export function analyzeGrowth(profile: CreatorProfile, now = new Date()): Growth
         ? "30-day follower change is modeled from the same public signals as 12-month growth. Interaction trend and posting cadence are measured from recent public posts."
         : "30-day follower change uses the most recent two monthly data points. Interaction trend and posting cadence are measured from recent public posts.") +
       (postsInWindowCapped
-        ? " Public views expose only 12 recent posts, so the 30-day post count is a minimum."
+        ? " Public views expose only 12 recent posts, so the 30-day reel count is a minimum."
         : ""),
   };
 }

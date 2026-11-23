@@ -22,11 +22,12 @@ describe("homepage positioning copy", () => {
   });
 });
 
-describe("growth post-count badge", () => {
-  it("shows the visible count and explains the public cap instead of a plus-count", () => {
+describe("growth reel-count badge", () => {
+  it("labels the metric as reels and explains the public 12-post cap", () => {
     const dashboard = source("src/features/profile/ProfileDashboard.tsx");
 
-    expect(dashboard).not.toContain("${growth.postsLast30Days}+");
+    expect(dashboard).toContain("Reels in last 30 days");
+    expect(dashboard).not.toContain("Posts in last 30 days");
     expect(dashboard).toContain("Latest 12 public posts checked; total may be higher");
   });
 });
@@ -35,8 +36,8 @@ describe("no-post profile disclosure", () => {
   const dashboard = source("src/features/profile/ProfileDashboard.tsx");
 
   it("shows a dash, not zero, when Instagram did not expose recent posts", () => {
-    expect(dashboard).toContain('{noPublicPosts ? "—" : growth.postsLast30Days}');
-    expect(dashboard).toContain('"Recent posts not exposed"');
+    expect(dashboard).toContain('{noPublicPosts ? "—" : growth.reelsLast30Days}');
+    expect(dashboard).toContain('"Recent reels not exposed"');
     expect(dashboard).toContain("A dash (—) means the data was not");
     expect(dashboard).toContain("exposed, not zero.");
   });
@@ -50,5 +51,23 @@ describe("no-post profile disclosure", () => {
 
   it("does not claim an engagement comparison for a profile with no posts", () => {
     expect(dashboard).toContain("not comparable because this account's posts were not exposed");
+  });
+});
+
+describe("same-country peer benchmark", () => {
+  const dashboard = source("src/features/profile/ProfileDashboard.tsx");
+  const peer = source("src/core/analytics/peer.ts");
+
+  it("enforces the same inferred country for the closest peer and ranking table", () => {
+    expect(peer).toContain("requireSameCountry: true");
+    expect(peer).toContain("candidateCountry.country === targetCountry.country");
+    expect(dashboard).toContain(
+      "Both the closest peer and ranking table are limited to accounts with the same inferred country",
+    );
+  });
+
+  it("discloses the fallback when no country signal is published", () => {
+    expect(dashboard).toContain("closest available country or region tier");
+    expect(dashboard).toContain("Instagram does not publish account country");
   });
 });

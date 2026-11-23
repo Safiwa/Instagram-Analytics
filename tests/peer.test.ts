@@ -34,12 +34,12 @@ function profile(username: string, followers: number, bio: string, likes: number
 describe("closest public peer", () => {
   it("prefers a similarly sized profile with shared business themes", () => {
     const target = profile("uae.style", 60_000, "Fashion and skincare boutique in Dubai", 2_000);
-    const fashion = profile("fashion.peer", 75_000, "Fashion and beauty daily looks", 2_100);
+    const fashion = profile("fashion.uae", 75_000, "Fashion and beauty daily looks", 2_100);
     const footballer = profile("cristiano", 680_000_000, "Football player", 5_000_000);
 
     const match = findClosestPeer(target, computeMetrics(target), [footballer, fashion]);
 
-    expect(match?.profile.username).toBe("fashion.peer");
+    expect(match?.profile.username).toBe("fashion.uae");
     expect(match?.reasons.join(" ")).toContain("fashion");
     expect(match?.score).toBeGreaterThan(0);
   });
@@ -64,6 +64,14 @@ describe("closest public peer", () => {
 
     expect(findClosestPeer(target, computeMetrics(target), [])).toBeNull();
     expect(findClosestPeer(target, computeMetrics(target), [target])).toBeNull();
+  });
+
+  it("does not fall back to another country when the target has an inferred country", () => {
+    const target = profile("dubai.target", 60_000, "Fashion and beauty", 2_000);
+    const london = profile("london.peer", 65_000, "Fashion and beauty", 2_200);
+    const unknown = profile("unknown.peer", 62_000, "Fashion and beauty", 2_100);
+
+    expect(findClosestPeer(target, computeMetrics(target), [london, unknown])).toBeNull();
   });
 });
 
@@ -180,6 +188,33 @@ describe("peer ranking for the searched profile", () => {
     expect(usernames).not.toContain("paris.peer1");
     expect(usernames).not.toContain("tokyo.peer1");
     expect(ranking!.total).toBe(3);
+  });
+
+  it("returns null when no same-country peer exists for a known-country profile", () => {
+    const target = profile("dubai.target", 60_000, "Fashion and beauty", 2_000);
+    const london = profile("london.peer", 65_000, "Fashion and beauty", 2_200);
+    const unknown = profile("unknown.peer", 62_000, "Fashion and beauty", 2_100);
+
+    expect(buildPeerRanking(target, computeMetrics(target), [target, london, unknown])).toBeNull();
+  });
+
+  it("uses the nearest country tier only when the target country is not published", () => {
+    const target = profile("najet.dh", 60_000, "Fashion and beauty", 2_000);
+    const sameRegion = profile("uae.peer", 61_000, "Fashion and beauty", 2_100);
+    const differentCountry = profile("london.peer", 62_000, "Fashion and beauty", 2_200);
+    const unknown = profile("unknown.peer", 63_000, "Fashion and beauty", 2_300);
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), [
+      target,
+      sameRegion,
+      differentCountry,
+      unknown,
+    ]);
+    const usernames = ranking!.rows.map((row) => row.profile.username);
+
+    expect(usernames).toContain("uae.peer");
+    expect(usernames).not.toContain("london.peer");
+    expect(usernames).not.toContain("unknown.peer");
   });
 
   it("falls back to inferred creator labels only when explicit peers are scarce", () => {
