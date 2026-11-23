@@ -20,12 +20,14 @@ type CountryRule = {
   region: Region | null;
   aliases: string[];
   handleAliases?: string[];
+  flag?: string;
 };
 
 const COUNTRY_RULES: CountryRule[] = [
   {
     country: "United Arab Emirates",
     region: "uae",
+    flag: "🇦🇪",
     aliases: [
       "united arab emirates",
       "uae",
@@ -42,34 +44,92 @@ const COUNTRY_RULES: CountryRule[] = [
   {
     country: "Saudi Arabia",
     region: "middle-east",
+    flag: "🇸🇦",
     aliases: ["saudi arabia", "saudi", "ksa", "riyadh", "jeddah", "makkah", "medina"],
     handleAliases: ["saudi", "ksa", "riyadh", "jeddah"],
   },
-  { country: "Qatar", region: "middle-east", aliases: ["qatar", "doha"], handleAliases: ["qatar", "doha"] },
-  { country: "Jordan", region: "middle-east", aliases: ["jordan", "amman"], handleAliases: ["jordan", "amman"] },
-  { country: "Kuwait", region: "middle-east", aliases: ["kuwait"], handleAliases: ["kuwait"] },
-  { country: "Bahrain", region: "middle-east", aliases: ["bahrain", "manama"], handleAliases: ["bahrain", "manama"] },
-  { country: "Oman", region: "middle-east", aliases: ["oman", "muscat"], handleAliases: ["oman", "muscat"] },
-  { country: "Lebanon", region: "middle-east", aliases: ["lebanon", "beirut"], handleAliases: ["lebanon", "beirut"] },
-  { country: "Egypt", region: "middle-east", aliases: ["egypt", "cairo"], handleAliases: ["egypt", "cairo"] },
-  { country: "Syria", region: "middle-east", aliases: ["syria", "damascus"], handleAliases: ["syria", "damascus"] },
-  { country: "Iraq", region: "middle-east", aliases: ["iraq", "baghdad"], handleAliases: ["iraq", "baghdad"] },
+  {
+    country: "Qatar",
+    region: "middle-east",
+    flag: "🇶🇦",
+    aliases: ["qatar", "doha"],
+    handleAliases: ["qatar", "doha"],
+  },
+  {
+    country: "Jordan",
+    region: "middle-east",
+    flag: "🇯🇴",
+    aliases: ["jordan", "amman"],
+    handleAliases: ["jordan", "amman"],
+  },
+  { country: "Kuwait", region: "middle-east", flag: "🇰🇼", aliases: ["kuwait"], handleAliases: ["kuwait"] },
+  {
+    country: "Bahrain",
+    region: "middle-east",
+    flag: "🇧🇭",
+    aliases: ["bahrain", "manama"],
+    handleAliases: ["bahrain", "manama"],
+  },
+  {
+    country: "Oman",
+    region: "middle-east",
+    flag: "🇴🇲",
+    aliases: ["oman", "muscat"],
+    handleAliases: ["oman", "muscat"],
+  },
+  {
+    country: "Lebanon",
+    region: "middle-east",
+    flag: "🇱🇧",
+    aliases: ["lebanon", "beirut"],
+    handleAliases: ["lebanon", "beirut"],
+  },
+  {
+    country: "Egypt",
+    region: "middle-east",
+    flag: "🇪🇬",
+    aliases: ["egypt", "cairo"],
+    handleAliases: ["egypt", "cairo"],
+  },
+  {
+    country: "Syria",
+    region: "middle-east",
+    flag: "🇸🇾",
+    aliases: ["syria", "damascus"],
+    handleAliases: ["syria", "damascus"],
+  },
+  {
+    country: "Iraq",
+    region: "middle-east",
+    flag: "🇮🇶",
+    aliases: ["iraq", "baghdad"],
+    handleAliases: ["iraq", "baghdad"],
+  },
   {
     country: "Palestine",
     region: "middle-east",
+    flag: "🇵🇸",
     aliases: ["palestine", "palestinian", "ramallah", "gaza"],
     handleAliases: ["palestine", "ramallah", "gaza"],
   },
-  { country: "Tunisia", region: "middle-east", aliases: ["tunisia", "tunis"], handleAliases: ["tunisia", "tunis"] },
+  {
+    country: "Tunisia",
+    region: "middle-east",
+    flag: "🇹🇳",
+    aliases: ["tunisia", "tunis"],
+    handleAliases: ["tunisia", "tunis"],
+  },
   {
     country: "Morocco",
     region: "middle-east",
+    flag: "🇲🇦",
     aliases: ["morocco", "moroccan", "casablanca", "marrakech"],
     handleAliases: ["morocco", "casablanca", "marrakech"],
   },
   {
     country: "United States",
     region: "usa",
+    flag: "🇺🇸",
     aliases: [
       "united states",
       "usa",
@@ -84,23 +144,56 @@ const COUNTRY_RULES: CountryRule[] = [
   {
     country: "United Kingdom",
     region: "europe",
+    flag: "🇬🇧",
     aliases: ["united kingdom", "uk", "london", "england"],
     handleAliases: ["uk", "london"],
   },
-  { country: "Italy", region: "europe", aliases: ["italy", "italia", "milan"], handleAliases: ["italy", "milan"] },
-  { country: "France", region: "europe", aliases: ["france", "paris"], handleAliases: ["france", "paris"] },
-  { country: "Spain", region: "europe", aliases: ["spain", "madrid", "barcelona"], handleAliases: ["spain", "madrid", "barcelona"] },
-  { country: "Germany", region: "europe", aliases: ["germany", "berlin", "munich"], handleAliases: ["germany", "berlin"] },
-  { country: "Portugal", region: "europe", aliases: ["portugal", "lisbon"], handleAliases: ["portugal", "lisbon"] },
+  {
+    country: "Italy",
+    region: "europe",
+    flag: "🇮🇹",
+    aliases: ["italy", "italia", "milan"],
+    handleAliases: ["italy", "milan"],
+  },
+  {
+    country: "France",
+    region: "europe",
+    flag: "🇫🇷",
+    aliases: ["france", "paris"],
+    handleAliases: ["france", "paris"],
+  },
+  {
+    country: "Spain",
+    region: "europe",
+    flag: "🇪🇸",
+    aliases: ["spain", "madrid", "barcelona"],
+    handleAliases: ["spain", "madrid", "barcelona"],
+  },
+  {
+    country: "Germany",
+    region: "europe",
+    flag: "🇩🇪",
+    aliases: ["germany", "berlin", "munich"],
+    handleAliases: ["germany", "berlin"],
+  },
+  {
+    country: "Portugal",
+    region: "europe",
+    flag: "🇵🇹",
+    aliases: ["portugal", "lisbon"],
+    handleAliases: ["portugal", "lisbon"],
+  },
   {
     country: "Brazil",
     region: null,
+    flag: "🇧🇷",
     aliases: ["brazil", "brasil", "sao paulo", "saopaulo", "rio de janeiro"],
     handleAliases: ["brazil", "brasil", "saopaulo"],
   },
   {
     country: "India",
     region: null,
+    flag: "🇮🇳",
     aliases: ["india", "mumbai", "delhi", "bangalore"],
     handleAliases: ["india", "mumbai", "delhi"],
   },
@@ -138,6 +231,7 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   adidas: "Germany",
   alisha_sajjal: "United Arab Emirates",
   alitofique: "United Arab Emirates",
+  amrmaskoun: "United Arab Emirates",
   hinaashh: "United Arab Emirates",
   jexmi: "United Arab Emirates",
   donya_esmailiii: "United Arab Emirates",
@@ -148,6 +242,11 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   "dina.ak": "United Arab Emirates",
   anshi_pandyala_official: "United Arab Emirates",
   zeniamk: "United Arab Emirates",
+  // Real public UAE creator accounts in @amrmaskoun's 4–7M follower band.
+  baneenstars: "United Arab Emirates",
+  taimalfalasi: "United Arab Emirates",
+  technicalguruji: "United Arab Emirates",
+  wessamq: "United Arab Emirates",
   elsakahwaji: "Lebanon",
 };
 
@@ -195,6 +294,19 @@ function hasHandleAlias(handle: string, alias: string): boolean {
   return bounded || (needle.length >= 4 && (handle.startsWith(needle) || handle.endsWith(needle)));
 }
 
+// Emoji flags survive public profile/caption text even when the country name is
+// translated. `normalize()` strips them, so they must be checked before the text
+// aliases. When several flags appear, the rule order decides, with the UAE first;
+// explicit curated handles still win before any text signal.
+function matchCountryFlag(text: string): CountryRule | null {
+  for (const rule of COUNTRY_RULES) {
+    if (rule.flag && text.includes(rule.flag)) {
+      return rule;
+    }
+  }
+  return null;
+}
+
 function matchCountry(
   matcher: (alias: string) => boolean,
   source: "handle" | "text" = "text",
@@ -238,21 +350,28 @@ export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
     return signal(handleMatch, region, "handle");
   }
 
-  const profileText = normalize(
-    `${profile.displayName} ${profile.bio} ${profile.website ?? ""}`,
-  );
+  const profileTextRaw = `${profile.displayName} ${profile.bio} ${profile.website ?? ""}`;
+  const profileFlagMatch = matchCountryFlag(profileTextRaw);
+  if (profileFlagMatch) {
+    return signal(profileFlagMatch, region, "profile");
+  }
+  const profileText = normalize(profileTextRaw);
   const profileMatch = matchCountry((alias) => hasNormalizedAlias(profileText, alias));
   if (profileMatch) {
     return signal(profileMatch, region, "profile");
   }
 
   // Captions and hashtags are used as promoted-location signals, not as proof
-  // of residence. That is why this is the last fallback.
-  const postText = normalize(
-    profile.recentPosts
-      .flatMap((post) => [post.caption, ...post.hashtags])
-      .join(" "),
-  );
+  // of residence. That is why this is the last fallback, and why flags are
+  // checked there before translated country words.
+  const postTextRaw = profile.recentPosts
+    .flatMap((post) => [post.caption, ...post.hashtags])
+    .join(" ");
+  const postFlagMatch = matchCountryFlag(postTextRaw);
+  if (postFlagMatch) {
+    return signal(postFlagMatch, region, "posts");
+  }
+  const postText = normalize(postTextRaw);
   const postMatch = matchCountry((alias) => hasNormalizedAlias(postText, alias));
   if (postMatch) {
     return signal(postMatch, region, "posts");

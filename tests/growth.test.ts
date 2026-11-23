@@ -59,6 +59,27 @@ describe("30-day growth analysis", () => {
     expect(result.engagementTrendPct).not.toBeNull();
   });
 
+  it("marks a full 12-post public window as a minimum rather than an exact count", () => {
+    const posts = Array.from({ length: 12 }, (_, index) => post(index + 1, 2_000 + index));
+    const result = analyzeGrowth(profile({ recentPosts: posts }), NOW);
+
+    expect(result.postsLast30Days).toBe(12);
+    expect(result.postsInWindowCapped).toBe(true);
+    expect(result.basis).toContain("12 recent posts");
+    expect(result.basis).toContain("minimum");
+  });
+
+  it("does not flag a partial window as capped", () => {
+    const posts = [
+      ...Array.from({ length: 11 }, (_, index) => post(index + 1, 2_000 + index)),
+      post(45, 1_500),
+    ];
+    const result = analyzeGrowth(profile({ recentPosts: posts }), NOW);
+
+    expect(result.postsLast30Days).toBe(11);
+    expect(result.postsInWindowCapped).toBe(false);
+  });
+
   it("returns null metrics for private or postless profiles", () => {
     const result = analyzeGrowth(profile({ isPrivate: true, recentPosts: [] }), NOW);
 
@@ -66,5 +87,6 @@ describe("30-day growth analysis", () => {
     expect(result.monthGrowthFollowers).toBeNull();
     expect(result.momentum).toBe("unknown");
     expect(result.postsLast30Days).toBe(0);
+    expect(result.postsInWindowCapped).toBe(false);
   });
 });

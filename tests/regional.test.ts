@@ -337,6 +337,52 @@ describe("Middle East authenticity-aware ranking", () => {
     expect(ranking!.rows.every((row) => row.profile.followers <= 76_622)).toBe(true);
   });
 
+  it("fills @amrmaskoun's Middle East panel from real in-band UAE creator labels", () => {
+    const target = profile("amrmaskoun", 5_822_036, ["actor director and film"], {
+      displayName: "Amr Maskoun",
+      bio: "Founder & CEO of @ofoq.creative 🇸🇾 🇫🇷 🇦🇪 Actor Director",
+      likes: 18_000,
+    });
+    const peers = [
+      profile("wessamq", 5_131_128, ["comedy and lifestyle"], {
+        displayName: "Wessam Q",
+        bio: "Content creator",
+      }),
+      profile("taimalfalasi", 4_502_538, ["travel food and lifestyle"], {
+        displayName: "Taim AlFalasi تيم الفلاسي | 🇦🇪",
+        bio: "travel food lifestyle",
+      }),
+      profile("baneenstars", 5_997_069, ["fashion beauty and lifestyle"], {
+        displayName: "Baneen Naem",
+        bio: "Fashion Lifestyle Beauty",
+      }),
+      profile("technicalguruji", 6_295_677, ["technology and youtube"], {
+        displayName: "Gaurav Chaudhary",
+        bio: "YouTuber and video creator",
+      }),
+      profile("jumeirah", 5_500_000, ["hotel and hospitality offers"], {
+        displayName: "Jumeirah",
+        bio: "Beautiful hospitality, generously shared.",
+      }),
+    ];
+
+    const ranking = buildRegionalRanking(target, computeMetrics(target), [target, ...peers]);
+    const usernames = ranking!.rows.map((row) => row.profile.username);
+
+    expect(ranking?.total).toBe(5);
+    expect(usernames).toContain("amrmaskoun");
+    expect(usernames).toContain("wessamq");
+    expect(usernames).toContain("taimalfalasi");
+    expect(usernames).toContain("baneenstars");
+    expect(usernames).toContain("technicalguruji");
+    expect(usernames).not.toContain("jumeirah");
+    expect(ranking!.rows.every((row) => row.profile.followers >= 4_075_425)).toBe(true);
+    expect(ranking!.rows.every((row) => row.profile.followers <= 7_568_647)).toBe(true);
+    expect(ranking!.rows.every((row) => row.country.country === "United Arab Emirates")).toBe(
+      true,
+    );
+  });
+
   it("still supports an explicit top-10 limit after the filters", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
     const pool = [target];

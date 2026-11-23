@@ -120,6 +120,11 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   "dina.ak": "uae",
   anshi_pandyala_official: "uae",
   zeniamk: "uae",
+  amrmaskoun: "uae",
+  wessamq: "uae",
+  taimalfalasi: "uae",
+  baneenstars: "uae",
+  technicalguruji: "uae",
 
   // Other Middle East creators (Lebanon and a creator without a published country)
   elsakahwaji: "middle-east",

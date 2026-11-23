@@ -3,9 +3,10 @@
 // Meta's `business_discovery` response has no `is_verified` field, and the public
 // lookup bridge is not reachable from Vercel's datacenter egress. These handles
 // were read from their real public Instagram profile HTML on 2026-11-22 (each
-// response carried the signed `X-Instagram-Proxy: ok` marker). `rim.official__` was
-// confirmed from a public creator directory sourced from Instagram on 2026-11-23.
-// This is a fallback only: a fresh `fetchPublicIdentity()` result always wins when
+// response carried the signed `X-Instagram-Proxy: ok` marker). `rim.official__` and
+// the UAE creator band around @amrmaskoun were confirmed from real public profile
+// pages/directories sourced from Instagram on 2026-11-23. This is a fallback only:
+// a fresh `fetchPublicIdentity()` result always wins when
 // the bridge is up.
 //
 // Not a claim of completeness and not a modeled value — only accounts whose
@@ -14,11 +15,13 @@ export const VERIFIED_HANDLES: ReadonlySet<string> = new Set([
   "adidas",
   "alarabiya",
   "aljazeera",
+  "amrmaskoun",
   "arabianbusiness",
   "arabnews",
   "arianagrande",
   "asharqnews",
   "badgalriri",
+  "baneenstars",
   "beyonce",
   "billieeilish",
   "burjkhalifa",
@@ -56,7 +59,9 @@ export const VERIFIED_HANDLES: ReadonlySet<string> = new Set([
   "rim.official__",
   "selenagomez",
   "sofiamcoelho",
+  "taimalfalasi",
   "taylorswift",
+  "technicalguruji",
   "therock",
   "timeoutdubai",
   "trending.vibz.uae",
@@ -66,6 +71,7 @@ export const VERIFIED_HANDLES: ReadonlySet<string> = new Set([
   "visitkuwait",
   "visitqatar",
   "visitsaudi",
+  "wessamq",
   "zendaya",
   "zoella",
 ]);

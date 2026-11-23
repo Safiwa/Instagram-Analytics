@@ -85,14 +85,22 @@ function extractHashtags(caption: string): string[] {
   return caption.match(/#[\p{L}\p{N}_]+/gu) ?? [];
 }
 
-function mapPost(media: IgMedia): Post {
+// A missing Business Discovery timestamp must never be replaced with "now":
+// that would make every undated post look recent and inflate 30-day counts.
+function hasKnownTimestamp(media: IgMedia): media is IgMedia & { timestamp: string } {
+  return (
+    typeof media.timestamp === "string" && Number.isFinite(Date.parse(media.timestamp))
+  );
+}
+
+function mapPost(media: IgMedia & { timestamp: string }): Post {
   const caption = media.caption?.trim() || "No caption.";
 
   return {
     id: media.id,
     type: mapMediaType(media),
     caption,
-    postedAt: media.timestamp ?? new Date().toISOString(),
+    postedAt: media.timestamp,
     likes: Math.max(0, media.like_count ?? 0),
     comments: Math.max(0, media.comments_count ?? 0),
     viewCount: typeof media.view_count === "number" ? media.view_count : undefined,
@@ -102,7 +110,7 @@ function mapPost(media: IgMedia): Post {
 }
 
 function mapProfile(data: IgBusinessDiscovery, fallbackUsername: string): CreatorProfile {
-  const media = data.media?.data ?? [];
+  const media = (data.media?.data ?? []).filter(hasKnownTimestamp);
   const username = data.username || fallbackUsername;
 
   return {

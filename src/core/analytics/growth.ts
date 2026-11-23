@@ -9,10 +9,15 @@ export type GrowthAnalysis = {
   engagementTrendPct: number | null;
   postsPerWeek: number | null;
   postsLast30Days: number;
+  // Public sources expose at most 12 recent posts. When every visible post is
+  // inside the window, 12 is a minimum, not an exact count.
+  postsInWindowCapped: boolean;
   momentum: GrowthMomentum;
   growthEstimated: boolean;
   basis: string;
 };
+
+const VISIBLE_POST_LIMIT = 12;
 
 function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -29,6 +34,8 @@ export function analyzeGrowth(profile: CreatorProfile, now = new Date()): Growth
     const posted = Date.parse(post.postedAt);
     return Number.isFinite(posted) && posted >= cutoff;
   }).length;
+  const postsInWindowCapped =
+    posts.length >= VISIBLE_POST_LIMIT && postsLast30Days === posts.length;
 
   const unavailable: GrowthAnalysis = {
     monthGrowthPct: null,
@@ -36,6 +43,7 @@ export function analyzeGrowth(profile: CreatorProfile, now = new Date()): Growth
     engagementTrendPct: null,
     postsPerWeek: null,
     postsLast30Days,
+    postsInWindowCapped,
     momentum: "unknown",
     growthEstimated: false,
     basis: "Not enough public post data for a 30-day analysis.",
@@ -84,10 +92,15 @@ export function analyzeGrowth(profile: CreatorProfile, now = new Date()): Growth
     engagementTrendPct: trend === null ? null : round2(trend),
     postsPerWeek: cadence === null ? null : round2(cadence),
     postsLast30Days,
+    postsInWindowCapped,
     momentum,
     growthEstimated,
-    basis: growthEstimated
-      ? "30-day follower change is modeled from the same public signals as 12-month growth. Interaction trend and posting cadence are measured from recent public posts."
-      : "30-day follower change uses the most recent two monthly data points. Interaction trend and posting cadence are measured from recent public posts.",
+    basis:
+      (growthEstimated
+        ? "30-day follower change is modeled from the same public signals as 12-month growth. Interaction trend and posting cadence are measured from recent public posts."
+        : "30-day follower change uses the most recent two monthly data points. Interaction trend and posting cadence are measured from recent public posts.") +
+      (postsInWindowCapped
+        ? " Public views expose only 12 recent posts, so the 30-day post count is a minimum."
+        : ""),
   };
 }

@@ -309,13 +309,13 @@ account's country, so `src/core/data/regions.ts` maps each tracked handle to a b
 identity. This is editorial metadata, not an audience-demographic claim, and the homepage discloses
 it. The Middle East board includes UAE accounts, and a dedicated UAE board highlights them again.
 For benchmark and compare suggestions, `src/core/analytics/country.ts` prefers a country signal from
-the handle (including curated handle metadata), then public profile text, then hashtags and captions
-promoting a location. Instagram still does not publish account country, so these are inference
-signals, not measurements.
+the handle (including curated handle metadata), then public country flags in the name/bio, then
+other profile text, then flags and country words in captions/hashtags promoting a location. Instagram
+still does not publish account country, so these are inference signals, not measurements.
 
 ### Tracked pool and caching
 
-The pool is 65 curated, real worldwide Creator/Business accounts listed in
+The pool is 70 curated, real worldwide Creator/Business accounts listed in
 `src/core/data/leaderboard.ts` (expanded from 25 with verified European and Middle Eastern handles
 so every country board can fill). It is not an exhaustive global index, and accounts the API cannot
 resolve are skipped. Results are cached for 15 minutes in the data layer, and the home page is
@@ -339,11 +339,10 @@ bursts of Business Discovery calls (`code 4`), so refreshes are deliberately pac
   changing `LEADERBOARD_HANDLES` or the rebuild logic bumps it, and any profile no longer in the
   curated list is filtered out on the next merge.
 
-The benchmark panel uses published Modash ranges by follower tier (Nano 5-10%, Micro 3-7%, Macro
-1-3%, Mega 0.5-2%) with a link to the source. Modash calculates median likes divided by followers
-over roughly three months; this app uses average likes and comments divided by followers over up
-to 12 recent posts, so the comparison is directional, not exact. The matching tier also appears as
-a hint on each profile's engagement card.
+The homepage engagement-rate tier table uses published Modash ranges by follower tier (Nano 5-10%,
+Micro 3-7%, Macro 1-3%, Mega 0.5-2%) with a link to the source. This app uses average likes and
+comments divided by followers over up to 12 recent posts, so the comparison is directional, not
+exact. The matching tier also appears as a hint on each profile's engagement card.
 
 The homepage hero leads with a compact, top-positioned headline "Leading Instagram analytics platform
 in the UAE — performance-driven tools and a practical growth plan", followed by the lookup prompt.
@@ -361,9 +360,10 @@ Profile pages now surface verification, growth, and regional comparison:
   fresh public HTML profile lookup (`fetchPublicIdentity()`, 30-minute cache) when the signed proxy
   bridge is reachable, and otherwise `VERIFIED_HANDLES` in `src/core/data/verified.ts` — a snapshot of
   real public profile pages read on 2026-11-22 for the curated tracked pool, plus `rim.official__`
-  confirmed from a public creator directory sourced from Instagram on 2026-11-23. Unknown handles stay
-  "Not verified"; no badge is invented or modeled. The Middle East comparison panel uses creator
-  category labels and the authenticity-aware regional rank described below.
+  and the new UAE creator band (`amrmaskoun`, `wessamq`, `taimalfalasi`, `baneenstars`,
+  `technicalguruji`) confirmed from real public Instagram pages/directories on 2026-11-23. Unknown
+  handles stay "Not verified"; no badge is invented or modeled. The Middle East comparison panel
+  uses creator category labels and the authenticity-aware regional rank described below.
 - **Profile picture** (`profile-avatar`) shows the searched handle's real public avatar in the header
   (via `next/image`, with Instagram CDN hosts allow-listed in `next.config.ts`). If Instagram does
   not expose a picture or the image fails to load, the initials gradient remains as a fallback.
@@ -372,10 +372,13 @@ Profile pages now surface verification, growth, and regional comparison:
   The full **30-day growth analysis** (`growth-analysis`) section was also moved directly beneath
   the metric grid. It reports estimated follower change over 30 days, the median interaction trend
   across recent vs older posts, posting cadence, and the number of public posts in the last 30 days,
-  plus a momentum label (accelerating / steady / cooling). For demo fixtures the follower change is
-  measured from the latest two monthly history points and never modeled. For real public/live
-  accounts Instagram does not publish 30-day follower history, so the change is modeled from the
-  same public signals as 12-month growth and is clearly labelled **Est.**
+  plus a momentum label (accelerating / steady / cooling). Public sources expose only 12 recent
+  posts: when all 12 are inside the window the card shows **12+** with "At least 12; public view
+  exposes 12 recent posts" instead of claiming an exact count. Business Discovery media without a
+  valid timestamp is dropped, so undated posts never inflate the cadence. For demo fixtures the
+  follower change is measured from the latest two monthly history points and never modeled. For
+  real public/live accounts Instagram does not publish 30-day follower history, so the change is
+  modeled from the same public signals as 12-month growth and is clearly labelled **Est.**
 - **Category-only matching** (`src/core/analytics/category.ts`) gates the global peer benchmarks.
   The live Instagram API only returns the generic label `Instagram Professional`, so the category is
   inferred from each account's public name and biography there. A profile is benchmarked only against
@@ -413,11 +416,13 @@ Profile pages now surface verification, growth, and regional comparison:
   matched, and how this profile compares, with a link to a side-by-side comparison. The same
   matched set powers a five-profile ranking table (`peer-ranking`): the searched profile plus its
   four closest category peers, ordered by `rankScore`, with the searched profile's rank (for example,
-  "Rank #2 of 5") and the share of peers it outperforms. Country matches lead the selection and any
-  remaining rows are filled from the next country tiers, so a thin local tier cannot shorten the
-  five-profile group. This table is not range-gated, so it stays complete for accounts at either
-  audience extreme. If no tracked profile in a compatible category is available (for example,
-  without API credentials) the panel shows an empty state rather than unrelated profiles.
+  "Rank #2 of 5") and the share of peers it outperforms. Only the best country tier is kept, so a
+  thin same-country group is never padded with weaker regional or unknown-country profiles. When
+  explicitly labeled peers are scarce, the ranking table alone may use inferred `creator`-group
+  labels to fill its remaining rows; benchmark suggestions never do. This table is not
+  range-gated, so it stays complete for accounts at either audience extreme. If no tracked profile
+  in a compatible category is available (for example, without API credentials) the panel shows an
+  empty state rather than unrelated profiles.
 - **Middle East category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
   `src/core/data/regional.ts`) replaces the old UAE/GCC panel. Its pool is every tracked profile on
   the Middle East homepage board (`isInRegionBoard(username, "middle-east")`), which includes the
@@ -425,8 +430,10 @@ Profile pages now surface verification, growth, and regional comparison:
   publicly discoverable creator accounts in the relevant follower bands: `alisha_sajjal`,
   `alitofique`, `hinaashh`, `jexmi`, `najet.dh` and `elsakahwaji` around 250–327K, plus
   `donya_esmailiii`, `aiamwa`, `dina_h_ussien`, `poojaabis`, `taranum_sshahin`, `dina.ak`,
-  `anshi_pandyala_official` and `zeniamk` around 46–72K. These fill five-profile ranks at both the
-  larger and smaller UAE creator accounts without relaxing any gate. A candidate must (1) sit inside the
+  `anshi_pandyala_official` and `zeniamk` around 46–72K, plus `amrmaskoun`, `wessamq`,
+  `taimalfalasi`, `baneenstars` and `technicalguruji` in the 4.5–6.3M UAE creator band. These fill
+  five-profile ranks at the smaller, mid-sized and larger UAE creator accounts without relaxing any
+  gate. A candidate must (1) sit inside the
   **±30% follower band**, (2) have an explicit category label inferred from its public display
   name/bio via `inferExplicitCategory()` (fallback `Digital creator` / `Public figure` labels do not
   qualify), and (3) be in the same creator group under `isSimilarCategory()`. An exact explicit
@@ -530,6 +537,7 @@ network call.
 - Followers, following, total post count
 - Up to 12 recent, non-pinned posts with likes, comments, type, date, caption,
   hashtags, permalink, and video views
+- A `12+` lower bound on the 30-day post count when all 12 visible posts are in-window
 - Modeled fake-follower count, authenticity, and 12-month growth for accounts with
   visible posts, labeled `Est.` in the UI and report
 
@@ -540,6 +548,7 @@ These are not published on public profile pages, so they are omitted or render a
 - Saves and reach per post
 - Audience demographics (countries, age, gender)
 - Measured historical follower counts (the 12-month growth figure is modeled)
+- Exact post counts past the 12-post public exposure cap; media without a timestamp is omitted
 - Stories, highlights, and private-account media
 
 ## Estimated metrics

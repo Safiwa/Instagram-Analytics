@@ -159,7 +159,7 @@ describe("peer ranking for the searched profile", () => {
     expect(ranking!.rows.filter((row) => row.isTarget)).toHaveLength(1);
   });
 
-  it("fills five rows from other country tiers when local peers are scarce", () => {
+  it("does not mix lower country tiers when same-country peers exist", () => {
     const target = profile("dubai.target", 60_000, "Fashion and beauty", 2_000);
     const pool = [
       target,
@@ -171,10 +171,38 @@ describe("peer ranking for the searched profile", () => {
     ];
 
     const ranking = buildPeerRanking(target, computeMetrics(target), pool);
+    const usernames = ranking!.rows.map((row) => row.profile.username);
 
-    expect(ranking!.rows).toHaveLength(5);
-    expect(ranking!.rows.some((row) => row.profile.username === "uae.peer1")).toBe(true);
-    expect(ranking!.rows.some((row) => row.profile.username === "london.peer1")).toBe(true);
+    expect(usernames).toEqual(
+      expect.arrayContaining(["dubai.target", "uae.peer1", "uae.peer2"]),
+    );
+    expect(usernames).not.toContain("london.peer1");
+    expect(usernames).not.toContain("paris.peer1");
+    expect(usernames).not.toContain("tokyo.peer1");
+    expect(ranking!.total).toBe(3);
+  });
+
+  it("falls back to inferred creator labels only when explicit peers are scarce", () => {
+    const target = profile("dubai.target", 60_000, "Fashion and beauty", 2_000);
+    const explicit = profile("uae.explicit", 61_000, "Beauty skincare reviews", 2_100);
+    const inferred = profile("uae.inferred", 62_000, "", 2_200);
+    const business = profile("uae.brand", 63_000, "", 2_300);
+    business.bio = "Retail mall and shopping offers";
+
+    const strict = findClosestPeer(target, computeMetrics(target), [target, inferred]);
+    expect(strict).toBeNull();
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), [
+      target,
+      explicit,
+      inferred,
+      business,
+    ]);
+    const usernames = ranking!.rows.map((row) => row.profile.username);
+
+    expect(usernames).toContain("uae.explicit");
+    expect(usernames).toContain("uae.inferred");
+    expect(usernames).not.toContain("uae.brand");
   });
 
   it("returns null when no comparable peer is available", () => {

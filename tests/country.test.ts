@@ -68,6 +68,20 @@ describe("country signal inference", () => {
     expect(fromPosts.basis).toBe("posts");
   });
 
+  it("reads public country flags before translated country words", () => {
+    const fromProfile = inferCountrySignal(
+      profile({ bio: "Foodie in 🇦🇪 — Paris, Amman" }),
+    );
+    expect(fromProfile.country).toBe("United Arab Emirates");
+    expect(fromProfile.basis).toBe("profile");
+
+    const fromPosts = inferCountrySignal(
+      profile({ recentPosts: [{ ...post(), caption: "Dubai nights 🇦🇪" }] }),
+    );
+    expect(fromPosts.country).toBe("United Arab Emirates");
+    expect(fromPosts.basis).toBe("posts");
+  });
+
   it("maps curated Middle East handles to their editorial country", () => {
     expect(inferCountrySignal(profile({ username: "visitsyria" })).country).toBe("Syria");
     expect(inferCountrySignal(profile({ username: "explorepalestine" })).country).toBe(
@@ -77,6 +91,18 @@ describe("country signal inference", () => {
     expect(inferCountrySignal(profile({ username: "emirates" })).country).toBe(
       "United Arab Emirates",
     );
+  });
+
+  it("resolves the real UAE creator band around @amrmaskoun", () => {
+    const handles = ["amrmaskoun", "wessamq", "taimalfalasi", "baneenstars", "technicalguruji"];
+    for (const username of handles) {
+      const signal = inferCountrySignal(
+        profile({ username, bio: "Founder and actor 🇸🇾 🇫🇷 🇦🇪" }),
+      );
+      expect(signal.country).toBe("United Arab Emirates");
+      expect(signal.region).toBe("uae");
+      expect(signal.basis).toBe("handle");
+    }
   });
 
   it("keeps region-only signals when no country is published", () => {

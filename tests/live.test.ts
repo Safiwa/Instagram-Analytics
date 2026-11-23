@@ -216,6 +216,61 @@ describe("live Instagram adapter", () => {
     expect(resolution.profile.isVerified).toBe(true);
   });
 
+  it("drops Business Discovery posts with a missing or invalid timestamp", async () => {
+    const discovery = {
+      business_discovery: {
+        ...discoveryPayload.business_discovery,
+        username: "undated.test",
+        media: {
+          data: [
+            {
+              id: "dated",
+              caption: "Dated post",
+              media_type: "IMAGE",
+              like_count: 100,
+              comments_count: 4,
+              timestamp: "2026-11-01T10:00:00+0000",
+            },
+            {
+              id: "no-timestamp",
+              caption: "Undated post",
+              media_type: "IMAGE",
+              like_count: 900,
+              comments_count: 40,
+            },
+            {
+              id: "bad-timestamp",
+              caption: "Invalid date",
+              media_type: "IMAGE",
+              like_count: 800,
+              comments_count: 30,
+              timestamp: "not-a-date",
+            },
+          ],
+        },
+      },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes("graph.facebook.com")) {
+          return jsonResponse(discovery);
+        }
+        return new Response("", { status: 403 });
+      }),
+    );
+
+    const resolution = await resolveProfile("undated.test");
+
+    expect(resolution.status).toBe("found");
+    if (resolution.status !== "found") {
+      throw new Error("expected a live profile");
+    }
+    expect(resolution.profile.recentPosts).toHaveLength(1);
+    expect(resolution.profile.recentPosts[0].id).toBe("dated");
+    expect(resolution.profile.recentPosts[0].postedAt).toBe("2026-11-01T10:00:00+0000");
+  });
+
   it("maps an invalid token to an auth error", async () => {
     vi.stubGlobal(
       "fetch",

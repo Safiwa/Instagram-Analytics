@@ -1,5 +1,10 @@
 import type { CreatorProfile } from "../data/types";
-import { inferCategory, inferExplicitCategory, isSimilarCategory } from "./category";
+import {
+  categoryGroup,
+  inferCategory,
+  inferExplicitCategory,
+  isSimilarCategory,
+} from "./category";
 import {
   countryReason,
   countryRelationship,
@@ -73,9 +78,12 @@ type ScoreOptions = {
   // Suggestions/benchmarks enforce a believable audience band. Ranking tables
   // opt out so the searched profile always appears in a full five-profile group.
   requireComparableRange?: boolean;
-  // Suggestions keep only the best country tier. Rank tables keep same-country
-  // peers first, then fill remaining rows from the next tiers.
+  // Keep only the best country tier. Both suggestions and rank tables use this
+  // so a thin local group never gets padded with weaker country matches.
   fillCountryTiers?: boolean;
+  // Rank tables may fall back to inferred creator-group labels only when there
+  // are not enough explicitly labeled peers. Benchmark suggestions never do.
+  allowInferredCandidates?: boolean;
 };
 
 function scorePeers(
@@ -88,18 +96,26 @@ function scorePeers(
   const fillCountryTiers = options.fillCountryTiers === true;
   const explicitTargetCategory = inferExplicitCategory(target);
   const targetCategory = explicitTargetCategory ?? inferCategory(target);
-  const requireExplicitCandidate = explicitTargetCategory !== null;
+  const requireExplicitCandidate = explicitTargetCategory !== null && !options.allowInferredCandidates;
   const targetCountry = inferCountrySignal(target);
   const targetTopics = profileTopics(target);
   const targetFactors = rankFactors(target, metrics);
-  const candidates = pool.filter(
-    (candidate) =>
+  const candidates = pool.filter((candidate) => {
+    const candidateCategory = inferCategory(candidate);
+    const hasExplicitCandidate = inferExplicitCategory(candidate) !== null;
+    const inferredCreatorFallback =
+      options.allowInferredCandidates === true &&
+      categoryGroup(targetCategory) === "creator" &&
+      categoryGroup(candidateCategory) === "creator";
+
+    return (
       candidate.username !== target.username &&
       candidate.followers > 0 &&
       candidate.recentPosts.length > 0 &&
-      (!requireExplicitCandidate || inferExplicitCategory(candidate) !== null) &&
-      isSimilarCategory(targetCategory, inferCategory(candidate)),
-  );
+      (!requireExplicitCandidate || hasExplicitCandidate || inferredCreatorFallback) &&
+      isSimilarCategory(targetCategory, candidateCategory)
+    );
+  });
 
   if (candidates.length === 0) {
     return [];
@@ -175,8 +191,9 @@ function scorePeers(
     return sorted.filter((match) => countryTier(match.countryRelationship) === bestTier);
   }
 
-  // Same-country peers lead the five-profile table, but a thin local tier must
-  // not shorten it. Remaining rows come from the next country tiers in order.
+  // Kept for callers that explicitly opt in; the profile rank table does not.
+  // Mixing lower country tiers into a thin local group would make the rank look
+  // broader than the public evidence supports.
   return [
     ...sorted.filter((match) => countryTier(match.countryRelationship) === bestTier),
     ...sorted.filter((match) => countryTier(match.countryRelationship) !== bestTier),
@@ -232,10 +249,23 @@ export function buildPeerRanking(
   pool: CreatorProfile[],
   limit = 4,
 ): PeerRanking | null {
-  const peers = scorePeers(target, metrics, pool, {
-    requireComparableRange: false,
-    fillCountryTiers: true,
-  }).slice(0, limit);
+  const options = { requireComparableRange: false, fillCountryTiers: false } as const;
+  let peers = scorePeers(target, metrics, pool, options).slice(0, limit);
+
+  // Explicit public labels remain the rule. Only when that leaves gaps do we
+  // admit inferred creator-group labels, and only to fill the remaining rows.
+  if (peers.length < limit) {
+    const fallback = scorePeers(target, metrics, pool, {
+      ...options,
+      allowInferredCandidates: true,
+    });
+    const seen = new Set(peers.map((peer) => peer.profile.username));
+    peers = [...peers, ...fallback.filter((peer) => !seen.has(peer.profile.username))].slice(
+      0,
+      limit,
+    );
+  }
+
   if (peers.length === 0) {
     return null;
   }
