@@ -129,11 +129,17 @@ export function ProfileDashboard({
   const hasViews = profile.recentPosts.some((post) => typeof post.viewCount === "number");
   const noPublicPosts =
     profile.source !== "demo" && !profile.isPrivate && profile.recentPosts.length === 0;
+  // computeMetrics and rankFactors fall back to zero when Instagram exposes no
+  // posts. That zero is a placeholder, not a measurement, so never present it as
+  // a real value for the searched profile.
+  const targetSignal = (formatted: string, isTarget: boolean) =>
+    noPublicPosts && isTarget ? "—" : formatted;
   const momentumLabel =
     growth.momentum === "unknown" ? "Not enough data" : growth.momentum.charAt(0).toUpperCase() + growth.momentum.slice(1);
   const peerDelta = peer ? round2(metrics.engagementRate - peer.metrics.engagementRate) : null;
-  const peerInsight =
-    peerDelta === null
+  const peerInsight = noPublicPosts
+    ? "not comparable because this account's posts were not exposed"
+    : peerDelta === null
       ? ""
       : peerDelta > 0
         ? `${peerDelta.toFixed(2)} points above this peer`
@@ -258,9 +264,9 @@ export function ProfileDashboard({
           className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
         >
           Instagram did not expose this account&apos;s posts to its public pages on this lookup, so
-          engagement and modeled metrics cannot be calculated yet. The follower, following, and
-          post counts above are public. Try again in a few minutes, or connect the official API for
-          accounts you manage.
+          engagement and modeled metrics cannot be calculated yet. A dash (—) means the data was not
+          exposed, not zero. The follower, following, and total post counts are public. Try again in
+          a few minutes, or connect the official API for accounts you manage.
         </div>
       ) : null}
 
@@ -397,11 +403,15 @@ export function ProfileDashboard({
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
               Posts in last 30 days
             </p>
-            <p className="mt-2 text-xl font-semibold text-slate-950">{growth.postsLast30Days}</p>
+            <p className="mt-2 text-xl font-semibold text-slate-950">
+              {noPublicPosts ? "—" : growth.postsLast30Days}
+            </p>
             <p className="mt-1 text-xs text-slate-500">
-              {growth.postsInWindowCapped
-                ? "Latest 12 public posts checked; total may be higher"
-                : "Visible public media only"}
+              {noPublicPosts
+                ? "Recent posts not exposed"
+                : growth.postsInWindowCapped
+                  ? "Latest 12 public posts checked; total may be higher"
+                  : "Visible public media only"}
             </p>
           </div>
         </div>
@@ -707,6 +717,12 @@ export function ProfileDashboard({
                   Rank score: 55% followers, 20% engagement, 10% avg likes, 5% avg comments, 10%
                   follower change
                 </p>
+                {noPublicPosts ? (
+                  <p className="mt-1 text-[11px] text-amber-700">
+                    This profile&apos;s post-based signals were not exposed, so its score reflects
+                    only the public signals available.
+                  </p>
+                ) : null}
               </div>
               {ranking.outperformedPercent !== null ? (
                 <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
@@ -751,9 +767,9 @@ export function ProfileDashboard({
                       {row.matchScore !== null ? ` · ${row.matchScore.toFixed(0)}% match` : ""}
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
-                      {row.country.label} · {formatCompact(row.avgLikes)} avg likes ·{" "}
-                      {formatCompact(row.avgComments)} avg comments ·{" "}
-                      {formatPercent(row.followerChangePct)}
+                      {row.country.label} · {targetSignal(formatCompact(row.avgLikes), row.isTarget)} avg likes ·{" "}
+                      {targetSignal(formatCompact(row.avgComments), row.isTarget)} avg comments ·{" "}
+                      {targetSignal(formatPercent(row.followerChangePct), row.isTarget)}
                       {row.followerChangeEstimated ? " est." : ""} follower change
                     </p>
                   </div>
@@ -765,7 +781,7 @@ export function ProfileDashboard({
                       Rank score
                     </p>
                     <p className="mt-0.5 text-[10px] text-slate-500">
-                      {formatPercent(row.engagementRate)} ER
+                      {targetSignal(formatPercent(row.engagementRate), row.isTarget)} ER
                     </p>
                   </div>
                 </li>
@@ -848,17 +864,28 @@ export function ProfileDashboard({
                 <span>{regionalPeer.profile.displayName}</span>
                 <span>Insight</span>
               </div>
-              {regionalComparison.map((comparison) => (
-                <div
-                  key={comparison.label}
-                  className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 px-4 py-3 text-xs last:border-0"
-                >
-                  <span className="font-medium text-slate-700">{comparison.label}</span>
-                  <span className="font-semibold text-slate-950">{comparison.target}</span>
-                  <span className="font-semibold text-slate-950">{comparison.peer}</span>
-                  <span className="text-slate-500">{comparison.insight}</span>
-                </div>
-              ))}
+              {regionalComparison.map((comparison) => {
+                const hidden =
+                  noPublicPosts &&
+                  ["Engagement rate", "Avg likes", "Avg comments", "Follower change"].includes(
+                    comparison.label,
+                  );
+                return (
+                  <div
+                    key={comparison.label}
+                    className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 px-4 py-3 text-xs last:border-0"
+                  >
+                    <span className="font-medium text-slate-700">{comparison.label}</span>
+                    <span className="font-semibold text-slate-950">
+                      {hidden ? "—" : comparison.target}
+                    </span>
+                    <span className="font-semibold text-slate-950">{comparison.peer}</span>
+                    <span className="text-slate-500">
+                      {hidden ? "Posts not exposed" : comparison.insight}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
               Follower change is modeled from public signals for non-demo profiles; see the
@@ -881,6 +908,12 @@ export function ProfileDashboard({
                 <p className="text-xs text-slate-500">
                   Regional rank score · lower modeled fake-follower share ranks higher
                 </p>
+                {noPublicPosts ? (
+                  <p className="mt-1 text-[11px] text-amber-700">
+                    This profile&apos;s post-based signals were not exposed, so its score reflects
+                    only the public signals available.
+                  </p>
+                ) : null}
               </div>
               {regionalRanking.outperformedPercent !== null ? (
                 <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
@@ -925,9 +958,9 @@ export function ProfileDashboard({
                       {row.matchScore !== null ? ` · ${row.matchScore}% match` : ""}
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
-                      {row.country.label} · {formatCompact(row.avgLikes)} avg likes ·{" "}
-                      {formatCompact(row.avgComments)} avg comments ·{" "}
-                      {formatPercent(row.followerChangePct)}
+                      {row.country.label} · {targetSignal(formatCompact(row.avgLikes), row.isTarget)} avg likes ·{" "}
+                      {targetSignal(formatCompact(row.avgComments), row.isTarget)} avg comments ·{" "}
+                      {targetSignal(formatPercent(row.followerChangePct), row.isTarget)}
                       {row.followerChangeEstimated ? " est." : ""} follower change
                     </p>
                   </div>
@@ -939,7 +972,7 @@ export function ProfileDashboard({
                       Regional rank score
                     </p>
                     <p className="mt-0.5 text-[10px] text-slate-500">
-                      {formatPercent(row.engagementRate)} ER
+                      {targetSignal(formatPercent(row.engagementRate), row.isTarget)} ER
                     </p>
                   </div>
                 </li>

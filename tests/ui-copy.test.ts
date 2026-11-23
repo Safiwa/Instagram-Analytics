@@ -30,3 +30,25 @@ describe("growth post-count badge", () => {
     expect(dashboard).toContain("Latest 12 public posts checked; total may be higher");
   });
 });
+
+describe("no-post profile disclosure", () => {
+  const dashboard = source("src/features/profile/ProfileDashboard.tsx");
+
+  it("shows a dash, not zero, when Instagram did not expose recent posts", () => {
+    expect(dashboard).toContain('{noPublicPosts ? "—" : growth.postsLast30Days}');
+    expect(dashboard).toContain('"Recent posts not exposed"');
+    expect(dashboard).toContain("A dash (—) means the data was not");
+    expect(dashboard).toContain("exposed, not zero.");
+  });
+
+  it("hides zero placeholders from peer and regional comparison rows", () => {
+    expect(dashboard).toContain('noPublicPosts && isTarget ? "—" : formatted');
+    expect(dashboard).toContain("targetSignal(formatCompact(row.avgLikes), row.isTarget)");
+    expect(dashboard).toContain("targetSignal(formatPercent(row.engagementRate), row.isTarget)");
+    expect(dashboard).toContain('"Posts not exposed" : comparison.insight');
+  });
+
+  it("does not claim an engagement comparison for a profile with no posts", () => {
+    expect(dashboard).toContain("not comparable because this account's posts were not exposed");
+  });
+});
