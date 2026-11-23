@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Activity, BarChart3, GitCompareArrows } from "lucide-react";
+import { Analytics } from "@vercel/analytics/next";
 import { SiteNav } from "../components/SiteNav";
 import { isLiveConfigured } from "../core/data/adapter";
 import "./globals.css";
@@ -73,6 +74,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <div className="mx-auto max-w-7xl px-6 py-8">{children}</div>
           </main>
         </div>
+        <Analytics />
       </body>
     </html>
   );
