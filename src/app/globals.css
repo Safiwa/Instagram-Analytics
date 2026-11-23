@@ -6,6 +6,8 @@
 
 html {
   scroll-behavior: smooth;
+  /* Keep hash targets clear of the sticky 4rem header. */
+  scroll-padding-top: 5rem;
 }
 
 body {

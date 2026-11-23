@@ -131,7 +131,7 @@ export async function GlobalPulse() {
   const board = await getLeaderboard();
 
   return (
-    <section data-testid="global-pulse" className="space-y-8">
+    <section id="global-pulse" data-testid="global-pulse" className="space-y-8">
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
           Global pulse

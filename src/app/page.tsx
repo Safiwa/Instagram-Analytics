@@ -191,7 +191,7 @@ export default function Home() {
         <HandleLookup />
       </section>
 
-      <section data-testid="collaborations" className="space-y-5">
+      <section id="collaborations" data-testid="collaborations" className="space-y-5">
         <SectionTitle
           eyebrow="Collaborations"
           title="Map brand and creator partnerships in one place"
@@ -248,7 +248,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section data-testid="metric-engine" className="space-y-5">
+      <section id="metric-engine" data-testid="metric-engine" className="space-y-5">
         <SectionTitle
           eyebrow="Metric engine"
           title="What Instagram Analytics calculates"

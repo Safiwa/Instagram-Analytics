@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Activity, BarChart3, GitCompareArrows } from "lucide-react";
+import { SiteNav } from "../components/SiteNav";
 import { isLiveConfigured } from "../core/data/adapter";
 import "./globals.css";
 
@@ -55,15 +56,18 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </aside>
 
           <main className="min-w-0 flex-1">
-            <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
-              <div className="flex items-center gap-2 lg:hidden">
-                <Link href="/" className="font-bold tracking-tight text-slate-950">
-                  Instagram Analytics
-                </Link>
+            <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+              <div className="relative flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
+                <div className="flex items-center gap-2 lg:hidden">
+                  <Link href="/" className="font-bold tracking-tight text-slate-950">
+                    Instagram Analytics
+                  </Link>
+                </div>
+                <p className="hidden text-sm font-medium text-slate-500 lg:block">
+                  Instagram intelligence workspace
+                </p>
+                <SiteNav />
               </div>
-              <p className="hidden text-sm font-medium text-slate-500 lg:block">
-                Instagram intelligence workspace
-              </p>
             </header>
 
             <div className="mx-auto max-w-7xl px-6 py-8">{children}</div>

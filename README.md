@@ -258,6 +258,21 @@ request plus a few embed requests.
 | `/api/digest/send` | Cron-only weekly digest sender |
 | `/api/digest/unsubscribe` | Signed one-click unsubscribe link |
 
+## Header navigation
+
+The sticky header carries the primary navigation on every route. On desktop it sits beside the
+workspace label and offers: **Discover** (`/`), **Leaderboards** (`/#global-pulse`),
+**Collaborations** (`/#collaborations`), **Analytics** (`/#metric-engine`) and **Compare**
+(`/compare`). The three in-page links point at real section ids on the homepage, so they scroll
+directly to the leaderboards, collaboration services and metric engine instead of dead anchors.
+
+Below the `lg` breakpoint the links collapse into a three-bar menu button. The menu closes when a
+link is chosen, when the route changes, or when Escape is pressed, and it exposes
+`aria-expanded`/`aria-controls` state. Route links mark the current page with `aria-current="page"`;
+in-page hash links never claim to be the active page. The sticky header is paired with
+`scroll-padding-top` so scrolled-to sections are not hidden underneath it. The desktop sidebar
+remains available as a compact Discover/Compare shortcut.
+
 ## Agency positioning and collaboration services
 
 The homepage introduces the company as a UAE marketing agency that connects brands with creators
@@ -664,7 +679,7 @@ npm run lint       # ESLint
 ```text
 src/
 ├─ app/                         # routes: home, profile, compare, report API, local Instagram proxy
-├─ components/                  # MetricCard, EmptyState
+├─ components/                  # MetricCard, EmptyState, SiteNav, navigation links
 ├─ core/
 │  ├─ analytics/compare.ts      # same-country/region weighted compare ranking
 │  ├─ analytics/exclusive.ts    # mutually exclusive curated peer groups per profile page
