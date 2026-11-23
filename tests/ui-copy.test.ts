@@ -106,9 +106,12 @@ describe("regional board country labels", () => {
     expect(globalPulse).toContain("{showCountry ? ` · ${entry.countryLabel}` : \"\"}");
   });
 
-  it("discloses that Instagram does not publish account country", () => {
-    expect(globalPulse).toContain("Instagram does not");
-    expect(globalPulse).toContain("publish account country");
+  it("discloses the published account-country first rule and public fallbacks", () => {
+    expect(globalPulse).toContain("Instagram’s published “Account based in” value first");
+    expect(globalPulse).toContain("public post/reel locations, hashtags and captions");
+    expect(globalPulse).toContain("Middle East and UAE boards");
+    expect(globalPulse).toContain("require public evidence");
+    expect(globalPulse).toContain("unavailable values stay marked as not published");
   });
 });
 
@@ -126,6 +129,6 @@ describe("same-country peer benchmark", () => {
 
   it("discloses the fallback when no country signal is published", () => {
     expect(dashboard).toContain("closest available country or region tier");
-    expect(dashboard).toContain("Instagram does not publish account country");
+    expect(dashboard).toContain("Instagram has not published an “Account based in” value");
   });
 });

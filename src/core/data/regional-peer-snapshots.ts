@@ -512,17 +512,172 @@ export const REGIONAL_PEER_SNAPSHOTS: CreatorProfile[] = [
     ]
   },
   {
-    "username": "warrior_arezou",
-    "displayName": "Arezou yaghoubi",
+    "username": "raw.lebanon",
+    "displayName": "Nivine | Lebanon content creator",
     "category": "Instagram creator",
-    "bio": "No biography provided.",
-    "followers": 43000,
-    "following": 3479,
-    "postsCount": 173,
-    "isVerified": false,
+    "bio": "📍Exploring Raw Lebanon experiences!\n📌Just a girl مغرومة ببلدي لبنان 🇱🇧\n📩 Let’s connect!",
+    "followers": 55079,
+    "following": 155,
+    "postsCount": 125,
+    "isVerified": true,
     "isPrivate": false,
     "source": "public",
+    "accountCountry": null,
     "followerHistory": [],
-    "recentPosts": []
+    "recentPosts": [
+      {
+        "id": "DgF9d4wxGIS",
+        "type": "Reel",
+        "caption": "A chic Italian fine dining experience in the heart of Achrafieh.\n\nAltero brings together an elegant restaurant, a sophisticated lounge, a beautiful garden, and a stylish bar, each offering a unique atmosphere.\n\nFor something truly special, don’t miss the Chef’s Table, featuring an open kitchen and an exclusive blind menu curated by the chef for a one-of-a-kind culinary experience.\n\nWhether it’s a romantic date night or a gathering with friends, Altero has the perfect setting for every occasion.\n\nNext time you’re in Beirut, add this one to your dining list!\n\n#lebanon #beirut #ashrfieh #finediningexperience",
+        "postedAt": "2026-11-23T17:52:37.434Z",
+        "likes": 213,
+        "comments": 57,
+        "viewCount": 3049,
+        "permalink": "https://www.instagram.com/p/DgF9d4wxGIS/",
+        "hashtags": [
+          "#lebanon",
+          "#beirut",
+          "#ashrfieh",
+          "#finediningexperience"
+        ]
+      },
+      {
+        "id": "DgA_BmaRKbJ",
+        "type": "Reel",
+        "caption": "ABC nailed the Christmas spirit this year👌🎄🎅\n\n#christmas #lebanon",
+        "postedAt": "2026-11-21T19:30:02.125Z",
+        "likes": 1164,
+        "comments": 23,
+        "viewCount": 8555,
+        "permalink": "https://www.instagram.com/p/DgA_BmaRKbJ/",
+        "hashtags": [
+          "#christmas",
+          "#lebanon"
+        ]
+      },
+      {
+        "id": "Df-NOaSRF0C",
+        "type": "Reel",
+        "caption": "If you’re looking to try something different in Jounieh, Olivera is definitely worth a visit. \n\nBringing together French, Italian, Spanish and Greek influences, with a touch of flavors we all know and love.\n\nLocated in the heart of Jounieh Old Souk, it’s the perfect spot for a special dining experience.\n\nAnd make sure to try their Pain Perdu with fig jam!\n\n📍 Olivera, Jounieh Old Souk\n\n#lebanon #jounieh",
+        "postedAt": "2026-11-20T17:36:23.805Z",
+        "likes": 518,
+        "comments": 58,
+        "viewCount": 13983,
+        "permalink": "https://www.instagram.com/p/Df-NOaSRF0C/",
+        "hashtags": [
+          "#lebanon",
+          "#jounieh"
+        ]
+      },
+      {
+        "id": "Df5CEpPR4dL",
+        "type": "Reel",
+        "caption": "Two different experiences, one destination. ❤️\n\nScarlet is the kind of place where dinner turns into a whole night out. Start with an outdoor dining experience, enjoy an international menu that was honestly a 10/10, then head indoors to the club and keep the night going with great music and party vibes.\n\nGood food, great atmosphere, and everything you need for a perfect night out, all under one roof.\n\nIf you’re in Beirut, SAVE THIS ONE. Scarlet is definitely worth adding to your list!",
+        "postedAt": "2026-11-18T17:22:44.471Z",
+        "likes": 258,
+        "comments": 42,
+        "viewCount": 6533,
+        "permalink": "https://www.instagram.com/p/Df5CEpPR4dL/",
+        "hashtags": []
+      },
+      {
+        "id": "Df0Lwr9RJVb",
+        "type": "Reel",
+        "caption": "Christmas feels different in Batroun🎄🎅\n\n#lebanon #christmas #batroun #batrouninchristmas",
+        "postedAt": "2026-11-16T20:11:11.699Z",
+        "likes": 13626,
+        "comments": 94,
+        "viewCount": 76553,
+        "permalink": "https://www.instagram.com/p/Df0Lwr9RJVb/",
+        "hashtags": [
+          "#lebanon",
+          "#christmas",
+          "#batroun",
+          "#batrouninchristmas"
+        ]
+      },
+      {
+        "id": "DfkiNvKRJhI",
+        "type": "Reel",
+        "caption": "What if everything you love could come with a protein boost? 👀\n\nFrom protein-packed pancakes to ice cream and more, The Protein Bar turns your favorite treats into healthier alternatives, made with clean ingredients and a good dose of protein.\n\nA Lebanese concept that made it to the spotlight on Shark Tank Lebanon, and for good reason!\n\nAnd the best part? You can find The Protein Bar at Spinneys Jnah or Hazmieh, and grab your favorite treat while shopping! You can also order through their website: https://theprotein-bar.com/\n\nBecause eating healthy doesn’t mean giving up the things you love.",
+        "postedAt": "2026-11-10T18:19:33.101Z",
+        "likes": 298,
+        "comments": 64,
+        "viewCount": 7691,
+        "permalink": "https://www.instagram.com/p/DfkiNvKRJhI/",
+        "hashtags": []
+      },
+      {
+        "id": "DfC8swuxBWL",
+        "type": "Reel",
+        "caption": "A little trip back to the ’60s 🇱🇧\n\nFrom Saida to Gemmayzeh, Ahwet 60 brings back the charm of old Lebanon, where every detail tells a story and time seems to stand still.\n\nServing authentic Lebanese food with generous portions and amazing flavors that take you straight back to the good old days.\n\nAdd it to your list, try it this week and let me know what you think! 🤍🇱🇧",
+        "postedAt": "2026-10-28T17:16:48.054Z",
+        "likes": 405,
+        "comments": 90,
+        "viewCount": 6218,
+        "permalink": "https://www.instagram.com/p/DfC8swuxBWL/",
+        "hashtags": []
+      },
+      {
+        "id": "De7TgbdRRny",
+        "type": "Reel",
+        "caption": "Beirut’s nightlife favorite is BACK! ❤️‍🔥✨\n\nThe iconic @salazar.beirut has a new home in the heart of Mar Mikhael, bringing back the oriental vibes, commercial Arabic & English hits, and a fusion cuisine you don’t want to miss!\n\nNew location, same unforgettable nights. 🪩🥂\n\n📍 Salazar, Mar Mikhael, Beirut\n\n#lebanon #beirut #rawlebanon #لبنان #nightlife",
+        "postedAt": "2026-10-25T18:02:10.195Z",
+        "likes": 638,
+        "comments": 45,
+        "viewCount": 20321,
+        "permalink": "https://www.instagram.com/p/De7TgbdRRny/",
+        "hashtags": [
+          "#lebanon",
+          "#beirut",
+          "#rawlebanon",
+          "#لبنان",
+          "#nightlife"
+        ]
+      },
+      {
+        "id": "De2JOP6xBON",
+        "type": "Reel",
+        "caption": "Discover the new menu at Sèves, where creativity, quality, and attention to detail come together in every dish, all set within an atmosphere of timeless elegance✨\n\n#lebanon #rawlebanon #beirut #restaurant",
+        "postedAt": "2026-10-23T17:56:06.222Z",
+        "likes": 536,
+        "comments": 50,
+        "viewCount": 24637,
+        "permalink": "https://www.instagram.com/p/De2JOP6xBON/",
+        "hashtags": [
+          "#lebanon",
+          "#rawlebanon",
+          "#beirut",
+          "#restaurant"
+        ]
+      },
+      {
+        "id": "DeuWApENxT4",
+        "type": "Reel",
+        "caption": "Save this spot in Beirut! ✨\n\nLimonare in harj Tabet, is a hidden green escape in the heart of Beirut! Amazing Mediterranean & international food, amazing ambiance, and a whole lot of good vibes. A solid 10/10 for everything! 😍\n\nTheir Weekly Ritual:\nWednesday: Steak É Pasta — $32/person\nThursday: Nights with Nely — $10 band charge\nFriday: Ciao, Bella! with Pasquale from Napoli — $10 band charge\nSaturday: Limonare After Dark — Dinner, drinks & DJ beats\n\n📍 Horch Tabet, Beirut\nSave this place to try!\n\n#lebanon #rawlebanon #beirut #restaurant",
+        "postedAt": "2026-10-20T17:13:55.041Z",
+        "likes": 990,
+        "comments": 56,
+        "viewCount": 37386,
+        "permalink": "https://www.instagram.com/p/DeuWApENxT4/",
+        "hashtags": [
+          "#lebanon",
+          "#rawlebanon",
+          "#beirut",
+          "#restaurant"
+        ]
+      },
+      {
+        "id": "Dd2SykONXnl",
+        "type": "Reel",
+        "caption": "BEIRUT 🌧️🇱🇧✨",
+        "postedAt": "2026-09-28T22:48:18.677Z",
+        "likes": 34238,
+        "comments": 161,
+        "viewCount": 143851,
+        "permalink": "https://www.instagram.com/p/Dd2SykONXnl/",
+        "hashtags": []
+      }
+    ]
   }
 ];

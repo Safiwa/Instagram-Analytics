@@ -10,6 +10,8 @@ export type Post = {
   viewCount?: number;
   permalink?: string;
   hashtags: string[];
+  // Public location tag exposed by Instagram on the post/reel, when available.
+  location?: string;
 };
 
 export type MonthlyPoint = {
@@ -53,6 +55,9 @@ export type CreatorProfile = {
   source: "demo" | "public" | "live";
   profilePictureUrl?: string;
   website?: string;
+  // Instagram's "Account based in" value only when the platform actually
+  // publishes it. "Not shared" and unavailable values stay null/undefined.
+  accountCountry?: string | null;
   fakeFollowers?: number;
   followerHistory: MonthlyPoint[];
   recentPosts: Post[];

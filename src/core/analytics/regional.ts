@@ -10,7 +10,9 @@ import {
 import {
   countryRelationship,
   countryScore,
+  hasPublishedCountryEvidence,
   inferCountrySignal,
+  isMiddleEastCountry,
   type CountryRelationship,
   type CountrySignal,
 } from "./country";
@@ -83,6 +85,38 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+const MAX_COUNTRY_REPEATS = 3;
+
+// The target row is itself part of the five-row benchmark, so its country counts
+// toward the three-row limit. Profiles without a published country do not add a
+// country to the count.
+function capCountryRepeats(
+  candidates: RegionalPeer[],
+  targetCountry: CountrySignal,
+): RegionalPeer[] {
+  const counts = new Map<string, number>();
+  if (
+    targetCountry.country &&
+    isMiddleEastCountry(targetCountry.country) &&
+    hasPublishedCountryEvidence(targetCountry)
+  ) {
+    counts.set(targetCountry.country, 1);
+  }
+
+  return candidates.filter((candidate) => {
+    const country = candidate.country.country;
+    if (!country) {
+      return false;
+    }
+    const count = counts.get(country) ?? 0;
+    if (count >= MAX_COUNTRY_REPEATS) {
+      return false;
+    }
+    counts.set(country, count + 1);
+    return true;
+  });
+}
+
 function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): string[] {
   const targetActivity = inferPostActivity(target);
   const candidateActivity = inferPostActivity(candidate);
@@ -110,6 +144,16 @@ function rankedCandidates(
   if (!targetCategory || categoryGroup(targetCategory) !== "creator") {
     return [];
   }
+  // A known country must be one of the published Middle East countries and must
+  // come from public evidence. An unknown target is still allowed: its row is
+  // disclosed as "Country not published" and its peers remain evidence-gated.
+  if (
+    targetCountry.country &&
+    (!isMiddleEastCountry(targetCountry.country) ||
+      !hasPublishedCountryEvidence(targetCountry))
+  ) {
+    return [];
+  }
 
   const candidates = pool.filter((candidate) => {
     const candidateCategory = inferExplicitCategory(candidate);
@@ -126,7 +170,7 @@ function rankedCandidates(
     );
   });
 
-  return candidates
+  const ranked = candidates
     .map((candidate) => {
       const candidateMetrics = computeMetrics(candidate);
       const candidateFactors = rankFactors(candidate, candidateMetrics);
@@ -162,14 +206,25 @@ function rankedCandidates(
         engagementSource: candidateMetrics.engagementSource,
       };
     })
-    .sort(
-      (left, right) =>
-        Number(right.sameCategoryLabel) - Number(left.sameCategoryLabel) ||
-        right.matchScore - left.matchScore ||
-        regionalRankScore(right.factors, right.metrics.authenticityPct) -
-          regionalRankScore(left.factors, left.metrics.authenticityPct) ||
-        left.profile.username.localeCompare(right.profile.username),
+    .filter(
+      (peer) =>
+        peer.country.country !== null &&
+        isMiddleEastCountry(peer.country.country) &&
+        hasPublishedCountryEvidence(peer.country),
     );
+
+  ranked.sort(
+    (left, right) =>
+      Number(right.sameCategoryLabel) - Number(left.sameCategoryLabel) ||
+      right.matchScore - left.matchScore ||
+      regionalRankScore(right.factors, right.metrics.authenticityPct) -
+        regionalRankScore(left.factors, left.metrics.authenticityPct) ||
+      left.profile.username.localeCompare(right.profile.username),
+  );
+
+  // Apply the country cap after ranking so the strongest eligible peer in each
+  // country keeps its place; later profiles from that country are skipped.
+  return capCountryRepeats(ranked, targetCountry);
 }
 
 export function findRegionalCategoryPeer(

@@ -321,6 +321,44 @@ describe("country leaderboards", () => {
     ]);
   });
 
+  it("caps the Middle East board at three entries per country while the UAE board stays UAE-only", () => {
+    const uaeAccounts = [
+      "baneenstars",
+      "taimalfalasi",
+      "wessamq",
+      "sarahmalas",
+      "randdalati",
+    ].map((handle, index) =>
+      profile(handle, 100_000_000 - index * 10_000_000, [post("p", 2, 1_000)], "Based in Dubai"),
+    );
+    const otherCountries = [
+      profile("visitqatar", 50_000_000, [post("q", 2, 1_000)]),
+      profile("visitsaudi", 40_000_000, [post("s", 2, 1_000)]),
+      profile("visitjordan", 30_000_000, [post("j", 2, 1_000)]),
+      profile("visitlebanon", 20_000_000, [post("l", 2, 1_000)]),
+    ];
+    const board = rankProfiles([...uaeAccounts, ...otherCountries], NOW);
+    const middleEast = board.regional["middle-east"];
+
+    expect(middleEast.slice(0, 3).map((entry) => entry.username)).toEqual([
+      "baneenstars",
+      "taimalfalasi",
+      "wessamq",
+    ]);
+    expect(middleEast.map((entry) => entry.country)).toEqual([
+      "United Arab Emirates",
+      "United Arab Emirates",
+      "United Arab Emirates",
+      "Qatar",
+      "Saudi Arabia",
+      "Jordan",
+      "Lebanon",
+    ]);
+    expect(board.regional.uae.map((entry) => entry.username)).toEqual(
+      uaeAccounts.map((account) => account.username),
+    );
+  });
+
   it("excludes @technicalguruji from the Middle East and UAE boards", () => {
     const board = rankProfiles(
       [

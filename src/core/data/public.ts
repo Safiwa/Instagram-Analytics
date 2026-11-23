@@ -1,3 +1,4 @@
+import { normalizePublishedCountry } from "../analytics/country";
 import { log } from "../logging/logger";
 import type { CreatorProfile, Post } from "./types";
 
@@ -38,6 +39,8 @@ const cache = new Map<string, { expiresAt: number; profile: CreatorProfile }>();
 export type PublicIdentity = {
   isVerified: boolean;
   profilePictureUrl?: string;
+  // Only a published "Account based in" value. Null means not shared/unavailable.
+  accountCountry?: string | null;
 };
 
 // The Graph API's business_discovery does not expose the verified badge, so the
@@ -153,6 +156,15 @@ type PublicMediaNode = {
   comments_count?: number;
   video_view_count?: number;
   view_count?: number;
+  location?: PublicLocation | string | null;
+  edge_media_to_location?: { node?: PublicLocation };
+};
+
+type PublicLocation = {
+  name?: string;
+  short_name?: string;
+  city?: string;
+  country?: string;
 };
 
 type PublicEdge = { node?: PublicMediaNode };
@@ -176,6 +188,13 @@ type PublicUser = {
   bio_links?: { url?: string }[];
   category_name?: string;
   business_category_name?: string;
+  // Instagram's transparency fields, when the logged-out page happens to expose
+  // them. Viewer/proxy locale fields are deliberately not read here.
+  account_based_in?: unknown;
+  account_based_in_country?: unknown;
+  account_country?: unknown;
+  based_in?: unknown;
+  about_this_account?: unknown;
 };
 
 type EmbedMetrics = {
@@ -232,6 +251,142 @@ function parseCompact(value: string | null | undefined): number | null {
   const multiplier =
     suffix === "K" ? 1_000 : suffix === "M" ? 1_000_000 : suffix === "B" ? 1_000_000_000 : 1;
   return Math.round(base * multiplier);
+}
+
+const ACCOUNT_COUNTRY_KEYS = [
+  "account_based_in",
+  "account_based_in_country",
+  "account_country",
+  "based_in",
+] as const;
+
+const ACCOUNT_COUNTRY_VALUE_KEYS = [
+  "country_name",
+  "countryName",
+  "country",
+  "name",
+  "value",
+  "label",
+  "code",
+  "country_code",
+  "countryCode",
+] as const;
+
+// Accept only the value of an explicit account-country field. Generic page
+// fields such as PolarisSiteData.country_code are viewer locale and are never
+// passed to this parser.
+function parseCountryValue(value: unknown): string | null {
+  if (typeof value === "string") {
+    return normalizePublishedCountry(value);
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const parsed = parseCountryValue(item);
+      if (parsed) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  for (const key of ACCOUNT_COUNTRY_VALUE_KEYS) {
+    if (key in record) {
+      const parsed = parseCountryValue(record[key]);
+      if (parsed) {
+        return parsed;
+      }
+    }
+  }
+  return null;
+}
+
+function accountCountryFromText(text: string): string | null {
+  const decoded = decodeHtml(text).replace(/\\u0022/g, '"').replace(/\\"/g, '"');
+  const patterns = [
+    /"account_based_in"\s*:\s*"([^"\\]{1,80})"/i,
+    /"account_based_in"\s*,\s*"([^"\\]{1,80})"/i,
+    /account\s+based\s+in\s*[:：]?\s*["']?([A-Za-z][A-Za-z .'-]{1,60}?)["'\\,\]\}\n>]/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = decoded.match(pattern);
+    if (!match) {
+      continue;
+    }
+    const parsed = normalizePublishedCountry(match[1].trim().replace(/[,:;]+$/, ""));
+    if (parsed) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function accountCountryFromUser(user: PublicUser | null): string | null {
+  if (!user) {
+    return null;
+  }
+
+  for (const key of ACCOUNT_COUNTRY_KEYS) {
+    if (key in user) {
+      const parsed = parseCountryValue(user[key]);
+      if (parsed) {
+        return parsed;
+      }
+    }
+  }
+
+  if (user.about_this_account !== undefined) {
+    const parsed =
+      parseCountryValue(user.about_this_account) ??
+      accountCountryFromText(JSON.stringify(user.about_this_account));
+    if (parsed) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function findAccountCountry(root: unknown): string | null {
+  const seen = new Set<object>();
+  const stack: unknown[] = [root];
+  let visited = 0;
+
+  while (stack.length > 0 && visited < 200_000) {
+    const node = stack.pop();
+    if (!node || typeof node !== "object" || seen.has(node)) {
+      continue;
+    }
+    seen.add(node);
+    visited += 1;
+
+    const record = node as Record<string, unknown>;
+    for (const key of ACCOUNT_COUNTRY_KEYS) {
+      if (key in record) {
+        const parsed = parseCountryValue(record[key]);
+        if (parsed) {
+          return parsed;
+        }
+      }
+    }
+    if (record.about_this_account !== undefined) {
+      const parsed =
+        parseCountryValue(record.about_this_account) ??
+        accountCountryFromText(JSON.stringify(record.about_this_account));
+      if (parsed) {
+        return parsed;
+      }
+    }
+
+    for (const value of Object.values(record)) {
+      stack.push(value);
+    }
+  }
+
+  return null;
 }
 
 function parseOgStats(html: string): {
@@ -345,6 +500,21 @@ function viewsFromNode(node: PublicMediaNode): number | undefined {
   return typeof node.video_view_count === "number"
     ? node.video_view_count
     : node.view_count;
+}
+
+function locationFromNode(node: PublicMediaNode): string | undefined {
+  const location = node.location ?? node.edge_media_to_location?.node;
+  if (typeof location === "string") {
+    return location.trim() || undefined;
+  }
+  if (!location || typeof location !== "object") {
+    return undefined;
+  }
+
+  const parts = [location.name, location.city, location.country]
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part));
+  return [...new Set(parts)].join(", ") || undefined;
 }
 
 function parseJsonScripts(html: string): unknown[] {
@@ -531,6 +701,7 @@ async function fetchEmbeds(shortcodes: string[]): Promise<Map<string, EmbedMetri
 type WebProfileResult = {
   user: PublicUser | null;
   edges: PublicEdge[];
+  accountCountry: string | null;
 };
 
 async function fetchWebProfile(username: string): Promise<WebProfileResult | null> {
@@ -551,7 +722,9 @@ async function fetchWebProfile(username: string): Promise<WebProfileResult | nul
 
     const payload = await response.json();
     const user = findUser(payload, username);
-    return { user, edges: mediaEdgesFromUser(user) };
+    const accountCountry =
+      accountCountryFromUser(user) ?? findAccountCountry(payload) ?? accountCountryFromText(JSON.stringify(payload));
+    return { user, edges: mediaEdgesFromUser(user), accountCountry };
   } catch (error) {
     log.warn("instagram web profile fallback failed", {
       username,
@@ -567,6 +740,7 @@ type MediaCandidate = {
   mediaType: number | undefined;
   productType: string | undefined;
   caption: string;
+  location?: string;
   likes?: number;
   comments?: number;
   views?: number;
@@ -590,6 +764,7 @@ function buildCandidates(edges: PublicEdge[]): MediaCandidate[] {
     const likes = likesFromNode(node);
     const comments = commentsFromNode(node);
     const views = viewsFromNode(node);
+    const location = locationFromNode(node);
 
     candidates.push({
       shortcode,
@@ -597,6 +772,7 @@ function buildCandidates(edges: PublicEdge[]): MediaCandidate[] {
       mediaType: node.media_type,
       productType: node.product_type,
       caption: captionFromNode(node),
+      ...(location ? { location } : {}),
       ...(likes === undefined ? {} : { likes }),
       ...(comments === undefined ? {} : { comments }),
       ...(views === undefined ? {} : { views }),
@@ -645,8 +821,9 @@ function preferredCategory(user: PublicUser | null): string {
 }
 
 // Best-effort identity enrichment for live profiles. Business Discovery cannot
-// return verification, so this reads only the public badge/picture. A failed or
-// offline bridge simply leaves the live profile unchanged.
+// return verification or "Account based in", so this reads only the public
+// badge/picture and an explicitly published account country. A failed or offline
+// bridge simply leaves the live profile unchanged.
 export async function fetchPublicIdentity(username: string): Promise<PublicIdentity | null> {
   const key = username.trim().replace(/^@/, "").toLowerCase();
   if (!isValidHandle(key)) {
@@ -660,7 +837,7 @@ export async function fetchPublicIdentity(username: string): Promise<PublicIdent
 
   // The signed proxy bridge serves the public HTML profile with a real
   // `is_verified` field; `web_profile_info` is blocked by Instagram's login wall.
-  let user: PublicUser | null = null;
+  let parsed: ParsedProfileHtml | null = null;
   try {
     const response = await fetchInstagram(
       `${ORIGIN}/${encodeURIComponent(key)}/`,
@@ -668,7 +845,7 @@ export async function fetchPublicIdentity(username: string): Promise<PublicIdent
       REQUEST_TIMEOUT_MS,
     );
     if (response.ok) {
-      user = parseProfileHtml(await response.text(), key).user;
+      parsed = parseProfileHtml(await response.text(), key);
     }
   } catch (error) {
     log.warn("public identity lookup failed", {
@@ -678,13 +855,16 @@ export async function fetchPublicIdentity(username: string): Promise<PublicIdent
     return null;
   }
 
-  if (!user) {
+  const user = parsed?.user ?? null;
+  if (!parsed || (!user && !parsed.ogTitle)) {
     return null;
   }
 
   const identity: PublicIdentity = {
-    isVerified: Boolean(user.is_verified),
-    profilePictureUrl: user.profile_pic_url_hd?.trim() || user.profile_pic_url?.trim() || undefined,
+    isVerified: Boolean(user?.is_verified),
+    profilePictureUrl:
+      user?.profile_pic_url_hd?.trim() || user?.profile_pic_url?.trim() || undefined,
+    accountCountry: accountCountryFromUser(user) ?? parsed.accountCountry,
   };
   identityCache.set(key, { expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS, identity });
   if (identityCache.size > CACHE_MAX) {
@@ -706,21 +886,26 @@ type ParsedProfileHtml = {
   edges: PublicEdge[];
   ogStats: ReturnType<typeof parseOgStats>;
   ogTitle: string | null;
+  accountCountry: string | null;
 };
 
 function parseProfileHtml(html: string, username: string): ParsedProfileHtml {
   const documents = parseJsonScripts(html);
   let user: PublicUser | null = null;
   let edges: PublicEdge[] = [];
+  let accountCountry = accountCountryFromText(html);
 
   for (const document of documents) {
     if (!user) {
       user = findUser(document, username);
     }
+    if (!accountCountry) {
+      accountCountry = findAccountCountry(document);
+    }
     if (edges.length === 0) {
       edges = findMediaEdges(document);
     }
-    if (user && edges.length > 0) {
+    if (user && accountCountry && edges.length > 0) {
       break;
     }
   }
@@ -730,6 +915,7 @@ function parseProfileHtml(html: string, username: string): ParsedProfileHtml {
     edges,
     ogStats: parseOgStats(html),
     ogTitle: metaContent(html, "og:title"),
+    accountCountry: accountCountry ?? accountCountryFromUser(user),
   };
 }
 
@@ -801,7 +987,7 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
   }
 
   let html = await response.text();
-  let { user, edges, ogStats, ogTitle } = parseProfileHtml(html, key);
+  let { user, edges, ogStats, ogTitle, accountCountry } = parseProfileHtml(html, key);
 
   // A scraper can return a metadata-free app shell for a real account. Retry once
   // through a fresh proxy before treating the handle as genuinely missing.
@@ -819,7 +1005,7 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     }
     if (retry.ok) {
       html = await retry.text();
-      ({ user, edges, ogStats, ogTitle } = parseProfileHtml(html, key));
+      ({ user, edges, ogStats, ogTitle, accountCountry } = parseProfileHtml(html, key));
     }
   }
 
@@ -846,6 +1032,9 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     if (webProfile) {
       if (webProfile.user && (!user || followersOf(user) === undefined)) {
         user = webProfile.user;
+      }
+      if (!accountCountry && webProfile.accountCountry) {
+        accountCountry = webProfile.accountCountry;
       }
       isPrivate = Boolean(isPrivate || user?.is_private);
       edges = webProfile.edges;
@@ -881,6 +1070,7 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
       viewCount: candidate.views ?? metrics?.views,
       permalink: `${ORIGIN}/p/${candidate.shortcode}/`,
       hashtags: extractHashtags(candidate.caption),
+      ...(candidate.location ? { location: candidate.location } : {}),
     });
   }
 
@@ -897,6 +1087,7 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     source: "public",
     profilePictureUrl: user?.profile_pic_url,
     website: preferredWebsite(user),
+    accountCountry: accountCountry ?? accountCountryFromUser(user),
     followerHistory: [],
     recentPosts,
     audience: undefined,

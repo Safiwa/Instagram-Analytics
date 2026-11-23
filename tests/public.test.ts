@@ -27,6 +27,8 @@ type ProfileFixture = {
   posts?: number;
   isPrivate?: boolean;
   isVerified?: boolean;
+  accountCountry?: string | null;
+  viewerCountry?: string;
   media?: MediaFixture[];
 };
 
@@ -73,6 +75,9 @@ function profileHtml(fixture: ProfileFixture): string {
                 follower_count: followers,
                 following_count: following,
                 profile_pic_url: "https://example.com/avatar.jpg",
+                ...(fixture.accountCountry
+                  ? { account_based_in: fixture.accountCountry }
+                  : {}),
               },
               polaris_timeline_connection: {
                 edges: media.map((item) => ({
@@ -106,6 +111,9 @@ function profileHtml(fixture: ProfileFixture): string {
     `<meta property="og:title" content="${fixture.fullName ?? "Public Test"} (@${fixture.username}) • Instagram photos and videos" />`,
     "</head><body>",
     `<script type="application/json" data-sjs>${JSON.stringify(payload)}</script>`,
+    `<script type="application/json" data-sjs>${JSON.stringify({
+      PolarisSiteData: { country_code: fixture.viewerCountry ?? "US" },
+    })}</script>`,
     "</body></html>",
   ].join("");
 }
@@ -224,9 +232,35 @@ describe("public Instagram reader", () => {
     expect(identity).toEqual({
       isVerified: true,
       profilePictureUrl: "https://example.com/avatar.jpg",
+      accountCountry: null,
     });
     await fetchPublicIdentity("public.test");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads a published account country and never uses the viewer locale", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("instagram.com/public.test/")) {
+        return new Response(
+          profileHtml({
+            username: "public.test",
+            accountCountry: "Lebanon",
+            viewerCountry: "AE",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "text/html", "X-Instagram-Proxy": "ok" },
+          },
+        );
+      }
+      return new Response("", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const identity = await fetchPublicIdentity("public.test");
+
+    expect(identity?.accountCountry).toBe("Lebanon");
+    expect(identity && JSON.stringify(identity)).not.toContain("AE");
   });
 
   it("maps a public profile and its recent posts", async () => {

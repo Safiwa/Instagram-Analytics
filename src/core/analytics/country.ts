@@ -1,13 +1,12 @@
-import { regionForHandle, type Region } from "../data/regions";
+import { MIDDLE_EAST_COUNTRIES, regionForHandle, type Region } from "../data/regions";
 import type { CreatorProfile } from "../data/types";
 
-// Instagram does not publish an account's country. These signals are inferred
-// from public text first, then curated handle metadata, and are never presented
-// as audience demographics. The order is deliberate: public handle and profile
-// text, then a clear majority of hashtag/caption locations, then curated
-// metadata. Curated-only attribution is marked with the "curated" basis so
-// country boards can require public evidence.
-export type CountryBasis = "handle" | "profile" | "posts" | "curated" | "region";
+// Instagram's "Account based in" value wins when it is shared. When it is not
+// shared, public post/reel locations, hashtags and captions come before the
+// remaining public text signals and curated metadata. None of these values are
+// audience demographics. Curated-only attribution is marked with the "curated"
+// basis so country boards can require published evidence.
+export type CountryBasis = "account" | "handle" | "profile" | "posts" | "curated" | "region";
 
 export type CountrySignal = {
   country: string | null;
@@ -22,6 +21,7 @@ type CountryRule = {
   aliases: string[];
   handleAliases?: string[];
   flag?: string;
+  code?: string;
 };
 
 const COUNTRY_RULES: CountryRule[] = [
@@ -29,9 +29,11 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "United Arab Emirates",
     region: "uae",
     flag: "🇦🇪",
+    code: "AE",
     aliases: [
       "united arab emirates",
       "uae",
+      "u a e",
       "dubai",
       "dxb",
       "abu dhabi",
@@ -46,6 +48,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Saudi Arabia",
     region: "middle-east",
     flag: "🇸🇦",
+    code: "SA",
     aliases: ["saudi arabia", "saudi", "ksa", "riyadh", "jeddah", "makkah", "medina"],
     handleAliases: ["saudi", "ksa", "riyadh", "jeddah"],
   },
@@ -53,6 +56,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Qatar",
     region: "middle-east",
     flag: "🇶🇦",
+    code: "QA",
     aliases: ["qatar", "doha"],
     handleAliases: ["qatar", "doha"],
   },
@@ -60,14 +64,23 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Jordan",
     region: "middle-east",
     flag: "🇯🇴",
+    code: "JO",
     aliases: ["jordan", "amman"],
     handleAliases: ["jordan", "amman"],
   },
-  { country: "Kuwait", region: "middle-east", flag: "🇰🇼", aliases: ["kuwait"], handleAliases: ["kuwait"] },
+  {
+    country: "Kuwait",
+    region: "middle-east",
+    flag: "🇰🇼",
+    code: "KW",
+    aliases: ["kuwait"],
+    handleAliases: ["kuwait"],
+  },
   {
     country: "Bahrain",
     region: "middle-east",
     flag: "🇧🇭",
+    code: "BH",
     aliases: ["bahrain", "manama"],
     handleAliases: ["bahrain", "manama"],
   },
@@ -75,6 +88,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Oman",
     region: "middle-east",
     flag: "🇴🇲",
+    code: "OM",
     aliases: ["oman", "muscat"],
     handleAliases: ["oman", "muscat"],
   },
@@ -82,6 +96,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Lebanon",
     region: "middle-east",
     flag: "🇱🇧",
+    code: "LB",
     aliases: ["lebanon", "beirut"],
     handleAliases: ["lebanon", "beirut"],
   },
@@ -89,6 +104,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Egypt",
     region: "middle-east",
     flag: "🇪🇬",
+    code: "EG",
     aliases: ["egypt", "cairo"],
     handleAliases: ["egypt", "cairo"],
   },
@@ -96,6 +112,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Syria",
     region: "middle-east",
     flag: "🇸🇾",
+    code: "SY",
     aliases: ["syria", "damascus"],
     handleAliases: ["syria", "damascus"],
   },
@@ -103,6 +120,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Iraq",
     region: "middle-east",
     flag: "🇮🇶",
+    code: "IQ",
     aliases: ["iraq", "baghdad"],
     handleAliases: ["iraq", "baghdad"],
   },
@@ -110,6 +128,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Palestine",
     region: "middle-east",
     flag: "🇵🇸",
+    code: "PS",
     aliases: ["palestine", "palestinian", "ramallah", "gaza"],
     handleAliases: ["palestine", "ramallah", "gaza"],
   },
@@ -117,6 +136,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Tunisia",
     region: "middle-east",
     flag: "🇹🇳",
+    code: "TN",
     aliases: ["tunisia", "tunis"],
     handleAliases: ["tunisia", "tunis"],
   },
@@ -124,6 +144,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Morocco",
     region: "middle-east",
     flag: "🇲🇦",
+    code: "MA",
     aliases: ["morocco", "moroccan", "casablanca", "marrakech"],
     handleAliases: ["morocco", "casablanca", "marrakech"],
   },
@@ -131,6 +152,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Libya",
     region: "middle-east",
     flag: "🇱🇾",
+    code: "LY",
     aliases: ["libya", "libyan", "tripoli", "benghazi"],
     handleAliases: ["libya", "tripoli", "benghazi"],
   },
@@ -138,6 +160,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Iran",
     region: "middle-east",
     flag: "🇮🇷",
+    code: "IR",
     aliases: ["iran", "iranian", "tehran"],
     handleAliases: ["iran", "tehran"],
   },
@@ -145,8 +168,10 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "United States",
     region: "usa",
     flag: "🇺🇸",
+    code: "US",
     aliases: [
       "united states",
+      "united states of america",
       "usa",
       "new york",
       "los angeles",
@@ -160,6 +185,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "United Kingdom",
     region: "europe",
     flag: "🇬🇧",
+    code: "GB",
     aliases: ["united kingdom", "uk", "london", "england"],
     handleAliases: ["uk", "london"],
   },
@@ -167,6 +193,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Italy",
     region: "europe",
     flag: "🇮🇹",
+    code: "IT",
     aliases: ["italy", "italia", "milan"],
     handleAliases: ["italy", "milan"],
   },
@@ -174,6 +201,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "France",
     region: "europe",
     flag: "🇫🇷",
+    code: "FR",
     aliases: ["france", "paris"],
     handleAliases: ["france", "paris"],
   },
@@ -181,6 +209,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Spain",
     region: "europe",
     flag: "🇪🇸",
+    code: "ES",
     aliases: ["spain", "madrid", "barcelona"],
     handleAliases: ["spain", "madrid", "barcelona"],
   },
@@ -188,6 +217,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Germany",
     region: "europe",
     flag: "🇩🇪",
+    code: "DE",
     aliases: ["germany", "berlin", "munich"],
     handleAliases: ["germany", "berlin"],
   },
@@ -195,6 +225,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Portugal",
     region: "europe",
     flag: "🇵🇹",
+    code: "PT",
     aliases: ["portugal", "lisbon"],
     handleAliases: ["portugal", "lisbon"],
   },
@@ -202,6 +233,7 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "Brazil",
     region: null,
     flag: "🇧🇷",
+    code: "BR",
     aliases: ["brazil", "brasil", "sao paulo", "saopaulo", "rio de janeiro"],
     handleAliases: ["brazil", "brasil", "saopaulo"],
   },
@@ -209,14 +241,16 @@ const COUNTRY_RULES: CountryRule[] = [
     country: "India",
     region: null,
     flag: "🇮🇳",
+    code: "IN",
     aliases: ["india", "mumbai", "delhi", "bangalore"],
     handleAliases: ["india", "mumbai", "delhi"],
   },
 ];
 
-// Curated published account country, used only when no public handle, profile
-// or post signal resolves a country. It is editorial metadata, not Instagram
-// audience data, and is marked with the "curated" basis.
+// Curated account country, used only when Instagram's "Account based in" and
+// the public handle, profile and post signals all leave the country unresolved.
+// It is editorial metadata, not Instagram audience data, and is marked with the
+// "curated" basis.
 const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   qatarairways: "Qatar",
   visitqatar: "Qatar",
@@ -320,7 +354,7 @@ function hasHandleAlias(handle: string, alias: string): boolean {
 // Emoji flags survive public profile/caption text even when the country name is
 // translated. `normalize()` strips them, so they must be checked before the text
 // aliases. When several flags appear, the rule order decides, with the UAE first;
-// public handle signals still win before any profile or post text.
+// explicit account-country and post signals are checked before this text.
 function matchCountryFlag(text: string): CountryRule | null {
   for (const rule of COUNTRY_RULES) {
     if (rule.flag && text.includes(rule.flag)) {
@@ -361,6 +395,52 @@ function countryRuleForCountry(country: string): CountryRule | null {
   return COUNTRY_RULES.find((entry) => entry.country === country) ?? null;
 }
 
+// Canonicalizes Instagram's published "Account based in" name or ISO code. Only
+// known countries are accepted so viewer-locale fields such as `country_code`
+// can never be mistaken for an account country.
+export function normalizePublishedCountry(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed || /not shared|not available|unknown|unspecified|none/i.test(trimmed)) {
+    return null;
+  }
+
+  const compactValue = compact(trimmed).toUpperCase();
+  const byCode = COUNTRY_RULES.find((rule) => rule.code === compactValue);
+  if (byCode) {
+    return byCode.country;
+  }
+
+  const normalizedValue = normalize(trimmed);
+  const byAlias = COUNTRY_RULES.find(
+    (rule) =>
+      rule.country.toLowerCase() === normalizedValue ||
+      rule.aliases.some((alias) => normalize(alias) === normalizedValue),
+  );
+  return byAlias?.country ?? null;
+}
+
+// Only public evidence qualifies for the Middle East and UAE boards. Handle,
+// profile, post and explicit account-country signals are published; curated
+// metadata and region membership are editorial fallbacks.
+export function hasPublishedCountryEvidence(signal: CountrySignal): boolean {
+  return (
+    signal.country !== null &&
+    (signal.basis === "account" ||
+      signal.basis === "handle" ||
+      signal.basis === "profile" ||
+      signal.basis === "posts")
+  );
+}
+
+export function isMiddleEastCountry(country: string | null | undefined): boolean {
+  return Boolean(
+    country && MIDDLE_EAST_COUNTRIES.includes(country as (typeof MIDDLE_EAST_COUNTRIES)[number]),
+  );
+}
+
 // Count one vote per post per detected country. A post that mentions two
 // countries contributes one vote to each, so a single hashtag-stuffed post
 // cannot outweigh a clear majority across the public recent posts.
@@ -368,7 +448,7 @@ function postCountryVotes(profile: CreatorProfile): Map<string, number> {
   const votes = new Map<string, number>();
 
   for (const post of profile.recentPosts) {
-    const raw = [post.caption, ...post.hashtags].join(" ");
+    const raw = [post.caption, post.location ?? "", ...post.hashtags].join(" ");
     const countries = new Set<string>();
 
     for (const rule of COUNTRY_RULES) {
@@ -412,6 +492,20 @@ export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
   const username = profile.username.toLowerCase();
   const region = regionForHandle(username);
 
+  // Instagram's own transparency value is authoritative when it is shared.
+  const accountCountry = normalizePublishedCountry(profile.accountCountry);
+  const accountRule = accountCountry ? countryRuleForCountry(accountCountry) : null;
+  if (accountRule) {
+    return signal(accountRule, region, "account");
+  }
+
+  // If it is not shared, the public posts and reels are the next requested
+  // source: their location tags, hashtags and captions count as one vote each.
+  const postMatch = dominantPostCountry(profile);
+  if (postMatch) {
+    return signal(postMatch, region, "posts");
+  }
+
   const handleMatch = matchCountry((alias) => hasHandleAlias(username, alias), "handle");
   if (handleMatch) {
     return signal(handleMatch, region, "handle");
@@ -426,14 +520,6 @@ export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
   const profileMatch = matchCountry((alias) => hasNormalizedAlias(profileText, alias));
   if (profileMatch) {
     return signal(profileMatch, region, "profile");
-  }
-
-  // Captions and hashtags are used as promoted-location signals, not as proof
-  // of residence. They only count when one country has a clear majority and
-  // are checked after explicit handle and profile text.
-  const postMatch = dominantPostCountry(profile);
-  if (postMatch) {
-    return signal(postMatch, region, "posts");
   }
 
   const curatedCountry =

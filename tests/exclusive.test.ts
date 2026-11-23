@@ -36,6 +36,7 @@ function profile(username: string, followers: number): CreatorProfile {
     postsCount: 20,
     isVerified: false,
     source: "live",
+    accountCountry: "United Arab Emirates",
     followerHistory: [],
     recentPosts: [post(`${username}-1`), post(`${username}-2`)],
   };
@@ -224,7 +225,7 @@ describe("exclusive peer groups", () => {
     target.bio = "Travel Creator";
     const duplicate = profile("trending.vibz.uae", 58_980);
     duplicate.displayName = "Hadia Nashed";
-    duplicate.bio = "Content Creator";
+    duplicate.bio = "Travel Creator";
     // Make the duplicate the strongest regional peer so it lands in the top four.
     duplicate.recentPosts = [post("duplicate-1"), post("duplicate-2")].map((item) => ({
       ...item,
@@ -235,12 +236,22 @@ describe("exclusive peer groups", () => {
     const peers = [
       profile("dina_h_ussien", 59_963),
       profile("poojaabis", 58_197),
-      profile("dina.ak", 60_264),
-      profile("anshi_pandyala_official", 65_744),
+      {
+        ...profile("lebanon.creator", 60_264),
+        accountCountry: "Lebanon",
+        bio: "Lebanese content creator",
+      },
+      {
+        ...profile("egypt.creator", 65_744),
+        accountCountry: "Egypt",
+        bio: "Egyptian content creator",
+      },
     ];
     const pool = [target, duplicate, ...peers];
     const initial = buildRegionalRanking(target, computeMetrics(target), pool);
 
+    // The target plus two UAE peers reaches the three-country maximum; the
+    // remaining rows must come from other Middle East countries.
     expect(initial?.total).toBe(5);
     expect(initial?.rows.some((row) => row.profile.username === "trending.vibz.uae")).toBe(true);
 

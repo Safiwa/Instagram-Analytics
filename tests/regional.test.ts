@@ -8,6 +8,7 @@ import {
 } from "../src/core/analytics/regional";
 import { getModashEngagement } from "../src/core/data/modash-snapshot";
 import { isMiddleEastProfile } from "../src/core/data/regional";
+import { MIDDLE_EAST_COUNTRIES } from "../src/core/data/regions";
 import type { CreatorProfile, MonthlyPoint, Post } from "../src/core/data/types";
 
 const POSTED_AT = "2026-11-20T00:00:00.000Z";
@@ -37,6 +38,7 @@ function profile(
   options: {
     displayName?: string;
     bio?: string;
+    accountCountry?: string | null;
     likes?: number;
     comments?: number;
     fakeFollowers?: number;
@@ -54,6 +56,8 @@ function profile(
     postsCount: captions.length,
     isVerified: false,
     source: "live",
+    accountCountry:
+      options.accountCountry === undefined ? "United Arab Emirates" : options.accountCountry,
     fakeFollowers: options.fakeFollowers,
     followerHistory: options.followerHistory ?? [],
     recentPosts: captions.map((caption, index) =>
@@ -71,7 +75,7 @@ describe("Middle East regional pool", () => {
     expect(isMiddleEastProfile("khalus_recipes")).toBe(true);
     expect(isMiddleEastProfile("ladyandhersweetescapes")).toBe(true);
     expect(isMiddleEastProfile("airagymn")).toBe(true);
-    expect(isMiddleEastProfile("warrior_arezou")).toBe(true);
+    expect(isMiddleEastProfile("raw.lebanon")).toBe(true);
     expect(isMiddleEastProfile("selenagomez")).toBe(false);
     expect(isMiddleEastProfile("gucci")).toBe(false);
   });
@@ -195,6 +199,48 @@ describe("Middle East category peer", () => {
     expect(buildRegionalRanking(target, computeMetrics(target), [creator])).toBeNull();
   });
 
+  it("rejects targets outside the exact Middle East list and curated-only attribution", () => {
+    const peer = profile("peer", 1_100_000, ["festival poetry"]);
+    const nonMiddleEast = profile("global.creator", 1_000_000, ["festival poetry"], {
+      accountCountry: "India",
+    });
+    const curatedOnly = profile("emirates", 1_000_000, ["festival poetry"], {
+      accountCountry: null,
+      displayName: "Digital Creator",
+      bio: "Digital creator",
+    });
+
+    expect(findRegionalCategoryPeer(nonMiddleEast, computeMetrics(nonMiddleEast), [peer])).toBeNull();
+    expect(
+      buildRegionalRanking(nonMiddleEast, computeMetrics(nonMiddleEast), [peer]),
+    ).toBeNull();
+    expect(findRegionalCategoryPeer(curatedOnly, computeMetrics(curatedOnly), [peer])).toBeNull();
+    expect(buildRegionalRanking(curatedOnly, computeMetrics(curatedOnly), [peer])).toBeNull();
+  });
+
+  it("keeps unpublished and non-Middle-East profiles out of the peer rows", () => {
+    const target = profile("target", 1_000_000, ["festival poetry"], { accountCountry: null });
+    const inside = profile("lebanon.creator", 1_100_000, ["festival poetry"], {
+      accountCountry: "Lebanon",
+    });
+    const outside = profile("india.creator", 1_100_000, ["festival poetry"], {
+      accountCountry: "India",
+    });
+    const curatedOnly = profile("emirates", 1_100_000, ["festival poetry"], {
+      accountCountry: null,
+      displayName: "Digital Creator",
+      bio: "Digital creator",
+    });
+
+    const ranking = buildRegionalRanking(target, computeMetrics(target), [
+      inside,
+      outside,
+      curatedOnly,
+    ]);
+
+    expect(ranking?.rows.map((row) => row.profile.username)).toEqual(["target", "lebanon.creator"]);
+  });
+
   it("keeps the visible match reasons category-first and short", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
     const peer = profile("peer", 1_100_000, ["festival poetry"]);
@@ -242,9 +288,18 @@ describe("key regional comparisons", () => {
 describe("Middle East authenticity-aware ranking", () => {
   it("orders eligible profiles by the regional rank score", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
-    const low = profile("low", 800_000, ["festival poetry"], { likes: 500 });
-    const balanced = profile("balanced", 1_000_000, ["festival poetry"], { likes: 3_000 });
-    const high = profile("high", 1_200_000, ["festival poetry"], { likes: 9_000 });
+    const low = profile("low", 800_000, ["festival poetry"], {
+      likes: 500,
+      accountCountry: "Qatar",
+    });
+    const balanced = profile("balanced", 1_000_000, ["festival poetry"], {
+      likes: 3_000,
+      accountCountry: "Jordan",
+    });
+    const high = profile("high", 1_200_000, ["festival poetry"], {
+      likes: 9_000,
+      accountCountry: "Lebanon",
+    });
     const peers = [high, low, balanced];
 
     const ranking = buildRegionalRanking(target, computeMetrics(target), [target, ...peers])!;
@@ -297,10 +352,14 @@ describe("Middle East authenticity-aware ranking", () => {
   it("defaults to five profiles: the target plus four peers", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
     const pool = [target];
+    const otherCountries = MIDDLE_EAST_COUNTRIES.filter(
+      (country) => country !== "United Arab Emirates",
+    );
     for (let index = 1; index <= 12; index += 1) {
       pool.push(
         profile(`peer.${index}`, 900_000 + index * 10_000, ["festival poetry"], {
           likes: 1_000 + index * 100,
+          accountCountry: otherCountries[(index - 1) % otherCountries.length],
         }),
       );
     }
@@ -347,6 +406,18 @@ describe("Middle East authenticity-aware ranking", () => {
         displayName: "Zenia Khan",
         bio: "Dubai Creator | Beauty and Travel",
       }),
+      profile("lebanon.creator", 63_000, ["lifestyle and food"], {
+        displayName: "Lebanon Creator",
+        bio: "Lebanese content creator",
+        accountCountry: "Lebanon",
+        likes: 500,
+      }),
+      profile("egypt.creator", 55_000, ["lifestyle and beauty"], {
+        displayName: "Egypt Creator",
+        bio: "Egyptian content creator",
+        accountCountry: "Egypt",
+        likes: 450,
+      }),
     ];
 
     const ranking = buildRegionalRanking(target, computeMetrics(target), [target, ...peers]);
@@ -385,11 +456,10 @@ describe("Middle East authenticity-aware ranking", () => {
     const ranking = buildRegionalRanking(target, computeMetrics(target), [target, ...peers]);
     const usernames = ranking!.rows.map((row) => row.profile.username);
 
-    expect(ranking?.total).toBe(4);
+    // @amrmaskoun is UAE, so only two further UAE rows fit the three-country cap.
+    expect(ranking?.total).toBe(3);
     expect(usernames).toContain("amrmaskoun");
-    expect(usernames).toContain("wessamq");
-    expect(usernames).toContain("taimalfalasi");
-    expect(usernames).toContain("baneenstars");
+    expect(usernames.filter((username) => username !== "amrmaskoun")).toHaveLength(2);
     expect(usernames).not.toContain("technicalguruji");
     expect(usernames).not.toContain("jumeirah");
     expect(ranking!.rows.every((row) => row.profile.followers >= 4_075_425)).toBe(true);
@@ -446,10 +516,18 @@ describe("Middle East authenticity-aware ranking", () => {
       "rima_alosta",
       "lookatsascha",
     ]).toContain(peer!.profile.username);
-    expect(ranking?.total).toBe(5);
-    expect(usernames).toEqual(
-      expect.arrayContaining(["alaaabuharb", "sarahmalas", "randdalati", "rima_alosta", "lookatsascha"]),
-    );
+    // @alaaabuharb is UAE, so only two further UAE rows fit the three-country cap.
+    expect(ranking?.total).toBe(3);
+    expect(usernames).toContain("alaaabuharb");
+    expect(usernames.filter((username) => username !== "alaaabuharb")).toHaveLength(2);
+    expect(
+      [
+        "sarahmalas",
+        "randdalati",
+        "rima_alosta",
+        "lookatsascha",
+      ].some((username) => usernames.includes(username)),
+    ).toBe(true);
     expect(usernames).not.toContain("jumeirah");
     expect(ranking!.rows.every((row) => row.profile.followers >= 1_680_000)).toBe(true);
     expect(ranking!.rows.every((row) => row.profile.followers <= 3_120_000)).toBe(true);
@@ -461,10 +539,14 @@ describe("Middle East authenticity-aware ranking", () => {
   it("still supports an explicit top-10 limit after the filters", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
     const pool = [target];
+    const otherCountries = MIDDLE_EAST_COUNTRIES.filter(
+      (country) => country !== "United Arab Emirates",
+    );
     for (let index = 1; index <= 12; index += 1) {
       pool.push(
         profile(`peer.${index}`, 900_000 + index * 10_000, ["festival poetry"], {
           likes: 1_000 + index * 100,
+          accountCountry: otherCountries[(index - 1) % otherCountries.length],
         }),
       );
     }
@@ -480,6 +562,7 @@ describe("Middle East authenticity-aware ranking", () => {
       ...profile("zuhaboutique2024", 44_000, [], {
         displayName: "Zuha Boutique",
         bio: "No biography provided.",
+        accountCountry: null,
       }),
       recentPosts: [],
       thirdPartyEngagement: getModashEngagement("zuhaboutique2024") ?? undefined,
@@ -506,9 +589,10 @@ describe("Middle East authenticity-aware ranking", () => {
       ],
     });
     const noPostPeer: CreatorProfile = {
-      ...profile("warrior_arezou", 43_000, [], {
-        displayName: "Arezou yaghoubi",
-        bio: "No biography provided.",
+      ...profile("raw.lebanon", 43_000, [], {
+        displayName: "Nivine | Lebanon content creator",
+        bio: "Lebanon content creator",
+        accountCountry: "Lebanon",
       }),
       recentPosts: [],
     };
@@ -521,7 +605,7 @@ describe("Middle East authenticity-aware ranking", () => {
 
     expect(metrics.engagementRate).toBe(1.22);
     expect(peer).not.toBeNull();
-    expect(peer!.profile.username).not.toBe("warrior_arezou");
+    expect(peer!.profile.username).not.toBe("raw.lebanon");
     expect(ranking?.total).toBe(5);
     expect(usernames).toEqual(
       expect.arrayContaining([
@@ -529,12 +613,12 @@ describe("Middle East authenticity-aware ranking", () => {
         "khalus_recipes",
         "ladyandhersweetescapes",
         "airagymn",
-        "warrior_arezou",
+        "raw.lebanon",
       ]),
     );
     expect(ranking?.targetRank).toBe(3);
     expect(ranking!.rows.find((row) => row.isTarget)?.engagementSource).toBe("third-party");
-    expect(ranking!.rows.find((row) => row.profile.username === "warrior_arezou")?.postsNotExposed).toBe(
+    expect(ranking!.rows.find((row) => row.profile.username === "raw.lebanon")?.postsNotExposed).toBe(
       true,
     );
   });

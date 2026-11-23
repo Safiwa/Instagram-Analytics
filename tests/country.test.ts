@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   countryRelationship,
+  hasPublishedCountryEvidence,
   inferCountrySignal,
+  isMiddleEastCountry,
   type CountrySignal,
 } from "../src/core/analytics/country";
 import type { CreatorProfile, Post } from "../src/core/data/types";
@@ -36,13 +38,42 @@ function profile(overrides: Partial<CreatorProfile> = {}): CreatorProfile {
 }
 
 describe("country signal inference", () => {
-  it("reads a country word from the handle before any other text", () => {
+  it("uses Instagram's published account country before every other signal", () => {
     const signal = inferCountrySignal(
       profile({
         username: "dubai.style",
+        accountCountry: "AE",
         bio: "Fashion in Paris",
         recentPosts: [post(["#London"])],
       }),
+    );
+
+    expect(signal.country).toBe("United Arab Emirates");
+    expect(signal.basis).toBe("account");
+
+    const notShared = inferCountrySignal(
+      profile({ username: "dubai.style", accountCountry: "Not shared", bio: "Fashion in Paris" }),
+    );
+    expect(notShared.basis).toBe("handle");
+  });
+
+  it("uses public posts before the handle when the account country is not shared", () => {
+    const signal = inferCountrySignal(
+      profile({
+        username: "dubai.style",
+        accountCountry: null,
+        bio: "Fashion in Paris",
+        recentPosts: [post(["#London"])],
+      }),
+    );
+
+    expect(signal.country).toBe("United Kingdom");
+    expect(signal.basis).toBe("posts");
+  });
+
+  it("uses the handle before profile text when no country is published in posts", () => {
+    const signal = inferCountrySignal(
+      profile({ username: "dubai.style", accountCountry: null, bio: "Fashion in Paris" }),
     );
 
     expect(signal.country).toBe("United Arab Emirates");
@@ -56,7 +87,7 @@ describe("country signal inference", () => {
     expect(inferCountrySignal(profile({ username: "mall.stories" })).country).toBeNull();
   });
 
-  it("falls back to profile text, then promoted hashtags and captions", () => {
+  it("uses public posts, then the handle, then profile text when no account country is shared", () => {
     const fromProfile = inferCountrySignal(profile({ bio: "Food blogger in Amman" }));
     expect(fromProfile.country).toBe("Jordan");
     expect(fromProfile.basis).toBe("profile");
@@ -155,6 +186,34 @@ describe("country signal inference", () => {
     expect(signal.country).toBeNull();
     expect(signal.region).toBe("middle-east");
     expect(signal.label).toBe("Middle East");
+  });
+});
+
+describe("published Middle East evidence", () => {
+  const account: CountrySignal = {
+    country: "Lebanon",
+    region: "middle-east",
+    label: "Lebanon",
+    basis: "account",
+  };
+
+  it("accepts only exact Middle East countries with a published basis", () => {
+    expect(hasPublishedCountryEvidence(account)).toBe(true);
+    expect(hasPublishedCountryEvidence({ ...account, basis: "curated" })).toBe(false);
+    expect(
+      hasPublishedCountryEvidence({
+        country: null,
+        region: "middle-east",
+        label: "Middle East",
+        basis: "region",
+      }),
+    ).toBe(false);
+
+    expect(isMiddleEastCountry("Lebanon")).toBe(true);
+    expect(isMiddleEastCountry("Libya")).toBe(true);
+    expect(isMiddleEastCountry("Iran")).toBe(true);
+    expect(isMiddleEastCountry("Turkey")).toBe(false);
+    expect(isMiddleEastCountry(null)).toBe(false);
   });
 });
 

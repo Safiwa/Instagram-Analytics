@@ -1,4 +1,5 @@
 import { log } from "../logging/logger";
+import { fetchPublicIdentity } from "./public";
 import type { CreatorProfile, Post } from "./types";
 import { isVerifiedHandle } from "./verified";
 
@@ -127,6 +128,9 @@ function mapProfile(data: IgBusinessDiscovery, fallbackUsername: string): Creato
     source: "live",
     profilePictureUrl: data.profile_picture_url,
     website: data.website,
+    // Business Discovery has no account-country field. The public transparency
+    // parser fills this when Instagram publishes it; null means not shared.
+    accountCountry: null,
     followerHistory: [],
     recentPosts: media.slice(0, 12).map(mapPost),
     audience: undefined,
@@ -219,7 +223,19 @@ export async function fetchLiveProfile(username: string): Promise<CreatorProfile
     throw mapped;
   }
 
-  const profile = mapProfile(data.business_discovery, key);
+  let profile = mapProfile(data.business_discovery, key);
+  // Business Discovery has no "Account based in" field. Read the genuine public
+  // value here as well so tracked-pool refreshes carry it; a failed lookup never
+  // fails the live profile.
+  try {
+    const identity = await fetchPublicIdentity(key);
+    profile = { ...profile, accountCountry: identity?.accountCountry ?? null };
+  } catch (error) {
+    log.warn("public account-country enrichment failed", {
+      username: key,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
   cache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, profile });
   if (cache.size > CACHE_MAX) {
     const oldest = cache.keys().next().value;

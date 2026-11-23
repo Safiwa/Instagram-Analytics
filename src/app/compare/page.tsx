@@ -97,8 +97,9 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
             Other real public profiles in the same country or wider region. Same-country profiles
             lead and same-region profiles fill the remaining rows; each group is ordered by the same
             five signals: 55% followers, 20% engagement rate, 10% average likes, 5% average comments
-            and 10% follower change. Country is inferred from the handle, profile text and promoted
-            locations; Instagram does not publish account country.
+            and 10% follower change. Country uses Instagram’s published “Account based in” value
+            first; when it is not shared, it is inferred from public post/reel hashtags, locations
+            and captions, then handle and profile text.
           </p>
           {compareRanking.length > 0 ? (
             <ol className="mt-5 space-y-2">
@@ -163,10 +164,11 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
             Suggested peers for @{rows[0].profile.username}
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Picked from the same creator category, with the same country preferred. Country is
-            inferred from the handle first, then profile text, hashtags and promoted locations;
-            Instagram does not publish account country. Peers are ordered by the same five signals:
-            followers, engagement rate, average likes, average comments and follower change.
+            Picked from the same creator category, with the same country preferred. Country uses
+            Instagram’s published “Account based in” value first; when it is not shared, it is
+            inferred from public post/reel hashtags and locations, then handle and profile text.
+            Peers are ordered by the same five signals: followers, engagement rate, average likes,
+            average comments and follower change.
           </p>
           <ul className="mt-5 grid gap-3 sm:grid-cols-2">
             {suggestions.map((match) => {

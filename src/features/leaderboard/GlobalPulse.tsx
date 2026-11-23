@@ -195,10 +195,10 @@ export async function GlobalPulse() {
           By country
         </h3>
         <p className="text-xs leading-relaxed text-slate-500">
-          Country labels come from public handle/profile signals, a clear majority of promoted
-          locations, or curated account metadata. Instagram does not publish account country;
-          Middle East and UAE boards require public evidence, and unavailable values stay marked
-          as not published.
+          Country labels use Instagram’s published “Account based in” value first. When it is not
+          shared, they use public post/reel locations, hashtags and captions, then other public
+          handle/profile signals or clearly marked curated metadata. Middle East and UAE boards
+          require public evidence, and unavailable values stay marked as not published.
         </p>
         <div className="grid gap-4 lg:grid-cols-2">
           {REGION_BOARDS.map((definition) => {

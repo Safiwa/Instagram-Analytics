@@ -129,7 +129,7 @@ export const LEADERBOARD_HANDLES = [
   "khalus_recipes",
   "ladyandhersweetescapes",
   "airagymn",
-  "warrior_arezou",
+  "raw.lebanon",
 ] as const;
 
 // Real, public UAE/GCC accounts verified through the live Instagram Business Discovery
@@ -222,6 +222,22 @@ function byFollowersFirst(left: LeaderboardEntry, right: LeaderboardEntry): numb
   );
 }
 
+// The Middle East board is a country overview, so no more than three entries may
+// share a country. Entries are already follower-sorted when this runs, so the
+// largest accounts keep their places and later same-country accounts are skipped.
+function capCountryRepeats(entries: LeaderboardEntry[], maximum = 3): LeaderboardEntry[] {
+  const counts = new Map<string, number>();
+  return entries.filter((entry) => {
+    const key = entry.country ?? "unknown";
+    const count = counts.get(key) ?? 0;
+    if (count >= maximum) {
+      return false;
+    }
+    counts.set(key, count + 1);
+    return true;
+  });
+}
+
 const CACHE_TTL_MS = 15 * 60 * 1000;
 const WINDOW_MS = TRENDING_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 const FETCH_CHUNK = 10;
@@ -305,11 +321,14 @@ function isCountryBoardEligible(entry: LeaderboardEntry, board: Region): boolean
 function regionalBoards(entries: LeaderboardEntry[]): Record<Region, LeaderboardEntry[]> {
   const boards = {} as Record<Region, LeaderboardEntry[]>;
   for (const board of REGION_BOARDS) {
-    boards[board.id] = entries
+    const eligible = entries
       .filter((entry) => isInRegionBoard(entry.username, board.id))
       .filter((entry) => isCountryBoardEligible(entry, board.id))
-      .sort(byFollowersFirst)
-      .slice(0, LEADERBOARD_SIZE);
+      .sort(byFollowersFirst);
+    // The dedicated UAE board stays UAE-only; the wider Middle East board must
+    // keep looking at other countries instead of filling with one country.
+    const boardEntries = board.id === "middle-east" ? capCountryRepeats(eligible) : eligible;
+    boards[board.id] = boardEntries.slice(0, LEADERBOARD_SIZE);
   }
   return boards;
 }
@@ -348,7 +367,7 @@ function emptyLeaderboard(): Leaderboard {
 
 // Bump the prefix whenever the tracked-pool rebuild logic changes so a snapshot
 // written by the previous version is not reused with the new expectations.
-const TRACKED_SIGNATURE = `v8:${LEADERBOARD_HANDLES.join(",")}`;
+const TRACKED_SIGNATURE = `v9:${LEADERBOARD_HANDLES.join(",")}`;
 
 // Meta rate-limits large bursts of Business Discovery calls. Instead of
 // rebuilding all 55 profiles at once, each refresh updates a small rotating

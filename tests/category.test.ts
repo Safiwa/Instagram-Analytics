@@ -39,6 +39,7 @@ function profile(
     postsCount: 20,
     isVerified: false,
     source: "live",
+    accountCountry: "United Arab Emirates",
     followerHistory: [],
     recentPosts: [post(likes), post(likes)],
   };

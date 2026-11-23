@@ -136,7 +136,7 @@ export function ProfileDashboard({
   const benchmarkCountry = inferCountrySignal(profile).country;
   const benchmarkScope = benchmarkCountry
     ? `Both the closest peer and ranking table are limited to accounts with the same inferred country (${benchmarkCountry}).`
-    : "Instagram does not publish a country signal for this profile, so the closest available country or region tier is used instead.";
+    : "Instagram has not published an “Account based in” value for this profile, so the closest available country or region tier is used instead.";
   // rankFactors falls back to zero when Instagram exposes no posts. That zero is
   // a placeholder, not a measurement. Engagement from a disclosed third party is
   // real source data and stays visible; follower change and Reels remain hidden.
@@ -694,9 +694,10 @@ export function ProfileDashboard({
               We match this profile only to real public accounts in the same or a closely related
               category (for example Digital creator, Blogger, Public figure, or Beauty). {benchmarkScope}{" "}
               The group is ranked by followers, engagement rate, average likes, average comments and
-              follower change. Country is inferred from the handle first, then profile text, hashtags
-              and promoted locations; Instagram does not publish account country. This is a curated
-              reference set, not an exhaustive niche search.
+              follower change. Country uses Instagram’s published “Account based in” value first;
+              when it is not shared, it is inferred from public post/reel hashtags and locations,
+              then handle and profile text. This is a curated reference set, not an exhaustive niche
+              search.
             </p>
           </div>
         </div>
