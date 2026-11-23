@@ -74,4 +74,11 @@ describe("responsive header navigation", () => {
     expect(source("src/app/globals.css")).toContain("scroll-padding-top: 5rem");
     expect(source("src/app/layout.tsx")).toContain("sticky top-0");
   });
+
+  it("brands the logo as Instagram Analytics by Campaign Masters UAE", () => {
+    const layout = source("src/app/layout.tsx");
+
+    expect(layout).toContain("Instagram Analytics");
+    expect(layout.match(/by Campaign Masters UAE/g)).toHaveLength(2);
+  });
 });
