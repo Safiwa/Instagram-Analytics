@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Sparkles,
   TrendingUp,
+  Users,
   Workflow,
   type LucideIcon,
 } from "lucide-react";
@@ -34,6 +35,12 @@ type EngineCard = {
   label: string;
   kind: "Measured" | "Modeled";
   basis: string;
+  body: string;
+};
+
+type CollaborationDetail = {
+  icon: LucideIcon;
+  title: string;
   body: string;
 };
 
@@ -95,6 +102,34 @@ const ENGINE: EngineCard[] = [
   },
 ];
 
+const COLLABORATION_DETAILS: CollaborationDetail[] = [
+  {
+    icon: ScanSearch,
+    title: "Discover and vet creators",
+    body: "Find public profiles, compare engagement quality and audience fit, and shortlist the right people before outreach.",
+  },
+  {
+    icon: CircleCheck,
+    title: "Map paid partnerships",
+    body: "Understand branded-content history, creator relationships and competitor collaborations across the accounts you follow.",
+  },
+  {
+    icon: Workflow,
+    title: "Run affiliate programs",
+    body: "Coordinate creator links, promo codes and gifting, then review content performance and campaign summaries in one place.",
+  },
+  {
+    icon: Users,
+    title: "Manage creator relationships",
+    body: "Keep lists, outreach, deliverables and performance history organized from first conversation to long-term partnership.",
+  },
+  {
+    icon: Sparkles,
+    title: "Stage brand events",
+    body: "Plan creator appearances, launches and activations that carry the same story from social feeds into the room.",
+  },
+];
+
 const AVAILABLE_SIGNALS = [
   "Followers, following, and total post count",
   "Name, username, bio, category, and verification",
@@ -139,22 +174,46 @@ export default function Home() {
       <section className="flex flex-col gap-6 rounded-2xl bg-slate-950 px-7 py-8 text-white md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-indigo-300">
-            Profile intelligence
+            Creator partnership agency
           </p>
           <h1 className="mt-3 max-w-4xl text-2xl font-semibold leading-tight tracking-tight md:text-3xl">
-            Leading Instagram analytics platform in the UAE — performance-driven tools and a
-            practical growth plan
+            Leading UAE marketing agency connecting brands with creators and managing events
           </h1>
           <p className="mt-3 text-base font-medium text-indigo-200">
-            Analyze any public Instagram account.
+            From discovery and paid partnerships to affiliates and live experiences.
           </p>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">
-            Enter a username to see how public signals become engagement and audience-quality
-            metrics. No API keys or Meta app needed.
+            Explore any public Instagram profile to see how real signals support creator vetting,
+            partnership planning and a practical growth plan. No API keys or Meta app needed.
           </p>
         </div>
 
         <HandleLookup />
+      </section>
+
+      <section data-testid="collaborations" className="space-y-5">
+        <SectionTitle
+          eyebrow="Collaborations"
+          title="Map brand and creator partnerships in one place"
+          body="We help brands discover and vet creators, understand paid partnership history, coordinate affiliate programs and manage every relationship — with event management built into the same plan."
+        />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {COLLABORATION_DETAILS.map((detail) => {
+            const Icon = detail.icon;
+            return (
+              <article
+                key={detail.title}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                  <Icon className="h-4 w-4" aria-hidden="true" />
+                </span>
+                <h3 className="mt-4 text-sm font-semibold text-slate-950">{detail.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">{detail.body}</p>
+              </article>
+            );
+          })}
+        </div>
       </section>
 
       <GlobalPulse />

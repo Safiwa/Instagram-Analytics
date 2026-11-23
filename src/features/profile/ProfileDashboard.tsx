@@ -397,12 +397,10 @@ export function ProfileDashboard({
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
               Posts in last 30 days
             </p>
-            <p className="mt-2 text-xl font-semibold text-slate-950">
-              {growth.postsInWindowCapped ? `${growth.postsLast30Days}+` : growth.postsLast30Days}
-            </p>
+            <p className="mt-2 text-xl font-semibold text-slate-950">{growth.postsLast30Days}</p>
             <p className="mt-1 text-xs text-slate-500">
               {growth.postsInWindowCapped
-                ? "At least 12; public view exposes 12 recent posts"
+                ? "Latest 12 public posts checked; total may be higher"
                 : "Visible public media only"}
             </p>
           </div>

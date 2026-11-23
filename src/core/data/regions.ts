@@ -125,6 +125,10 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   taimalfalasi: "uae",
   baneenstars: "uae",
   technicalguruji: "uae",
+  sarahmalas: "uae",
+  randdalati: "uae",
+  rima_alosta: "uae",
+  lookatsascha: "uae",
 
   // Other Middle East creators (Lebanon and a creator without a published country)
   elsakahwaji: "middle-east",

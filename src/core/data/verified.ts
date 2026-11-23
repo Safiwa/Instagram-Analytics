@@ -5,9 +5,9 @@
 // were read from their real public Instagram profile HTML on 2026-11-22 (each
 // response carried the signed `X-Instagram-Proxy: ok` marker). `rim.official__` and
 // the UAE creator band around @amrmaskoun were confirmed from real public profile
-// pages/directories sourced from Instagram on 2026-11-23. This is a fallback only:
-// a fresh `fetchPublicIdentity()` result always wins when
-// the bridge is up.
+// pages/directories sourced from Instagram on 2026-11-23, along with the real
+// 1.7–3.1M creator band around @alaaabuharb. This is a fallback only: a fresh
+// `fetchPublicIdentity()` result always wins when the bridge is up.
 //
 // Not a claim of completeness and not a modeled value — only accounts whose
 // public page was actually read are listed. Unknown handles stay "Not verified".
@@ -46,6 +46,7 @@ export const VERIFIED_HANDLES: ReadonlySet<string> = new Set([
   "leomessi",
   "leonardodicaprio",
   "lilbieber",
+  "lookatsascha",
   "mrbeast",
   "natgeo",
   "neymarjr",
@@ -54,9 +55,12 @@ export const VERIFIED_HANDLES: ReadonlySet<string> = new Set([
   "psg",
   "qatar",
   "qatarairways",
+  "randdalati",
   "rafflesdubai",
   "realmadrid",
   "rim.official__",
+  "rima_alosta",
+  "sarahmalas",
   "selenagomez",
   "sofiamcoelho",
   "taimalfalasi",

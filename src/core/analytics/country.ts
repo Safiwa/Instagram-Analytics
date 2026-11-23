@@ -247,6 +247,11 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   taimalfalasi: "United Arab Emirates",
   technicalguruji: "United Arab Emirates",
   wessamq: "United Arab Emirates",
+  // Real public UAE creator accounts in @alaaabuharb's 1.7–3.1M follower band.
+  sarahmalas: "United Arab Emirates",
+  randdalati: "United Arab Emirates",
+  rima_alosta: "United Arab Emirates",
+  lookatsascha: "United Arab Emirates",
   elsakahwaji: "Lebanon",
 };
 

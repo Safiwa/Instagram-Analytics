@@ -112,6 +112,12 @@ export const LEADERBOARD_HANDLES = [
   "taimalfalasi",
   "baneenstars",
   "technicalguruji",
+  // Real, explicitly labeled UAE creators in @alaaabuharb's 1.7–3.1M band.
+  // They fill the Middle East rank panel honestly without widening the ±30% gate.
+  "sarahmalas",
+  "randdalati",
+  "rima_alosta",
+  "lookatsascha",
 ] as const;
 
 // Real, public UAE/GCC accounts verified through the live Instagram Business Discovery
@@ -150,6 +156,10 @@ export const UAE_GCC_HANDLES = [
   "taimalfalasi",
   "baneenstars",
   "technicalguruji",
+  "sarahmalas",
+  "randdalati",
+  "rima_alosta",
+  "lookatsascha",
 ] as const;
 
 export type LeaderboardEntry = {
@@ -289,7 +299,7 @@ function emptyLeaderboard(): Leaderboard {
 
 // Bump the prefix whenever the tracked-pool rebuild logic changes so a snapshot
 // written by the previous version is not reused with the new expectations.
-const TRACKED_SIGNATURE = `v6:${LEADERBOARD_HANDLES.join(",")}`;
+const TRACKED_SIGNATURE = `v7:${LEADERBOARD_HANDLES.join(",")}`;
 
 // Meta rate-limits large bursts of Business Discovery calls. Instead of
 // rebuilding all 55 profiles at once, each refresh updates a small rotating

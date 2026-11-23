@@ -383,6 +383,65 @@ describe("Middle East authenticity-aware ranking", () => {
     );
   });
 
+  it("fills @alaaabuharb's Middle East panel from real in-band creator labels", () => {
+    const target = profile("alaaabuharb", 2_400_000, ["daily beauty and lifestyle"], {
+      displayName: "Alaa Abou Harb",
+      bio: "Content creator 🎬 صانعة البهجه اليوميه 😌 📍 UAE 🇦🇪",
+      likes: 65_000,
+    });
+    const peers = [
+      profile("sarahmalas", 2_500_000, ["lifestyle and travel content"], {
+        displayName: "Sarah Malas",
+        bio: "Dubai Lifestyle & Travel Content Creator",
+        likes: 131_000,
+      }),
+      profile("randdalati", 2_100_000, ["beauty fashion and lifestyle"], {
+        displayName: "The Datis",
+        bio: "Content Creator • Author • Journalist • Youtuber",
+        likes: 26_000,
+      }),
+      profile("rima_alosta", 2_100_000, ["gaming beauty and lifestyle"], {
+        displayName: "Rima Alosta",
+        bio: "#1 Female Gaming Creator in MENA 🎮 Gaming • Beauty • Lifestyle 📍Dubai",
+        likes: 9_700,
+      }),
+      profile("lookatsascha", 1_900_000, ["mindset discipline and lifestyle"], {
+        displayName: "Sascha Burci | Content Creator",
+        bio: "Italian. Living in Dubai. Mindset. Discipline. Lifestyle.",
+        likes: 19_600,
+      }),
+      profile("jumeirah", 2_400_000, ["hotel and hospitality offers"], {
+        displayName: "Jumeirah",
+        bio: "Beautiful hospitality, generously shared.",
+        likes: 1_000,
+      }),
+    ];
+    const pool = [target, ...peers];
+    const metrics = computeMetrics(target);
+
+    const peer = findRegionalCategoryPeer(target, metrics, pool);
+    const ranking = buildRegionalRanking(target, metrics, pool);
+    const usernames = ranking!.rows.map((row) => row.profile.username);
+
+    expect(peer).not.toBeNull();
+    expect([
+      "sarahmalas",
+      "randdalati",
+      "rima_alosta",
+      "lookatsascha",
+    ]).toContain(peer!.profile.username);
+    expect(ranking?.total).toBe(5);
+    expect(usernames).toEqual(
+      expect.arrayContaining(["alaaabuharb", "sarahmalas", "randdalati", "rima_alosta", "lookatsascha"]),
+    );
+    expect(usernames).not.toContain("jumeirah");
+    expect(ranking!.rows.every((row) => row.profile.followers >= 1_680_000)).toBe(true);
+    expect(ranking!.rows.every((row) => row.profile.followers <= 3_120_000)).toBe(true);
+    expect(ranking!.rows.every((row) => row.country.country === "United Arab Emirates")).toBe(
+      true,
+    );
+  });
+
   it("still supports an explicit top-10 limit after the filters", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
     const pool = [target];

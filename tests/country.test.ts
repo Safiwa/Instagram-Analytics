@@ -105,6 +105,16 @@ describe("country signal inference", () => {
     }
   });
 
+  it("resolves the real UAE creator band around @alaaabuharb", () => {
+    const handles = ["sarahmalas", "randdalati", "rima_alosta", "lookatsascha"];
+    for (const username of handles) {
+      const signal = inferCountrySignal(profile({ username, bio: "Based in Dubai" }));
+      expect(signal.country).toBe("United Arab Emirates");
+      expect(signal.region).toBe("uae");
+      expect(signal.basis).toBe("handle");
+    }
+  });
+
   it("keeps region-only signals when no country is published", () => {
     const signal = inferCountrySignal(profile({ username: "aljazeera" }));
     expect(signal.country).toBeNull();
