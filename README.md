@@ -250,13 +250,22 @@ request plus a few embed requests.
 
 | Route | Purpose |
 |---|---|
-| `/` | Analysis dashboard: lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, Modash benchmark, sources, confidence |
+| `/` | Agency home and analysis dashboard: creator/brand collaboration positioning, lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, benchmark tiers, sources, confidence |
 | `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and Middle East category benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region weighted rank table and remaining comparable suggestions |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
 | `/api/digest/send` | Cron-only weekly digest sender |
 | `/api/digest/unsubscribe` | Signed one-click unsubscribe link |
+
+## Agency positioning and collaboration services
+
+The homepage introduces the company as a UAE marketing agency that connects brands with creators
+and manages events. A dedicated **Collaborations** section explains the service model without naming
+any third-party platform: creator discovery and vetting, paid-partnership history, affiliate
+programs, ongoing relationship management and event activations. The Instagram analytics lookup and
+leaderboards remain the evidence layer beneath that positioning; no service claims are generated from
+unavailable private data.
 
 ## Global pulse leaderboards and benchmark
 
@@ -359,9 +368,10 @@ Profile pages now surface verification, growth, and regional comparison:
   `business_discovery` has no verification field, so live profiles get the real badge two ways: a
   fresh public HTML profile lookup (`fetchPublicIdentity()`, 30-minute cache) when the signed proxy
   bridge is reachable, and otherwise `VERIFIED_HANDLES` in `src/core/data/verified.ts` — a snapshot of
-  real public profile pages read on 2026-11-22 for the curated tracked pool, plus `rim.official__`
-  and the new UAE creator band (`amrmaskoun`, `wessamq`, `taimalfalasi`, `baneenstars`,
-  `technicalguruji`) confirmed from real public Instagram pages/directories on 2026-11-23. Unknown
+  real public profile pages read on 2026-11-22 for the curated tracked pool, plus `rim.official__`,
+  the 4.5–6.3M UAE creator band (`amrmaskoun`, `wessamq`, `taimalfalasi`, `baneenstars`,
+  `technicalguruji`) and the 1.7–3.1M band (`sarahmalas`, `randdalati`, `rima_alosta`,
+  `lookatsascha`) confirmed from real public Instagram pages/directories on 2026-11-23. Unknown
   handles stay "Not verified"; no badge is invented or modeled. The Middle East comparison panel
   uses creator category labels and the authenticity-aware regional rank described below.
 - **Profile picture** (`profile-avatar`) shows the searched handle's real public avatar in the header
@@ -373,9 +383,10 @@ Profile pages now surface verification, growth, and regional comparison:
   the metric grid. It reports estimated follower change over 30 days, the median interaction trend
   across recent vs older posts, posting cadence, and the number of public posts in the last 30 days,
   plus a momentum label (accelerating / steady / cooling). Public sources expose only 12 recent
-  posts: when all 12 are inside the window the card shows **12+** with "At least 12; public view
-  exposes 12 recent posts" instead of claiming an exact count. Business Discovery media without a
-  valid timestamp is dropped, so undated posts never inflate the cadence. For demo fixtures the
+  posts: when all 12 are inside the window the card shows the visible count (**12**) with "Latest 12
+  public posts checked; total may be higher" instead of a plus-count that reads like an exact total.
+  Business Discovery media without a valid timestamp is dropped, so undated posts never inflate the
+  cadence. For demo fixtures the
   follower change is measured from the latest two monthly history points and never modeled. For
   real public/live accounts Instagram does not publish 30-day follower history, so the change is
   modeled from the same public signals as 12-month growth and is clearly labelled **Est.**
@@ -431,9 +442,10 @@ Profile pages now surface verification, growth, and regional comparison:
   `alitofique`, `hinaashh`, `jexmi`, `najet.dh` and `elsakahwaji` around 250–327K, plus
   `donya_esmailiii`, `aiamwa`, `dina_h_ussien`, `poojaabis`, `taranum_sshahin`, `dina.ak`,
   `anshi_pandyala_official` and `zeniamk` around 46–72K, plus `amrmaskoun`, `wessamq`,
-  `taimalfalasi`, `baneenstars` and `technicalguruji` in the 4.5–6.3M UAE creator band. These fill
-  five-profile ranks at the smaller, mid-sized and larger UAE creator accounts without relaxing any
-  gate. A candidate must (1) sit inside the
+  `taimalfalasi`, `baneenstars` and `technicalguruji` in the 4.5–6.3M UAE creator band, plus
+  `sarahmalas`, `randdalati`, `rima_alosta` and `lookatsascha` in the 1.7–3.1M UAE creator band.
+  These fill five-profile ranks at the smaller, mid-sized and larger UAE creator accounts without
+  relaxing any gate. A candidate must (1) sit inside the
   **±30% follower band**, (2) have an explicit category label inferred from its public display
   name/bio via `inferExplicitCategory()` (fallback `Digital creator` / `Public figure` labels do not
   qualify), and (3) be in the same creator group under `isSimilarCategory()`. An exact explicit
@@ -537,7 +549,8 @@ network call.
 - Followers, following, total post count
 - Up to 12 recent, non-pinned posts with likes, comments, type, date, caption,
   hashtags, permalink, and video views
-- A `12+` lower bound on the 30-day post count when all 12 visible posts are in-window
+- A visible 30-day post count from the latest 12 public posts, with a note when the total may be
+  higher than the public window
 - Modeled fake-follower count, authenticity, and 12-month growth for accounts with
   visible posts, labeled `Est.` in the UI and report
 
