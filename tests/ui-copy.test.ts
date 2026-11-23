@@ -11,7 +11,7 @@ describe("homepage positioning copy", () => {
     const page = source("src/app/page.tsx");
 
     expect(page).toContain(
-      "Leading UAE marketing agency connecting brands with creators and managing events",
+      "UAE-Based marketing agency connecting brands with creators and managing events over the Middle East",
     );
     expect(page).toContain("Map brand and creator partnerships in one place");
     expect(page).toContain("Map paid partnerships");

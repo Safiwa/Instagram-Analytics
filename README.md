@@ -275,8 +275,8 @@ remains available as a compact Discover/Compare shortcut.
 
 ## Agency positioning and collaboration services
 
-The homepage introduces the company as a UAE marketing agency that connects brands with creators
-and manages events. A dedicated **Collaborations** section explains the service model without naming
+The homepage introduces the company as a UAE-based marketing agency that connects brands with
+creators and manages events across the Middle East. A dedicated **Collaborations** section explains the service model without naming
 any third-party platform: creator discovery and vetting, paid-partnership history, affiliate
 programs, ongoing relationship management and event activations. The Instagram analytics lookup and
 leaderboards remain the evidence layer beneath that positioning; no service claims are generated from
