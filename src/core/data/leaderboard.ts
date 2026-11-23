@@ -118,6 +118,12 @@ export const LEADERBOARD_HANDLES = [
   "randdalati",
   "rima_alosta",
   "lookatsascha",
+  // Real, explicitly labeled creators in @zuhaboutique2024's 30.8–57.1K band.
+  // They bracket the disclosed Modash-backed rank without widening the gate.
+  "khalus_recipes",
+  "ladyandhersweetescapes",
+  "airagymn",
+  "warrior_arezou",
 ] as const;
 
 // Real, public UAE/GCC accounts verified through the live Instagram Business Discovery
@@ -160,6 +166,9 @@ export const UAE_GCC_HANDLES = [
   "randdalati",
   "rima_alosta",
   "lookatsascha",
+  "khalus_recipes",
+  "ladyandhersweetescapes",
+  "airagymn",
 ] as const;
 
 export type LeaderboardEntry = {
@@ -299,7 +308,7 @@ function emptyLeaderboard(): Leaderboard {
 
 // Bump the prefix whenever the tracked-pool rebuild logic changes so a snapshot
 // written by the previous version is not reused with the new expectations.
-const TRACKED_SIGNATURE = `v7:${LEADERBOARD_HANDLES.join(",")}`;
+const TRACKED_SIGNATURE = `v8:${LEADERBOARD_HANDLES.join(",")}`;
 
 // Meta rate-limits large bursts of Business Discovery calls. Instead of
 // rebuilding all 55 profiles at once, each refresh updates a small rotating

@@ -6,19 +6,26 @@ import {
   buildRegionalRanking,
   findRegionalCategoryPeer,
 } from "../src/core/analytics/regional";
+import { getModashEngagement } from "../src/core/data/modash-snapshot";
 import { isMiddleEastProfile } from "../src/core/data/regional";
-import type { CreatorProfile, Post } from "../src/core/data/types";
+import type { CreatorProfile, MonthlyPoint, Post } from "../src/core/data/types";
 
 const POSTED_AT = "2026-11-20T00:00:00.000Z";
 
-function post(id: string, caption: string, likes: number, hashtags: string[] = []): Post {
+function post(
+  id: string,
+  caption: string,
+  likes: number,
+  hashtags: string[] = [],
+  comments = Math.round(likes * 0.1),
+): Post {
   return {
     id,
     type: "Reel",
     caption,
     postedAt: POSTED_AT,
     likes,
-    comments: Math.round(likes * 0.1),
+    comments,
     hashtags,
   };
 }
@@ -27,7 +34,14 @@ function profile(
   username: string,
   followers: number,
   captions: string[],
-  options: { displayName?: string; bio?: string; likes?: number; fakeFollowers?: number } = {},
+  options: {
+    displayName?: string;
+    bio?: string;
+    likes?: number;
+    comments?: number;
+    fakeFollowers?: number;
+    followerHistory?: MonthlyPoint[];
+  } = {},
 ): CreatorProfile {
   const likes = options.likes ?? 2_000;
   return {
@@ -41,8 +55,10 @@ function profile(
     isVerified: false,
     source: "live",
     fakeFollowers: options.fakeFollowers,
-    followerHistory: [],
-    recentPosts: captions.map((caption, index) => post(`${username}-${index}`, caption, likes)),
+    followerHistory: options.followerHistory ?? [],
+    recentPosts: captions.map((caption, index) =>
+      post(`${username}-${index}`, caption, likes, [], options.comments),
+    ),
   };
 }
 
@@ -52,6 +68,10 @@ describe("Middle East regional pool", () => {
     expect(isMiddleEastProfile("qatarairways")).toBe(true);
     expect(isMiddleEastProfile("visitqatar")).toBe(true);
     expect(isMiddleEastProfile("emirates")).toBe(true);
+    expect(isMiddleEastProfile("khalus_recipes")).toBe(true);
+    expect(isMiddleEastProfile("ladyandhersweetescapes")).toBe(true);
+    expect(isMiddleEastProfile("airagymn")).toBe(true);
+    expect(isMiddleEastProfile("warrior_arezou")).toBe(true);
     expect(isMiddleEastProfile("selenagomez")).toBe(false);
     expect(isMiddleEastProfile("gucci")).toBe(false);
   });
@@ -457,5 +477,69 @@ describe("Middle East authenticity-aware ranking", () => {
 
     expect(ranking?.rows).toHaveLength(11); // target + top 10 peers
     expect(ranking?.total).toBe(11);
+  });
+
+  it("brackets a no-post profile with five real, explicitly labeled peers", () => {
+    const target: CreatorProfile = {
+      ...profile("zuhaboutique2024", 44_000, [], {
+        displayName: "Zuha Boutique",
+        bio: "No biography provided.",
+      }),
+      recentPosts: [],
+      thirdPartyEngagement: getModashEngagement("zuhaboutique2024") ?? undefined,
+    };
+    const high = profile("khalus_recipes", 47_996, ["recipe and food in Dubai"], {
+      displayName: "Khalid C",
+      bio: "Easiest Recipes · Dubai food blogger",
+      likes: 1_883,
+    });
+    const higher = profile("ladyandhersweetescapes", 55_396, ["dubai food vlog"], {
+      displayName: "Lady Anne | Dubai Vlogger",
+      bio: "Dubai Content creator and vlogger",
+      likes: 858,
+    });
+    const lower = profile("airagymn", 36_007, ["beauty and training"], {
+      displayName: "Irina Skobeleva",
+      bio: "Beauty and training in Dubai",
+      likes: 58,
+      comments: 65,
+      fakeFollowers: 18_364,
+      followerHistory: [
+        { month: "2026-09", followers: 37_690 },
+        { month: "2026-10", followers: 36_007 },
+      ],
+    });
+    const noPostPeer: CreatorProfile = {
+      ...profile("warrior_arezou", 43_000, [], {
+        displayName: "Arezou yaghoubi",
+        bio: "No biography provided.",
+      }),
+      recentPosts: [],
+    };
+    const pool = [target, high, higher, lower, noPostPeer];
+    const metrics = computeMetrics(target);
+
+    const peer = findRegionalCategoryPeer(target, metrics, pool);
+    const ranking = buildRegionalRanking(target, metrics, pool);
+    const usernames = ranking!.rows.map((row) => row.profile.username);
+
+    expect(metrics.engagementRate).toBe(1.22);
+    expect(peer).not.toBeNull();
+    expect(peer!.profile.username).not.toBe("warrior_arezou");
+    expect(ranking?.total).toBe(5);
+    expect(usernames).toEqual(
+      expect.arrayContaining([
+        "zuhaboutique2024",
+        "khalus_recipes",
+        "ladyandhersweetescapes",
+        "airagymn",
+        "warrior_arezou",
+      ]),
+    );
+    expect(ranking?.targetRank).toBe(3);
+    expect(ranking!.rows.find((row) => row.isTarget)?.engagementSource).toBe("third-party");
+    expect(ranking!.rows.find((row) => row.profile.username === "warrior_arezou")?.postsNotExposed).toBe(
+      true,
+    );
   });
 });

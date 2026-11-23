@@ -252,6 +252,9 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   randdalati: "United Arab Emirates",
   rima_alosta: "United Arab Emirates",
   lookatsascha: "United Arab Emirates",
+  khalus_recipes: "United Arab Emirates",
+  ladyandhersweetescapes: "United Arab Emirates",
+  airagymn: "United Arab Emirates",
   elsakahwaji: "Lebanon",
 };
 

@@ -68,6 +68,8 @@ function regionalPeer(candidate: CreatorProfile, score: number): RegionalPeer {
     country: inferCountrySignal(candidate),
     countryRelationship: "same-country" as CountryRelationship,
     matchReasons: [],
+    postsNotExposed: candidate.recentPosts.length === 0,
+    engagementSource: metrics.engagementSource,
   };
 }
 
@@ -84,6 +86,8 @@ function peerRow(candidate: CreatorProfile, isTarget: boolean, matchScore: numbe
     category: "Content creator",
     country: inferCountrySignal(candidate),
     isTarget,
+    postsNotExposed: candidate.recentPosts.length === 0,
+    engagementSource: "public-posts",
   };
 }
 

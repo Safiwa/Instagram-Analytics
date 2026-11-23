@@ -42,15 +42,27 @@ describe("no-post profile disclosure", () => {
     expect(dashboard).toContain("exposed, not zero.");
   });
 
-  it("hides zero placeholders from peer and regional comparison rows", () => {
-    expect(dashboard).toContain('noPublicPosts && isTarget ? "—" : formatted');
-    expect(dashboard).toContain("targetSignal(formatCompact(row.avgLikes), row.isTarget)");
-    expect(dashboard).toContain("targetSignal(formatPercent(row.engagementRate), row.isTarget)");
-    expect(dashboard).toContain('"Posts not exposed" : comparison.insight');
+  it("hides zero placeholders but keeps sourced engagement visible", () => {
+    expect(dashboard).toContain('row.postsNotExposed && row.engagementSource === "unavailable"');
+    expect(dashboard).toContain("engagementSignal(formatCompact(row.avgLikes), row)");
+    expect(dashboard).toContain("engagementSignal(formatPercent(row.engagementRate), row)");
+    expect(dashboard).toContain("changeSignal(formatPercent(row.followerChangePct), row)");
+    expect(dashboard).toContain('"Posts not exposed"');
   });
 
-  it("does not claim an engagement comparison for a profile with no posts", () => {
-    expect(dashboard).toContain("not comparable because this account's posts were not exposed");
+  it("labels a Modash-filled no-post profile instead of claiming Instagram measurements", () => {
+    expect(dashboard).toContain("Modash estimate");
+    expect(dashboard).toContain("Modash est. engagement");
+    expect(dashboard).toContain("not Instagram measurements");
+    expect(dashboard).toContain(
+      "a Modash estimate, not directly comparable with this peer's public-post average",
+    );
+  });
+
+  it("uses the exact similar-profile rank copy", () => {
+    expect(dashboard).toContain(
+      'Rank #{regionalRanking.targetRank} of {regionalRanking.total} of similar Middle East profiles',
+    );
   });
 });
 

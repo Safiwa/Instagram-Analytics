@@ -1,4 +1,5 @@
 import { log } from "../logging/logger";
+import { getModashEngagement } from "./modash-snapshot";
 import { fetchLiveProfile, isLiveConfigured, LiveProfileError } from "./live";
 import { fetchPublicIdentity, fetchPublicProfile, PublicProfileError } from "./public";
 import { seedProfiles } from "./seed";
@@ -32,6 +33,23 @@ export function getProfile(handle: string): CreatorProfile | null {
 function findSeedProfile(handle: string): CreatorProfile | null {
   const key = normalizeHandle(handle);
   return seedProfiles.find((profile) => profile.username.toLowerCase() === key) ?? null;
+}
+
+function withThirdPartyEngagement(profile: CreatorProfile): CreatorProfile {
+  if (profile.source === "demo" || profile.isPrivate || profile.recentPosts.length > 0) {
+    return profile;
+  }
+
+  const engagement = getModashEngagement(profile.username);
+  if (!engagement) {
+    return profile;
+  }
+
+  log.info("third-party engagement snapshot applied", {
+    handle: profile.username,
+    source: engagement.source,
+  });
+  return { ...profile, thirdPartyEngagement: engagement };
 }
 
 export function searchProfiles(query: string): CreatorProfile[] {
@@ -69,23 +87,25 @@ export async function resolveProfile(handle: string): Promise<ProfileResolution>
       const identity = await fetchPublicIdentity(key);
       return {
         status: "found",
-        profile: identity
-          ? {
-              ...live,
-              isVerified: identity.isVerified,
-              profilePictureUrl: identity.profilePictureUrl ?? live.profilePictureUrl,
-            }
-          : live,
+        profile: withThirdPartyEngagement(
+          identity
+            ? {
+                ...live,
+                isVerified: identity.isVerified,
+                profilePictureUrl: identity.profilePictureUrl ?? live.profilePictureUrl,
+              }
+            : live,
+        ),
       };
     } catch (error) {
       const liveFailure = mapLiveFailure(error, key);
       const fallback = await tryPublicProfile(key);
-      return fallback ? { status: "found", profile: fallback } : liveFailure;
+      return fallback ? { status: "found", profile: withThirdPartyEngagement(fallback) } : liveFailure;
     }
   }
 
   try {
-    return { status: "found", profile: await fetchPublicProfile(key) };
+    return { status: "found", profile: withThirdPartyEngagement(await fetchPublicProfile(key)) };
   } catch (error) {
     return mapPublicFailure(error, key);
   }

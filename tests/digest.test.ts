@@ -15,6 +15,8 @@ const metrics = {
   avgSaves: null,
   engagementRate: 1.23,
   engagementBasis: "likes+comments",
+  engagementSource: "public-posts",
+  thirdPartyEngagement: null,
   fakeFollowers: null,
   fakeFollowersPct: null,
   followerGrowthPct: 4.56,

@@ -15,14 +15,35 @@ function average(values: number[]): number {
 
 export function computeMetrics(profile: CreatorProfile) {
   const posts = profile.recentPosts;
-  const avgLikes = round2(average(posts.map((post) => post.likes)));
-  const avgComments = round2(average(posts.map((post) => post.comments)));
+  // Third-party engagement fills only the three engagement cards when Instagram
+  // exposes no posts. It must not become a fake post or feed public-signal models.
+  const thirdPartyEngagement =
+    profile.source !== "demo" &&
+    !profile.isPrivate &&
+    profile.followers > 0 &&
+    posts.length === 0
+      ? (profile.thirdPartyEngagement ?? null)
+      : null;
+  const postAvgLikes = round2(average(posts.map((post) => post.likes)));
+  const postAvgComments = round2(average(posts.map((post) => post.comments)));
+  const avgLikes = thirdPartyEngagement ? thirdPartyEngagement.averageLikes : postAvgLikes;
+  const avgComments = thirdPartyEngagement ? thirdPartyEngagement.averageComments : postAvgComments;
   const savesComplete = posts.length > 0 && posts.every((post) => typeof post.saves === "number");
   const avgSaves = savesComplete ? round2(average(posts.map((post) => post.saves ?? 0))) : null;
-  const engagementBasis = avgSaves === null ? "likes+comments" : "likes+comments+saves";
+  const engagementBasis = thirdPartyEngagement
+    ? "third-party:likes+comments"
+    : avgSaves === null
+      ? "likes+comments"
+      : "likes+comments+saves";
+  const engagementSource = thirdPartyEngagement
+    ? "third-party"
+    : posts.length > 0
+      ? "public-posts"
+      : "unavailable";
 
-  const engagementRate =
-    profile.followers === 0
+  const engagementRate = thirdPartyEngagement
+    ? round2(thirdPartyEngagement.engagementRatePct)
+    : profile.followers === 0
       ? 0
       : round2(((avgLikes + avgComments + (avgSaves ?? 0)) / profile.followers) * 100);
 
@@ -65,6 +86,8 @@ export function computeMetrics(profile: CreatorProfile) {
     avgSaves,
     engagementRate,
     engagementBasis,
+    engagementSource,
+    thirdPartyEngagement,
     fakeFollowers,
     fakeFollowersPct,
     followerGrowthPct,

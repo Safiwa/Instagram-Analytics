@@ -129,10 +129,14 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   randdalati: "uae",
   rima_alosta: "uae",
   lookatsascha: "uae",
+  khalus_recipes: "uae",
+  ladyandhersweetescapes: "uae",
+  airagymn: "uae",
 
-  // Other Middle East creators (Lebanon and a creator without a published country)
+  // Other Middle East creators (Lebanon and creators without a published country)
   elsakahwaji: "middle-east",
   "najet.dh": "middle-east",
+  warrior_arezou: "middle-east",
 };
 
 export function regionForHandle(username: string): Region | null {

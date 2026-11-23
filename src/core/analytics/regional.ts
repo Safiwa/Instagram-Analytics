@@ -47,6 +47,8 @@ export type RegionalPeer = {
   country: CountrySignal;
   countryRelationship: CountryRelationship;
   matchReasons: string[];
+  postsNotExposed: boolean;
+  engagementSource: ProfileMetrics["engagementSource"];
 };
 
 export type RegionalComparison = {
@@ -66,6 +68,8 @@ export type RegionalRankRow = {
   category: string;
   country: CountrySignal;
   isTarget: boolean;
+  postsNotExposed: boolean;
+  engagementSource: ProfileMetrics["engagementSource"];
 };
 
 export type RegionalRanking = {
@@ -101,6 +105,7 @@ function rankedCandidates(
   const targetCountry = inferCountrySignal(target);
   const targetFactors = rankFactors(target, metrics);
   const targetCategory = inferExplicitCategory(target);
+  const targetPostsNotExposed = target.recentPosts.length === 0;
 
   if (!targetCategory || categoryGroup(targetCategory) !== "creator") {
     return [];
@@ -111,7 +116,9 @@ function rankedCandidates(
     return (
       candidate.username !== target.username &&
       candidate.followers > 0 &&
-      candidate.recentPosts.length > 0 &&
+      // A no-post searched profile may be ranked alongside other no-post
+      // accounts, but never against invented activity. Their rows are disclosed.
+      (targetPostsNotExposed || candidate.recentPosts.length > 0) &&
       isWithinFollowerLatency(target.followers, candidate.followers) &&
       candidateCategory !== null &&
       categoryGroup(candidateCategory) === "creator" &&
@@ -132,10 +139,12 @@ function rankedCandidates(
       const activityScore = shared.length > 0 ? clamp(80 + shared.length * 5, 0, 100) : 75;
       const raw = factorScore * 0.55 + countryScore(relationship) * 0.3 + activityScore * 0.15;
 
+      const postsNotExposed = candidate.recentPosts.length === 0;
       const matchReasons = [
         `${sameCategoryLabel ? "same category label" : "same creator category group"}: ${candidateCategory}`,
         ...(shared.length > 0 ? [`shared activity: ${shared.join(", ")}`] : []),
         `regional fit ${Math.round(factorScore)}%`,
+        ...(postsNotExposed ? ["posts not exposed; public signals only"] : []),
       ];
 
       return {
@@ -149,6 +158,8 @@ function rankedCandidates(
         country: candidateCountry,
         countryRelationship: relationship,
         matchReasons,
+        postsNotExposed,
+        engagementSource: candidateMetrics.engagementSource,
       };
     })
     .sort(
@@ -166,7 +177,10 @@ export function findRegionalCategoryPeer(
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
 ): RegionalPeer | null {
-  return rankedCandidates(target, metrics, pool)[0] ?? null;
+  const candidates = rankedCandidates(target, metrics, pool);
+  // The headline comparison card should show a profile with visible activity
+  // whenever one exists; no-post accounts belong in the disclosed rank table.
+  return candidates.find((candidate) => !candidate.postsNotExposed) ?? candidates[0] ?? null;
 }
 
 function differenceInsight(
@@ -254,6 +268,47 @@ export function buildKeyComparisons(
   ];
 }
 
+function regionalScore(peer: RegionalPeer): number {
+  return regionalRankScore(peer.factors, peer.metrics.authenticityPct);
+}
+
+// Most profiles use the strongest four real peers. A searched profile with no
+// exposed posts scores from public signals only, so the strongest-four rule can
+// hide the genuinely comparable lower-scoring accounts. Bracket that score with
+// two higher and two lower real peers instead; the rows remain ordered by score.
+function selectRegionalPeers(
+  candidates: RegionalPeer[],
+  targetScore: number,
+  limit: number,
+  targetPostsNotExposed: boolean,
+): RegionalPeer[] {
+  const byScore = [...candidates].sort(
+    (left, right) =>
+      regionalScore(right) - regionalScore(left) ||
+      left.profile.username.localeCompare(right.profile.username),
+  );
+
+  if (!targetPostsNotExposed) {
+    return byScore.slice(0, limit);
+  }
+
+  const higher = byScore.filter((peer) => regionalScore(peer) > targetScore);
+  const lower = byScore
+    .filter((peer) => regionalScore(peer) <= targetScore)
+    .sort((left, right) => regionalScore(right) - regionalScore(left));
+  const upperCount = Math.ceil(limit / 2);
+  const lowerCount = limit - upperCount;
+  const selected = [...higher.slice(0, upperCount), ...lower.slice(0, lowerCount)];
+  const seen = new Set(selected.map((peer) => peer.profile.username));
+  const remaining = byScore
+    .filter((peer) => !seen.has(peer.profile.username))
+    .sort(
+      (left, right) =>
+        Math.abs(regionalScore(left) - targetScore) - Math.abs(regionalScore(right) - targetScore),
+    );
+  return [...selected, ...remaining].slice(0, limit);
+}
+
 export function buildRegionalRanking(
   target: CreatorProfile,
   metrics: ProfileMetrics,
@@ -263,15 +318,12 @@ export function buildRegionalRanking(
 ): RegionalRanking | null {
   const targetFactors = rankFactors(target, metrics);
   const targetRegionalScore = regionalRankScore(targetFactors, metrics.authenticityPct);
-  const peers = [...rankedCandidates(target, metrics, pool)]
-    .sort(
-      (left, right) =>
-        regionalRankScore(right.factors, right.metrics.authenticityPct) -
-          regionalRankScore(left.factors, left.metrics.authenticityPct) ||
-        right.profile.followers - left.profile.followers ||
-        left.profile.username.localeCompare(right.profile.username),
-    )
-    .slice(0, limit);
+  const peers = selectRegionalPeers(
+    rankedCandidates(target, metrics, pool),
+    targetRegionalScore,
+    limit,
+    target.recentPosts.length === 0,
+  );
   if (peers.length === 0) {
     return null;
   }
@@ -289,6 +341,8 @@ export function buildRegionalRanking(
       category: inferExplicitCategory(target) ?? inferCategory(target),
       country: inferCountrySignal(target),
       isTarget: true,
+      postsNotExposed: target.recentPosts.length === 0,
+      engagementSource: metrics.engagementSource,
     },
     ...peers.map((peer) => ({
       profile: peer.profile,
@@ -302,6 +356,8 @@ export function buildRegionalRanking(
       category: peer.category,
       country: peer.country,
       isTarget: false,
+      postsNotExposed: peer.postsNotExposed,
+      engagementSource: peer.engagementSource,
     })),
   ];
 

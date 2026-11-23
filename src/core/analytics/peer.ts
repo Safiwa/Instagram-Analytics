@@ -246,6 +246,8 @@ export type PeerRankingRow = {
   category: string;
   country: CountrySignal;
   isTarget: boolean;
+  postsNotExposed: boolean;
+  engagementSource: ProfileMetrics["engagementSource"];
 };
 
 export type PeerRanking = {
@@ -305,6 +307,8 @@ export function buildPeerRanking(
       category: inferCategory(target),
       country: inferCountrySignal(target),
       isTarget: true,
+      postsNotExposed: target.recentPosts.length === 0,
+      engagementSource: metrics.engagementSource,
     },
     ...peers.map((peer) => ({
       profile: peer.profile,
@@ -318,6 +322,8 @@ export function buildPeerRanking(
       category: peer.category,
       country: peer.country,
       isTarget: false,
+      postsNotExposed: peer.profile.recentPosts.length === 0,
+      engagementSource: peer.metrics.engagementSource,
     })),
   ];
 

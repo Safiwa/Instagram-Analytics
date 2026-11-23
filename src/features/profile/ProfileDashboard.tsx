@@ -130,27 +130,38 @@ export function ProfileDashboard({
   const hasViews = profile.recentPosts.some((post) => typeof post.viewCount === "number");
   const noPublicPosts =
     profile.source !== "demo" && !profile.isPrivate && profile.recentPosts.length === 0;
+  const hasThirdPartyEngagement = metrics.engagementSource === "third-party";
+  const engagementUnavailable = metrics.engagementSource === "unavailable";
   const benchmarkCountry = inferCountrySignal(profile).country;
   const benchmarkScope = benchmarkCountry
     ? `Both the closest peer and ranking table are limited to accounts with the same inferred country (${benchmarkCountry}).`
     : "Instagram does not publish a country signal for this profile, so the closest available country or region tier is used instead.";
-  // computeMetrics and rankFactors fall back to zero when Instagram exposes no
-  // posts. That zero is a placeholder, not a measurement, so never present it as
-  // a real value for the searched profile.
-  const targetSignal = (formatted: string, isTarget: boolean) =>
-    noPublicPosts && isTarget ? "—" : formatted;
+  // rankFactors falls back to zero when Instagram exposes no posts. That zero is
+  // a placeholder, not a measurement. Engagement from a disclosed third party is
+  // real source data and stays visible; follower change and Reels remain hidden.
+  type SignalRow = {
+    isTarget: boolean;
+    postsNotExposed: boolean;
+    engagementSource: string;
+  };
+  const engagementSignal = (formatted: string, row: SignalRow) =>
+    row.postsNotExposed && row.engagementSource === "unavailable" ? "—" : formatted;
+  const changeSignal = (formatted: string, row: SignalRow) =>
+    row.postsNotExposed ? "—" : formatted;
   const momentumLabel =
     growth.momentum === "unknown" ? "Not enough data" : growth.momentum.charAt(0).toUpperCase() + growth.momentum.slice(1);
   const peerDelta = peer ? round2(metrics.engagementRate - peer.metrics.engagementRate) : null;
-  const peerInsight = noPublicPosts
-    ? "not comparable because this account's posts were not exposed"
-    : peerDelta === null
-      ? ""
-      : peerDelta > 0
-        ? `${peerDelta.toFixed(2)} points above this peer`
-        : peerDelta < 0
-          ? `${Math.abs(peerDelta).toFixed(2)} points below this peer`
-          : "level with this peer";
+  const peerInsight = hasThirdPartyEngagement
+    ? "a Modash estimate, not directly comparable with this peer's public-post average"
+    : noPublicPosts
+      ? "not comparable because this account's posts were not exposed"
+      : peerDelta === null
+        ? ""
+        : peerDelta > 0
+          ? `${peerDelta.toFixed(2)} points above this peer`
+          : peerDelta < 0
+            ? `${Math.abs(peerDelta).toFixed(2)} points below this peer`
+            : "level with this peer";
 
   const initials =
     profile.displayName
@@ -268,10 +279,31 @@ export function ProfileDashboard({
           data-testid="no-posts-notice"
           className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
         >
-          Instagram did not expose this account&apos;s posts to its public pages on this lookup, so
-          engagement and modeled metrics cannot be calculated yet. A dash (—) means the data was not
-          exposed, not zero. The follower, following, and total post counts are public. Try again in
-          a few minutes, or connect the official API for accounts you manage.
+          {hasThirdPartyEngagement && metrics.thirdPartyEngagement ? (
+            <>
+              Instagram did not expose this account&apos;s posts on this lookup. Engagement rate,
+              average likes, and average comments below are{" "}
+              <a
+                href={metrics.thirdPartyEngagement.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium underline"
+              >
+                {metrics.thirdPartyEngagement.source} estimates
+              </a>{" "}
+              from its public engagement-rate calculator (report updated{" "}
+              {formatDate(metrics.thirdPartyEngagement.reportUpdatedAt)}), not Instagram
+              measurements. Reels, fake followers, authenticity, and follower growth remain
+              unavailable. A dash (—) means the data was not exposed, not zero.
+            </>
+          ) : (
+            <>
+              Instagram did not expose this account&apos;s posts to its public pages on this lookup,
+              so engagement and modeled metrics cannot be calculated yet. A dash (—) means the data
+              was not exposed, not zero. The follower, following, and total post counts are public.
+              Try again in a few minutes, or connect the official API for accounts you manage.
+            </>
+          )}
         </div>
       ) : null}
 
@@ -286,22 +318,27 @@ export function ProfileDashboard({
         >
           {profile.isPrivate
             ? "This account is private. Public follower and post counts are available, but posts and engagement are hidden, so modeled metrics are unavailable."
-            : profile.source === "public"
-              ? "Public web data from Instagram's public profile page. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."
-              : "Official API data via Instagram Business Discovery. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."}
+            : hasThirdPartyEngagement
+              ? "Instagram profile data is public-web sourced. Saves, reach, audience demographics, and measured follower history are not exposed. The engagement figures are third-party Modash estimates; fake followers, authenticity, and growth are not modeled without public posts."
+              : profile.source === "public"
+                ? "Public web data from Instagram's public profile page. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."
+                : "Official API data via Instagram Business Discovery. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."}
         </div>
       ) : null}
 
       <section data-testid="metric-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard
           label="Engagement rate"
-          value={profile.isPrivate || noPublicPosts ? "—" : formatPercent(metrics.engagementRate)}
+          value={engagementUnavailable ? "—" : formatPercent(metrics.engagementRate)}
+          badge={hasThirdPartyEngagement ? "Est." : undefined}
           hint={
-            profile.isPrivate || noPublicPosts
+            engagementUnavailable
               ? "No public posts available"
-              : metrics.engagementBasis === "likes+comments"
-                ? "Public likes + comments / followers"
-                : "Avg likes + comments + saves / followers"
+              : hasThirdPartyEngagement
+                ? "Modash estimate · likes + comments / followers"
+                : metrics.engagementBasis === "likes+comments"
+                  ? "Public likes + comments / followers"
+                  : "Avg likes + comments + saves / followers"
           }
         />
         <MetricCard
@@ -342,17 +379,27 @@ export function ProfileDashboard({
         />
         <MetricCard
           label="Avg likes"
-          value={
-            profile.isPrivate || noPublicPosts ? "—" : formatCompact(metrics.avgLikes)
+          value={engagementUnavailable ? "—" : formatCompact(metrics.avgLikes)}
+          badge={hasThirdPartyEngagement ? "Est." : undefined}
+          hint={
+            engagementUnavailable
+              ? "No public posts available"
+              : hasThirdPartyEngagement
+                ? "Modash estimate · average per post"
+                : "Average per public post"
           }
-          hint={profile.isPrivate || noPublicPosts ? "No public posts available" : "Average per public post"}
         />
         <MetricCard
           label="Avg comments"
-          value={
-            profile.isPrivate || noPublicPosts ? "—" : formatCompact(metrics.avgComments)
+          value={engagementUnavailable ? "—" : formatCompact(metrics.avgComments)}
+          badge={hasThirdPartyEngagement ? "Est." : undefined}
+          hint={
+            engagementUnavailable
+              ? "No public posts available"
+              : hasThirdPartyEngagement
+                ? "Modash estimate · average per post"
+                : "Average per public post"
           }
-          hint={profile.isPrivate || noPublicPosts ? "No public posts available" : "Average per public post"}
         />
       </section>
 
@@ -724,8 +771,9 @@ export function ProfileDashboard({
                 </p>
                 {noPublicPosts ? (
                   <p className="mt-1 text-[11px] text-amber-700">
-                    This profile&apos;s post-based signals were not exposed, so its score reflects
-                    only the public signals available.
+                    {hasThirdPartyEngagement
+                      ? "Posts were not exposed. Engagement uses a disclosed Modash estimate; growth and Reels are unavailable."
+                      : "This profile's post-based signals were not exposed, so its score reflects only the public signals available."}
                   </p>
                 ) : null}
               </div>
@@ -772,10 +820,14 @@ export function ProfileDashboard({
                       {row.matchScore !== null ? ` · ${row.matchScore.toFixed(0)}% match` : ""}
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
-                      {row.country.label} · {targetSignal(formatCompact(row.avgLikes), row.isTarget)} avg likes ·{" "}
-                      {targetSignal(formatCompact(row.avgComments), row.isTarget)} avg comments ·{" "}
-                      {targetSignal(formatPercent(row.followerChangePct), row.isTarget)}
+                      {row.country.label} · {engagementSignal(formatCompact(row.avgLikes), row)} avg likes ·{" "}
+                      {engagementSignal(formatCompact(row.avgComments), row)} avg comments ·{" "}
+                      {changeSignal(formatPercent(row.followerChangePct), row)}
                       {row.followerChangeEstimated ? " est." : ""} follower change
+                      {row.isTarget && row.engagementSource === "third-party"
+                        ? " · Modash est. engagement"
+                        : ""}
+                      {!row.isTarget && row.postsNotExposed ? " · posts not exposed" : ""}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -786,7 +838,7 @@ export function ProfileDashboard({
                       Rank score
                     </p>
                     <p className="mt-0.5 text-[10px] text-slate-500">
-                      {targetSignal(formatPercent(row.engagementRate), row.isTarget)} ER
+                      {engagementSignal(formatPercent(row.engagementRate), row)} ER
                     </p>
                   </div>
                 </li>
@@ -872,11 +924,12 @@ export function ProfileDashboard({
                 <span>Insight</span>
               </div>
               {regionalComparison.map((comparison) => {
+                const unavailablePostMetric =
+                  metrics.engagementSource === "unavailable" &&
+                  ["Engagement rate", "Avg likes", "Avg comments"].includes(comparison.label);
                 const hidden =
                   noPublicPosts &&
-                  ["Engagement rate", "Avg likes", "Avg comments", "Follower change"].includes(
-                    comparison.label,
-                  );
+                  (comparison.label === "Follower change" || unavailablePostMetric);
                 return (
                   <div
                     key={comparison.label}
@@ -888,15 +941,22 @@ export function ProfileDashboard({
                     </span>
                     <span className="font-semibold text-slate-950">{comparison.peer}</span>
                     <span className="text-slate-500">
-                      {hidden ? "Posts not exposed" : comparison.insight}
+                      {hidden
+                        ? comparison.label === "Follower change"
+                          ? "Not available"
+                          : "Posts not exposed"
+                        : comparison.insight}
                     </span>
                   </div>
                 );
               })}
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
-              Follower change is modeled from public signals for non-demo profiles; see the
-              estimates panel below for details.
+              {hasThirdPartyEngagement
+                ? "Engagement rate, avg likes, and avg comments for this profile are Modash estimates, not Instagram measurements. Follower change is unavailable without public posts."
+                : noPublicPosts
+                  ? "Post-based values are unavailable because this account's posts were not exposed."
+                  : "Follower change is modeled from public signals for non-demo profiles; see the estimates panel below for details."}
             </p>
           </>
         ) : (
@@ -910,15 +970,16 @@ export function ProfileDashboard({
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-slate-950">
-                  Rank #{regionalRanking.targetRank} of {regionalRanking.total} Middle East profiles
+                  Rank #{regionalRanking.targetRank} of {regionalRanking.total} of similar Middle East profiles
                 </p>
                 <p className="text-xs text-slate-500">
                   Regional rank score · lower modeled fake-follower share ranks higher
                 </p>
                 {noPublicPosts ? (
                   <p className="mt-1 text-[11px] text-amber-700">
-                    This profile&apos;s post-based signals were not exposed, so its score reflects
-                    only the public signals available.
+                    {hasThirdPartyEngagement
+                      ? "Posts were not exposed. Engagement uses a disclosed Modash estimate; growth and Reels are unavailable."
+                      : "This profile's post-based signals were not exposed, so its score reflects only the public signals available."}
                   </p>
                 ) : null}
               </div>
@@ -965,10 +1026,14 @@ export function ProfileDashboard({
                       {row.matchScore !== null ? ` · ${row.matchScore}% match` : ""}
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
-                      {row.country.label} · {targetSignal(formatCompact(row.avgLikes), row.isTarget)} avg likes ·{" "}
-                      {targetSignal(formatCompact(row.avgComments), row.isTarget)} avg comments ·{" "}
-                      {targetSignal(formatPercent(row.followerChangePct), row.isTarget)}
+                      {row.country.label} · {engagementSignal(formatCompact(row.avgLikes), row)} avg likes ·{" "}
+                      {engagementSignal(formatCompact(row.avgComments), row)} avg comments ·{" "}
+                      {changeSignal(formatPercent(row.followerChangePct), row)}
                       {row.followerChangeEstimated ? " est." : ""} follower change
+                      {row.isTarget && row.engagementSource === "third-party"
+                        ? " · Modash est. engagement"
+                        : ""}
+                      {!row.isTarget && row.postsNotExposed ? " · posts not exposed" : ""}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -979,7 +1044,7 @@ export function ProfileDashboard({
                       Regional rank score
                     </p>
                     <p className="mt-0.5 text-[10px] text-slate-500">
-                      {targetSignal(formatPercent(row.engagementRate), row.isTarget)} ER
+                      {engagementSignal(formatPercent(row.engagementRate), row)} ER
                     </p>
                   </div>
                 </li>

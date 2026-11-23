@@ -28,6 +28,18 @@ export type Audience = {
   gender: AudienceSlice[];
 };
 
+// A disclosed third-party estimate used only when Instagram exposes no posts.
+// It is never treated as an Instagram measurement and never feeds the modeled
+// fake-follower, authenticity, or growth calculations.
+export type ThirdPartyEngagement = {
+  source: string;
+  sourceUrl: string;
+  reportUpdatedAt: string;
+  engagementRatePct: number;
+  averageLikes: number;
+  averageComments: number;
+};
+
 export type CreatorProfile = {
   username: string;
   displayName: string;
@@ -45,4 +57,5 @@ export type CreatorProfile = {
   followerHistory: MonthlyPoint[];
   recentPosts: Post[];
   audience?: Audience;
+  thirdPartyEngagement?: ThirdPartyEngagement;
 };
