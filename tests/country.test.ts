@@ -158,13 +158,33 @@ describe("country signal inference", () => {
         bio: "Engineer by Education, Entrepreneur by Profession",
         recentPosts: [
           post(["#TechnicalGuruji", "#TGFamily"]),
-          { ...post(["#vivo", "#Zeiss"]), caption: "Launching in India on 26th November" },
-          { ...post(["#TechnicalGuruji"]), caption: "War Memorial in Ladakh" },
+          { ...post(["#vivo", "#Zeiss", "#India"]), caption: "Launching on 26th November" },
+          {
+            ...post(["#TechnicalGuruji"]),
+            location: "Ladakh, India",
+            caption: "War Memorial",
+          },
         ],
       }),
     );
     expect(signal.country).toBe("India");
     expect(signal.basis).toBe("posts");
+  });
+
+  it("does not read a news topic in a caption as the account country", () => {
+    const signal = inferCountrySignal(
+      profile({
+        username: "arabnews",
+        bio: "The Middle East's leading English daily",
+        recentPosts: [
+          { ...post(), caption: "Iran says it will use all available means to respond" },
+          { ...post(), caption: "Tehran and Washington exchange messages through mediators" },
+        ],
+      }),
+    );
+
+    expect(signal.country).toBe("Saudi Arabia");
+    expect(signal.basis).toBe("curated");
   });
 
   it("uses only a clear majority of promoted locations", () => {

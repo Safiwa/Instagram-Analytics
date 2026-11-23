@@ -255,6 +255,7 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   qatarairways: "Qatar",
   visitqatar: "Qatar",
   qatar: "Qatar",
+  arabnews: "Saudi Arabia",
   visitsaudi: "Saudi Arabia",
   flynas: "Saudi Arabia",
   visitjordan: "Jordan",
@@ -441,25 +442,27 @@ export function isMiddleEastCountry(country: string | null | undefined): boolean
   );
 }
 
-// Count one vote per post per detected country. A post that mentions two
+// Count one vote per post per detected country. Only explicit location tags,
+// hashtags and location flags count: a news caption that mentions a country as
+// a story topic is not the account's country. A post that promotes two
 // countries contributes one vote to each, so a single hashtag-stuffed post
 // cannot outweigh a clear majority across the public recent posts.
 function postCountryVotes(profile: CreatorProfile): Map<string, number> {
   const votes = new Map<string, number>();
 
   for (const post of profile.recentPosts) {
-    const raw = [post.caption, post.location ?? "", ...post.hashtags].join(" ");
     const countries = new Set<string>();
+    const flagText = [post.caption, post.location ?? "", ...post.hashtags].join(" ");
 
     for (const rule of COUNTRY_RULES) {
-      if (rule.flag && raw.includes(rule.flag)) {
+      if (rule.flag && flagText.includes(rule.flag)) {
         countries.add(rule.country);
       }
     }
 
-    const text = normalize(raw);
+    const promoted = normalize([post.location ?? "", ...post.hashtags].join(" "));
     for (const rule of COUNTRY_RULES) {
-      if (rule.aliases.some((alias) => hasNormalizedAlias(text, alias))) {
+      if (rule.aliases.some((alias) => hasNormalizedAlias(promoted, alias))) {
         countries.add(rule.country);
       }
     }

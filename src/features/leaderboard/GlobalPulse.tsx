@@ -198,8 +198,8 @@ export async function GlobalPulse() {
         </h3>
         <p className="text-xs leading-relaxed text-slate-500">
           Every board’s country labels use Instagram’s published “Account based in” value first.
-          When it is not shared, they use public post/reel locations, hashtags and captions, then
-          other public handle/profile signals or clearly marked curated metadata. Middle East and
+          When it is not shared, they use public post/reel locations, hashtags and location flags,
+          then other public handle/profile signals or clearly marked curated metadata. Middle East and
           UAE boards require public evidence, and unavailable values stay marked as not published.
         </p>
         <div className="grid gap-4 lg:grid-cols-2">

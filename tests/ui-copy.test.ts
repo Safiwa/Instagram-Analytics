@@ -110,7 +110,7 @@ describe("regional board country labels", () => {
 
   it("discloses the published account-country first rule and public fallbacks", () => {
     expect(globalPulse).toContain("Instagram’s published “Account based in” value first");
-    expect(globalPulse).toContain("public post/reel locations, hashtags and captions");
+    expect(globalPulse).toContain("public post/reel locations, hashtags and location flags");
     expect(globalPulse).toContain("Middle East and\n          UAE boards");
     expect(globalPulse).toContain("require public evidence");
     expect(globalPulse).toContain("unavailable values stay marked as not published");

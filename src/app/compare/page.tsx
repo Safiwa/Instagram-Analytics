@@ -99,7 +99,7 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
             five signals: 55% followers, 20% engagement rate, 10% average likes, 5% average comments
             and 10% follower change. Country uses Instagram’s published “Account based in” value
             first; when it is not shared, it is inferred from public post/reel hashtags, locations
-            and captions, then handle and profile text.
+            and location flags, then handle and profile text.
           </p>
           {compareRanking.length > 0 ? (
             <ol className="mt-5 space-y-2">
