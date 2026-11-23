@@ -187,6 +187,49 @@ describe("country signal inference", () => {
     expect(signal.basis).toBe("curated");
   });
 
+  it("reads compound public hashtags at their edges but never caption topics", () => {
+    const signal = inferCountrySignal(
+      profile({
+        username: "airagymn",
+        recentPosts: [
+          {
+            ...post(["#dubaimiraclegarden", "#miraclegarden", "#dubaireels", "#whatsondubai"]),
+            caption: "Iran and Tehran are the story topic, not the account country.",
+          },
+          { ...post(["#uaewinter"]), caption: "A winter post." },
+          { ...post(["#whatsondubai"]), caption: "A city guide." },
+        ],
+      }),
+    );
+
+    expect(signal.country).toBe("United Arab Emirates");
+    expect(signal.basis).toBe("posts");
+    expect(hasPublishedCountryEvidence(signal)).toBe(true);
+
+    const middleOnly = inferCountrySignal(
+      profile({ username: "sample", recentPosts: [post(["#mydubaistory"])] }),
+    );
+    expect(middleOnly.country).toBeNull();
+  });
+
+  it("keeps @leomessi unpublished when only general caption places are available", () => {
+    const signal = inferCountrySignal(
+      profile({
+        username: "leomessi",
+        bio: "Bienvenidos a la cuenta oficial de Instagram de Leo Messi",
+        recentPosts: [
+          {
+            ...post(["#ChatGPT_Partner"]),
+            caption: "Desde Rosario hasta Miami, y todos los destinos que hay en el medio.",
+          },
+        ],
+      }),
+    );
+
+    expect(signal.country).toBeNull();
+    expect(signal.label).toBe("Country not published");
+  });
+
   it("uses only a clear majority of promoted locations", () => {
     const clear = inferCountrySignal(
       profile({ recentPosts: [post(["#Doha", "#Qatar"]), post(["#Doha"])] }),

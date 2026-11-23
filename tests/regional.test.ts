@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { inferCountrySignal } from "../src/core/analytics/country";
 import { computeMetrics } from "../src/core/analytics/metrics";
 import { rankFactors, regionalRankScore } from "../src/core/analytics/rank";
 import {
@@ -664,9 +665,15 @@ describe("Middle East authenticity-aware ranking", () => {
           { month: "2026-10", followers: 51_500 },
         ],
       }),
-      profile("airagymn", 36_007, ["dubai beauty training"], {
+    ];
+    // The public @airagymn profile does not publish an account country or a
+    // country in its bio. Its real UAE hashtags are compound words, so this peer
+    // only qualifies after the explicit hashtag edge matcher is applied.
+    const airagymn: CreatorProfile = {
+      ...profile("airagymn", 36_007, [], {
         displayName: "Irina Skobeleva",
-        bio: "Beauty and training in Dubai",
+        bio: "Living between air & earth 🤍\nAerial silks | Pilates | handstand and splits!\nSharing beauty, freedom & inspiration 🧘🏼‍♀️\nDM for training 🤸🏻🤸‍♀️",
+        accountCountry: null,
         likes: 58,
         comments: 65,
         fakeFollowers: 18_364,
@@ -675,9 +682,20 @@ describe("Middle East authenticity-aware ranking", () => {
           { month: "2026-10", followers: 36_007 },
         ],
       }),
-    ];
+      recentPosts: [
+        post(
+          "airagymn-hashtags",
+          "Collecting flowers in my camera roll because real ones don’t last …forever 🌸🥀",
+          58,
+          ["#dubaimiraclegarden", "#miraclegarden", "#dubaireels", "#whatsondubai"],
+          65,
+        ),
+      ],
+    };
+    pool.push(airagymn);
     const ranking = buildRegionalRanking(target, computeMetrics(target), pool);
 
+    expect(inferCountrySignal(airagymn).basis).toBe("posts");
     expect(ranking?.targetRank).toBe(3);
     expect(ranking?.total).toBe(5);
     expect(ranking!.rows.filter((row) => row.country.country === "United Arab Emirates")).toHaveLength(

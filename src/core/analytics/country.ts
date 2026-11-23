@@ -352,6 +352,20 @@ function hasHandleAlias(handle: string, alias: string): boolean {
   return bounded || (needle.length >= 4 && (handle.startsWith(needle) || handle.endsWith(needle)));
 }
 
+function hasCompoundAlias(value: string, alias: string): boolean {
+  const needle = compact(alias);
+  const compactValue = compact(value);
+  // Public hashtags are often compound words (#dubaimiraclegarden, #uaewinter,
+  // #whatsondubai) rather than tokenized text. A country cue at either edge is
+  // explicit; a bare substring in the middle still is not. Three letters are
+  // enough for codes such as UAE/DXB, but not for ambiguous two-letter bits.
+  return (
+    needle.length >= 3 &&
+    compactValue.length > 0 &&
+    (compactValue.startsWith(needle) || compactValue.endsWith(needle))
+  );
+}
+
 // Emoji flags survive public profile/caption text even when the country name is
 // translated. `normalize()` strips them, so they must be checked before the text
 // aliases. When several flags appear, the rule order decides, with the UAE first;
@@ -460,9 +474,15 @@ function postCountryVotes(profile: CreatorProfile): Map<string, number> {
       }
     }
 
-    const promoted = normalize([post.location ?? "", ...post.hashtags].join(" "));
+    const promotedValues = [post.location ?? "", ...post.hashtags].filter(Boolean);
+    const promoted = normalize(promotedValues.join(" "));
     for (const rule of COUNTRY_RULES) {
-      if (rule.aliases.some((alias) => hasNormalizedAlias(promoted, alias))) {
+      const matched = rule.aliases.some(
+        (alias) =>
+          hasNormalizedAlias(promoted, alias) ||
+          promotedValues.some((value) => hasCompoundAlias(value, alias)),
+      );
+      if (matched) {
         countries.add(rule.country);
       }
     }
@@ -503,7 +523,7 @@ export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
   }
 
   // If it is not shared, the public posts and reels are the next requested
-  // source: their location tags, hashtags and captions count as one vote each.
+  // source: their location tags, hashtags and location flags count as votes.
   const postMatch = dominantPostCountry(profile);
   if (postMatch) {
     return signal(postMatch, region, "posts");
