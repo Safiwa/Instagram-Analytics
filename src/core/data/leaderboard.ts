@@ -1,9 +1,15 @@
-import { inferCountrySignal } from "../analytics/country";
+import { inferCountrySignal, type CountryBasis } from "../analytics/country";
 import { computeMetrics } from "../analytics/metrics";
 import { rankFactors, rankScore, round2 } from "../analytics/rank";
 import { log } from "../logging/logger";
 import { fetchLiveProfile, isLiveConfigured } from "./live";
-import { isInRegionBoard, REGION_BOARDS, type Region } from "./regions";
+import {
+  EUROPE_COUNTRIES,
+  isInRegionBoard,
+  MIDDLE_EAST_COUNTRIES,
+  REGION_BOARDS,
+  type Region,
+} from "./regions";
 import {
   readTrackedSnapshotAny,
   TRACKED_SNAPSHOT_TTL_SECONDS,
@@ -112,7 +118,6 @@ export const LEADERBOARD_HANDLES = [
   "wessamq",
   "taimalfalasi",
   "baneenstars",
-  "technicalguruji",
   // Real, explicitly labeled UAE creators in @alaaabuharb's 1.7–3.1M band.
   // They fill the Middle East rank panel honestly without widening the ±30% gate.
   "sarahmalas",
@@ -162,7 +167,6 @@ export const UAE_GCC_HANDLES = [
   "wessamq",
   "taimalfalasi",
   "baneenstars",
-  "technicalguruji",
   "sarahmalas",
   "randdalati",
   "rima_alosta",
@@ -186,6 +190,8 @@ export type LeaderboardEntry = {
   rankScore: number;
   // Editorial country signal from public handle/profile text. Instagram does
   // not publish an account country field, so unavailable values stay explicit.
+  country: string | null;
+  countryBasis: CountryBasis | null;
   countryLabel: string;
   profilePictureUrl?: string;
 };
@@ -250,6 +256,7 @@ function toEntry(profile: CreatorProfile, now: number): LeaderboardEntry | null 
   const window = windowRate(profile.recentPosts, profile.followers, now - WINDOW_MS);
   const metrics = computeMetrics(profile);
   const factors = rankFactors(profile, metrics, new Date(now));
+  const countrySignal = inferCountrySignal(profile);
 
   return {
     username: profile.username,
@@ -263,9 +270,36 @@ function toEntry(profile: CreatorProfile, now: number): LeaderboardEntry | null 
     followerChangePct: factors.followerChangePct,
     followerChangeEstimated: factors.followerChangeEstimated,
     rankScore: rankScore(factors),
-    countryLabel: inferCountrySignal(profile).country ?? "Country not published",
+    country: countrySignal.country,
+    countryBasis: countrySignal.basis,
+    countryLabel: countrySignal.country ?? "Country not published",
     profilePictureUrl: profile.profilePictureUrl,
   };
+}
+
+const BOARD_COUNTRIES: Record<Region, readonly string[]> = {
+  usa: ["United States"],
+  europe: EUROPE_COUNTRIES,
+  "middle-east": MIDDLE_EAST_COUNTRIES,
+  uae: ["United Arab Emirates"],
+};
+
+// Europe and USA keep their curated reference sets. The Middle East and UAE
+// boards are stricter: a handle must carry public handle/profile evidence or a
+// clear majority of promoted locations. Curated-only attribution is not enough
+// to claim that an account is based in one of those countries.
+function isCountryBoardEligible(entry: LeaderboardEntry, board: Region): boolean {
+  if (!entry.country || !BOARD_COUNTRIES[board].includes(entry.country)) {
+    return false;
+  }
+  if (board === "middle-east" || board === "uae") {
+    return (
+      entry.countryBasis !== null &&
+      entry.countryBasis !== "curated" &&
+      entry.countryBasis !== "region"
+    );
+  }
+  return true;
 }
 
 function regionalBoards(entries: LeaderboardEntry[]): Record<Region, LeaderboardEntry[]> {
@@ -273,6 +307,7 @@ function regionalBoards(entries: LeaderboardEntry[]): Record<Region, Leaderboard
   for (const board of REGION_BOARDS) {
     boards[board.id] = entries
       .filter((entry) => isInRegionBoard(entry.username, board.id))
+      .filter((entry) => isCountryBoardEligible(entry, board.id))
       .sort(byFollowersFirst)
       .slice(0, LEADERBOARD_SIZE);
   }

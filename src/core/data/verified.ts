@@ -65,7 +65,6 @@ export const VERIFIED_HANDLES: ReadonlySet<string> = new Set([
   "sofiamcoelho",
   "taimalfalasi",
   "taylorswift",
-  "technicalguruji",
   "therock",
   "timeoutdubai",
   "trending.vibz.uae",

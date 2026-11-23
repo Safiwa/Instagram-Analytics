@@ -384,8 +384,8 @@ Profile pages now surface verification, growth, and regional comparison:
   fresh public HTML profile lookup (`fetchPublicIdentity()`, 30-minute cache) when the signed proxy
   bridge is reachable, and otherwise `VERIFIED_HANDLES` in `src/core/data/verified.ts` — a snapshot of
   real public profile pages read on 2026-11-22 for the curated tracked pool, plus `rim.official__`,
-  the 4.5–6.3M UAE creator band (`amrmaskoun`, `wessamq`, `taimalfalasi`, `baneenstars`,
-  `technicalguruji`) and the 1.7–3.1M band (`sarahmalas`, `randdalati`, `rima_alosta`,
+  the 4.5–6.3M UAE creator band (`amrmaskoun`, `wessamq`, `taimalfalasi`, `baneenstars`)
+  and the 1.7–3.1M band (`sarahmalas`, `randdalati`, `rima_alosta`,
   `lookatsascha`) confirmed from real public Instagram pages/directories on 2026-11-23. Unknown
   handles stay "Not verified"; no badge is invented or modeled. The Middle East comparison panel
   uses creator category labels and the authenticity-aware regional rank described below.
@@ -459,7 +459,7 @@ Profile pages now surface verification, growth, and regional comparison:
   `alitofique`, `hinaashh`, `jexmi`, `najet.dh` and `elsakahwaji` around 250–327K, plus
   `donya_esmailiii`, `aiamwa`, `dina_h_ussien`, `poojaabis`, `taranum_sshahin`, `dina.ak`,
   `anshi_pandyala_official` and `zeniamk` around 46–72K, plus `amrmaskoun`, `wessamq`,
-  `taimalfalasi`, `baneenstars` and `technicalguruji` in the 4.5–6.3M UAE creator band, plus
+  `taimalfalasi` and `baneenstars` in the 4.5–6.3M UAE creator band, plus
   `sarahmalas`, `randdalati`, `rima_alosta` and `lookatsascha` in the 1.7–3.1M UAE creator band.
   These fill five-profile ranks at the smaller, mid-sized and larger UAE creator accounts without
   relaxing any gate. A candidate must (1) sit inside the

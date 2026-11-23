@@ -376,10 +376,6 @@ describe("Middle East authenticity-aware ranking", () => {
         displayName: "Baneen Naem",
         bio: "Fashion Lifestyle Beauty",
       }),
-      profile("technicalguruji", 6_295_677, ["technology and youtube"], {
-        displayName: "Gaurav Chaudhary",
-        bio: "YouTuber and video creator",
-      }),
       profile("jumeirah", 5_500_000, ["hotel and hospitality offers"], {
         displayName: "Jumeirah",
         bio: "Beautiful hospitality, generously shared.",
@@ -389,12 +385,12 @@ describe("Middle East authenticity-aware ranking", () => {
     const ranking = buildRegionalRanking(target, computeMetrics(target), [target, ...peers]);
     const usernames = ranking!.rows.map((row) => row.profile.username);
 
-    expect(ranking?.total).toBe(5);
+    expect(ranking?.total).toBe(4);
     expect(usernames).toContain("amrmaskoun");
     expect(usernames).toContain("wessamq");
     expect(usernames).toContain("taimalfalasi");
     expect(usernames).toContain("baneenstars");
-    expect(usernames).toContain("technicalguruji");
+    expect(usernames).not.toContain("technicalguruji");
     expect(usernames).not.toContain("jumeirah");
     expect(ranking!.rows.every((row) => row.profile.followers >= 4_075_425)).toBe(true);
     expect(ranking!.rows.every((row) => row.profile.followers <= 7_568_647)).toBe(true);

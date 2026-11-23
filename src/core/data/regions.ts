@@ -21,6 +21,19 @@ export const MIDDLE_EAST_COUNTRIES = [
   "Oman",
   "Tunisia",
   "Morocco",
+  "Libya",
+  "Iran",
+] as const;
+
+// Countries covered by the Europe board. This mirrors the public country rules
+// used by the homepage country labels.
+export const EUROPE_COUNTRIES = [
+  "United Kingdom",
+  "Italy",
+  "France",
+  "Spain",
+  "Germany",
+  "Portugal",
 ] as const;
 
 export const REGION_BOARDS: { id: Region; label: string; description: string }[] = [
@@ -124,7 +137,6 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   wessamq: "uae",
   taimalfalasi: "uae",
   baneenstars: "uae",
-  technicalguruji: "uae",
   sarahmalas: "uae",
   randdalati: "uae",
   rima_alosta: "uae",

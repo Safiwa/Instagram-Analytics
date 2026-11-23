@@ -2,11 +2,12 @@ import { regionForHandle, type Region } from "../data/regions";
 import type { CreatorProfile } from "../data/types";
 
 // Instagram does not publish an account's country. These signals are inferred
-// from public text and curated handle metadata, and are never presented as
-// audience demographics. The order is deliberate: handle/curated account data
-// first, then public profile text, then hashtags and captions that promote a
-// location.
-export type CountryBasis = "handle" | "profile" | "posts" | "region";
+// from public text first, then curated handle metadata, and are never presented
+// as audience demographics. The order is deliberate: public handle and profile
+// text, then a clear majority of hashtag/caption locations, then curated
+// metadata. Curated-only attribution is marked with the "curated" basis so
+// country boards can require public evidence.
+export type CountryBasis = "handle" | "profile" | "posts" | "curated" | "region";
 
 export type CountrySignal = {
   country: string | null;
@@ -127,6 +128,20 @@ const COUNTRY_RULES: CountryRule[] = [
     handleAliases: ["morocco", "casablanca", "marrakech"],
   },
   {
+    country: "Libya",
+    region: "middle-east",
+    flag: "🇱🇾",
+    aliases: ["libya", "libyan", "tripoli", "benghazi"],
+    handleAliases: ["libya", "tripoli", "benghazi"],
+  },
+  {
+    country: "Iran",
+    region: "middle-east",
+    flag: "🇮🇷",
+    aliases: ["iran", "iranian", "tehran"],
+    handleAliases: ["iran", "tehran"],
+  },
+  {
     country: "United States",
     region: "usa",
     flag: "🇺🇸",
@@ -199,8 +214,9 @@ const COUNTRY_RULES: CountryRule[] = [
   },
 ];
 
-// Curated published account country, used only when the handle itself does not
-// contain a country word. It is editorial metadata, not Instagram audience data.
+// Curated published account country, used only when no public handle, profile
+// or post signal resolves a country. It is editorial metadata, not Instagram
+// audience data, and is marked with the "curated" basis.
 const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   qatarairways: "Qatar",
   visitqatar: "Qatar",
@@ -245,7 +261,6 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   // Real public UAE creator accounts in @amrmaskoun's 4–7M follower band.
   baneenstars: "United Arab Emirates",
   taimalfalasi: "United Arab Emirates",
-  technicalguruji: "United Arab Emirates",
   wessamq: "United Arab Emirates",
   // Real public UAE creator accounts in @alaaabuharb's 1.7–3.1M follower band.
   sarahmalas: "United Arab Emirates",
@@ -305,7 +320,7 @@ function hasHandleAlias(handle: string, alias: string): boolean {
 // Emoji flags survive public profile/caption text even when the country name is
 // translated. `normalize()` strips them, so they must be checked before the text
 // aliases. When several flags appear, the rule order decides, with the UAE first;
-// explicit curated handles still win before any text signal.
+// public handle signals still win before any profile or post text.
 function matchCountryFlag(text: string): CountryRule | null {
   for (const rule of COUNTRY_RULES) {
     if (rule.flag && text.includes(rule.flag)) {
@@ -342,16 +357,60 @@ function signal(
   return { country: null, region: null, label: "Country not published", basis: null };
 }
 
+function countryRuleForCountry(country: string): CountryRule | null {
+  return COUNTRY_RULES.find((entry) => entry.country === country) ?? null;
+}
+
+// Count one vote per post per detected country. A post that mentions two
+// countries contributes one vote to each, so a single hashtag-stuffed post
+// cannot outweigh a clear majority across the public recent posts.
+function postCountryVotes(profile: CreatorProfile): Map<string, number> {
+  const votes = new Map<string, number>();
+
+  for (const post of profile.recentPosts) {
+    const raw = [post.caption, ...post.hashtags].join(" ");
+    const countries = new Set<string>();
+
+    for (const rule of COUNTRY_RULES) {
+      if (rule.flag && raw.includes(rule.flag)) {
+        countries.add(rule.country);
+      }
+    }
+
+    const text = normalize(raw);
+    for (const rule of COUNTRY_RULES) {
+      if (rule.aliases.some((alias) => hasNormalizedAlias(text, alias))) {
+        countries.add(rule.country);
+      }
+    }
+
+    for (const country of countries) {
+      votes.set(country, (votes.get(country) ?? 0) + 1);
+    }
+  }
+
+  return votes;
+}
+
+// Only a clear majority of promoted locations is treated as public evidence.
+// Mixed or tied signals stay unresolved instead of picking a country by rule
+// order. This is what keeps content from one country out of another's board.
+function dominantPostCountry(profile: CreatorProfile): CountryRule | null {
+  const votes = [...postCountryVotes(profile)].sort(
+    (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
+  );
+  if (votes.length === 0) {
+    return null;
+  }
+  if (votes.length > 1 && votes[0][1] === votes[1][1]) {
+    return null;
+  }
+  return countryRuleForCountry(votes[0][0]);
+}
+
 export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
   const username = profile.username.toLowerCase();
   const region = regionForHandle(username);
-  const curatedCountry =
-    CURATED_COUNTRY_BY_HANDLE[username] ?? (region ? REGION_COUNTRY[region] : undefined);
-
-  if (curatedCountry) {
-    const rule = COUNTRY_RULES.find((entry) => entry.country === curatedCountry) ?? null;
-    return signal(rule, region, "handle");
-  }
 
   const handleMatch = matchCountry((alias) => hasHandleAlias(username, alias), "handle");
   if (handleMatch) {
@@ -370,19 +429,17 @@ export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
   }
 
   // Captions and hashtags are used as promoted-location signals, not as proof
-  // of residence. That is why this is the last fallback, and why flags are
-  // checked there before translated country words.
-  const postTextRaw = profile.recentPosts
-    .flatMap((post) => [post.caption, ...post.hashtags])
-    .join(" ");
-  const postFlagMatch = matchCountryFlag(postTextRaw);
-  if (postFlagMatch) {
-    return signal(postFlagMatch, region, "posts");
-  }
-  const postText = normalize(postTextRaw);
-  const postMatch = matchCountry((alias) => hasNormalizedAlias(postText, alias));
+  // of residence. They only count when one country has a clear majority and
+  // are checked after explicit handle and profile text.
+  const postMatch = dominantPostCountry(profile);
   if (postMatch) {
     return signal(postMatch, region, "posts");
+  }
+
+  const curatedCountry =
+    CURATED_COUNTRY_BY_HANDLE[username] ?? (region ? REGION_COUNTRY[region] : undefined);
+  if (curatedCountry) {
+    return signal(countryRuleForCountry(curatedCountry), region, "curated");
   }
 
   return signal(null, region, region ? "region" : null);

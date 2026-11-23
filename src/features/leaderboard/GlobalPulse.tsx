@@ -195,8 +195,10 @@ export async function GlobalPulse() {
           By country
         </h3>
         <p className="text-xs leading-relaxed text-slate-500">
-          Country labels are inferred from public handle and profile signals. Instagram does not
-          publish account country, so unavailable values stay marked as not published.
+          Country labels come from public handle/profile signals, a clear majority of promoted
+          locations, or curated account metadata. Instagram does not publish account country;
+          Middle East and UAE boards require public evidence, and unavailable values stay marked
+          as not published.
         </p>
         <div className="grid gap-4 lg:grid-cols-2">
           {REGION_BOARDS.map((definition) => {
@@ -213,7 +215,7 @@ export async function GlobalPulse() {
                 label="Rank score"
                 metaFor={(entry) => signalMeta(entry)}
                 testId={`region-${definition.id}-list`}
-                showCountry={definition.id === "middle-east"}
+                showCountry={definition.id === "middle-east" || definition.id === "europe"}
               />
             );
           })}

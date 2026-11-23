@@ -30,12 +30,17 @@ function post(id: string, daysAgo: number, likes: number, comments = 0): Post {
   };
 }
 
-function profile(username: string, followers: number, posts: Post[]): CreatorProfile {
+function profile(
+  username: string,
+  followers: number,
+  posts: Post[],
+  bio = "",
+): CreatorProfile {
   return {
     username,
     displayName: username,
     category: "Instagram Professional",
-    bio: "",
+    bio,
     followers,
     following: 100,
     postsCount: posts.length,
@@ -102,11 +107,11 @@ describe("weighted leaderboard ranking", () => {
   });
 
   it("ranks country boards by follower count before the weighted score", () => {
-    const big = profile("emirates", 10_000_000, [post("a", 2, 100_000)]);
-    const small = profile("flydubai", 5_000, [post("b", 2, 4_000)]);
+    const big = profile("baneenstars", 10_000_000, [post("a", 2, 100_000)], "📍DUBAI");
+    const small = profile("wessamq", 5_000, [post("b", 2, 4_000)], "•Dubai📍");
     const board = rankProfiles([small, big], NOW);
 
-    expect(board.regional.uae.map((entry) => entry.username)).toEqual(["emirates", "flydubai"]);
+    expect(board.regional.uae.map((entry) => entry.username)).toEqual(["baneenstars", "wessamq"]);
     expect(board.regional.uae[0].followers).toBeGreaterThan(board.regional.uae[1].followers);
   });
 
@@ -189,6 +194,7 @@ describe("country leaderboards", () => {
     expect(regionForHandle("lookatsascha")).toBe("uae");
     expect(regionForHandle("elsakahwaji")).toBe("middle-east");
     expect(regionForHandle("leomessi")).toBeNull();
+    expect(regionForHandle("technicalguruji")).toBeNull();
     expect(regionForHandle("UNKNOWN")).toBeNull();
     expect(REGION_BOARDS.map((board) => board.id)).toEqual([
       "usa",
@@ -214,6 +220,8 @@ describe("country leaderboards", () => {
       "Oman",
       "Tunisia",
       "Morocco",
+      "Libya",
+      "Iran",
     ]);
     for (const handle of [
       "visitqatar",
@@ -261,8 +269,9 @@ describe("country leaderboards", () => {
         profile("taylorswift", 100_000_000, [post("a", 2, 100_000)]),
         profile("davidguetta", 12_000_000, [post("b", 2, 50_000)]),
         profile("aljazeera", 15_000_000, [post("c", 2, 50_000)]),
-        profile("emirates", 9_000_000, [post("d", 2, 20_000)]),
-        profile("leomessi", 500_000_000, [post("e", 2, 100_000)]),
+        profile("qatarairways", 9_200_000, [post("d", 2, 20_000)]),
+        profile("baneenstars", 6_000_000, [post("e", 2, 20_000)], "📍DUBAI"),
+        profile("leomessi", 500_000_000, [post("f", 2, 100_000)]),
       ],
       NOW,
     );
@@ -270,10 +279,63 @@ describe("country leaderboards", () => {
     expect(board.regional.usa.map((entry) => entry.username)).toEqual(["taylorswift"]);
     expect(board.regional.europe.map((entry) => entry.username)).toEqual(["davidguetta"]);
     expect(board.regional["middle-east"].map((entry) => entry.username)).toEqual([
-      "aljazeera",
-      "emirates",
+      "qatarairways",
+      "baneenstars",
     ]);
-    expect(board.regional.uae.map((entry) => entry.username)).toEqual(["emirates"]);
+    expect(board.regional.uae.map((entry) => entry.username)).toEqual(["baneenstars"]);
+  });
+
+  it("requires public country evidence on Middle East and UAE boards", () => {
+    const board = rankProfiles(
+      [
+        profile("emirates", 9_000_000, [post("a", 2, 20_000)]),
+        profile(
+          "aljazeera",
+          15_000_000,
+          [{ ...post("b", 2, 20_000), caption: "Launching in India", hashtags: ["#India"] }],
+        ),
+        profile("baneenstars", 6_000_000, [post("c", 2, 20_000)], "📍DUBAI"),
+      ],
+      NOW,
+    );
+
+    expect(board.regional["middle-east"].map((entry) => entry.username)).toEqual([
+      "baneenstars",
+    ]);
+    expect(board.regional.uae.map((entry) => entry.username)).toEqual(["baneenstars"]);
+  });
+
+  it("keeps UAE board entries strictly to the UAE", () => {
+    const board = rankProfiles(
+      [
+        profile("visitsaudi", 1_000_000, [post("a", 2, 20_000)], "Saudi official tourism"),
+        profile("baneenstars", 6_000_000, [post("b", 2, 20_000)], "📍DUBAI"),
+      ],
+      NOW,
+    );
+
+    expect(board.regional.uae.map((entry) => entry.username)).toEqual(["baneenstars"]);
+    expect(board.regional["middle-east"].map((entry) => entry.username)).toEqual([
+      "baneenstars",
+      "visitsaudi",
+    ]);
+  });
+
+  it("excludes @technicalguruji from the Middle East and UAE boards", () => {
+    const board = rankProfiles(
+      [
+        profile(
+          "technicalguruji",
+          6_300_000,
+          [{ ...post("a", 2, 20_000), caption: "Launching in India", hashtags: ["#India"] }],
+          "Engineer by Education, Entrepreneur by Profession",
+        ),
+      ],
+      NOW,
+    );
+
+    expect(board.regional["middle-east"]).toEqual([]);
+    expect(board.regional.uae).toEqual([]);
   });
 
   it("always returns all four boards, even for an empty pool", () => {

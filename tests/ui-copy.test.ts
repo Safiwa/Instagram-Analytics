@@ -92,15 +92,17 @@ describe("Instagram direct links in ranking rows", () => {
   });
 });
 
-describe("Middle East board country labels", () => {
+describe("regional board country labels", () => {
   const globalPulse = source("src/features/leaderboard/GlobalPulse.tsx");
   const leaderboard = source("src/core/data/leaderboard.ts");
 
-  it("shows the inferred country in Middle East top 10 rows", () => {
+  it("shows the inferred country in Middle East and Europe top 10 rows", () => {
     expect(leaderboard).toContain(
-      'countryLabel: inferCountrySignal(profile).country ?? "Country not published"',
+      'countryLabel: countrySignal.country ?? "Country not published"',
     );
-    expect(globalPulse).toContain("showCountry={definition.id === \"middle-east\"}");
+    expect(globalPulse).toContain(
+      'showCountry={definition.id === "middle-east" || definition.id === "europe"}',
+    );
     expect(globalPulse).toContain("{showCountry ? ` · ${entry.countryLabel}` : \"\"}");
   });
 
