@@ -93,13 +93,15 @@ describe("Instagram direct links in ranking rows", () => {
 });
 
 describe("regional board country labels", () => {
-  const globalPulse = source("src/features/leaderboard/GlobalPulse.tsx");
-  const leaderboard = source("src/core/data/leaderboard.ts");
+  const globalPulse = source("src/features/leaderboard/GlobalPulse.tsx").replace(/\r\n/g, "\n");
+  const leaderboard = source("src/core/data/leaderboard.ts").replace(/\r\n/g, "\n");
 
-  it("shows the inferred country in Middle East and Europe top 10 rows", () => {
+  it("shows the account-based country on both worldwide boards and country rows", () => {
     expect(leaderboard).toContain(
       'countryLabel: countrySignal.country ?? "Country not published"',
     );
+    expect(globalPulse).toContain('testId="trending-list"\n            showCountry');
+    expect(globalPulse).toContain('testId="engagement-list"\n            showCountry');
     expect(globalPulse).toContain(
       'showCountry={definition.id === "middle-east" || definition.id === "europe"}',
     );
@@ -109,7 +111,7 @@ describe("regional board country labels", () => {
   it("discloses the published account-country first rule and public fallbacks", () => {
     expect(globalPulse).toContain("Instagram’s published “Account based in” value first");
     expect(globalPulse).toContain("public post/reel locations, hashtags and captions");
-    expect(globalPulse).toContain("Middle East and UAE boards");
+    expect(globalPulse).toContain("Middle East and\n          UAE boards");
     expect(globalPulse).toContain("require public evidence");
     expect(globalPulse).toContain("unavailable values stay marked as not published");
   });

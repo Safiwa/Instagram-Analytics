@@ -147,8 +147,9 @@ describe("authenticity-aware regional ranking", () => {
     expect(regionalRankScore(factors, 100)).toBeGreaterThan(regionalRankScore(factors, 40));
   });
 
-  it("treats a missing authenticity as zero and clamps out-of-range values", () => {
-    expect(regionalRankScore(factors, null)).toBe(regionalRankScore(factors, 0));
+  it("excludes a missing authenticity instead of treating it as zero", () => {
+    expect(regionalRankScore(factors, null)).toBe(rankScore(factors));
+    expect(regionalRankScore(factors, null)).toBeGreaterThan(regionalRankScore(factors, 0));
     expect(regionalRankScore(factors, 200)).toBe(regionalRankScore(factors, 100));
     expect(regionalRankScore(factors, -20)).toBe(regionalRankScore(factors, 0));
   });

@@ -985,7 +985,7 @@ export function ProfileDashboard({
                   Rank #{regionalRanking.targetRank} of {regionalRanking.total} of similar Middle East profiles
                 </p>
                 <p className="text-xs text-slate-500">
-                  Regional rank score · lower modeled fake-follower share ranks higher
+                  Regional rank score · estimated authenticity adjusts rank when available
                 </p>
                 {noPublicPosts ? (
                   <p className="mt-1 text-[11px] text-amber-700">

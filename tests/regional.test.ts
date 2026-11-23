@@ -622,4 +622,68 @@ describe("Middle East authenticity-aware ranking", () => {
       true,
     );
   });
+
+  it("brackets a no-post target between stronger and weaker peers after the country cap", () => {
+    const target: CreatorProfile = {
+      ...profile("zuhaboutique2024", 44_000, [], {
+        displayName: "Zuha Boutique",
+        bio: "No biography provided.",
+        accountCountry: null,
+      }),
+      recentPosts: [],
+      thirdPartyEngagement: getModashEngagement("zuhaboutique2024") ?? undefined,
+    };
+    const pool = [
+      target,
+      profile("raw.lebanon", 55_079, ["beirut lebanon nightlife"], {
+        displayName: "Nivine | Lebanon content creator",
+        bio: "Lebanon content creator",
+        accountCountry: "Lebanon",
+        likes: 4_800,
+        comments: 670,
+      }),
+      profile("khalus_recipes", 47_996, ["dubai food vlog"], {
+        displayName: "Khalid C",
+        bio: "Dubai food blogger",
+        likes: 1_883,
+        comments: 493,
+      }),
+      profile("zeniamk", 46_100, ["dubai beauty travel"], {
+        displayName: "Zenia Mariam Khan | Dubai Creator",
+        bio: "Dubai beauty and travel creator",
+        likes: 188,
+        comments: 18,
+      }),
+      profile("ola.alqodmani", 51_500, ["dubai travel family"], {
+        displayName: "Ola Al Qodmani",
+        bio: "Dubai travel creator",
+        likes: 80,
+        comments: 12,
+        followerHistory: [
+          { month: "2026-09", followers: 53_500 },
+          { month: "2026-10", followers: 51_500 },
+        ],
+      }),
+      profile("airagymn", 36_007, ["dubai beauty training"], {
+        displayName: "Irina Skobeleva",
+        bio: "Beauty and training in Dubai",
+        likes: 58,
+        comments: 65,
+        fakeFollowers: 18_364,
+        followerHistory: [
+          { month: "2026-09", followers: 37_690 },
+          { month: "2026-10", followers: 36_007 },
+        ],
+      }),
+    ];
+    const ranking = buildRegionalRanking(target, computeMetrics(target), pool);
+
+    expect(ranking?.targetRank).toBe(3);
+    expect(ranking?.total).toBe(5);
+    expect(ranking!.rows.filter((row) => row.country.country === "United Arab Emirates")).toHaveLength(
+      3,
+    );
+    expect(ranking!.rows.filter((row) => row.country.country === "Lebanon")).toHaveLength(1);
+    expect(ranking!.rows.find((row) => row.isTarget)?.country.country).toBeNull();
+  });
 });

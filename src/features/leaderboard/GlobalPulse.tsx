@@ -175,6 +175,7 @@ export async function GlobalPulse() {
             label="Rank score"
             metaFor={(entry) => signalMeta(entry, true)}
             testId="trending-list"
+            showCountry
           />
           <RankCard
             title="High engagement"
@@ -186,6 +187,7 @@ export async function GlobalPulse() {
             label="Rank score"
             metaFor={(entry) => signalMeta(entry)}
             testId="engagement-list"
+            showCountry
           />
         </div>
       </div>
@@ -195,10 +197,10 @@ export async function GlobalPulse() {
           By country
         </h3>
         <p className="text-xs leading-relaxed text-slate-500">
-          Country labels use Instagram’s published “Account based in” value first. When it is not
-          shared, they use public post/reel locations, hashtags and captions, then other public
-          handle/profile signals or clearly marked curated metadata. Middle East and UAE boards
-          require public evidence, and unavailable values stay marked as not published.
+          Every board’s country labels use Instagram’s published “Account based in” value first.
+          When it is not shared, they use public post/reel locations, hashtags and captions, then
+          other public handle/profile signals or clearly marked curated metadata. Middle East and
+          UAE boards require public evidence, and unavailable values stay marked as not published.
         </p>
         <div className="grid gap-4 lg:grid-cols-2">
           {REGION_BOARDS.map((definition) => {

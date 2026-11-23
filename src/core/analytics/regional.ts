@@ -93,6 +93,7 @@ const MAX_COUNTRY_REPEATS = 3;
 function capCountryRepeats(
   candidates: RegionalPeer[],
   targetCountry: CountrySignal,
+  limit = candidates.length,
 ): RegionalPeer[] {
   const counts = new Map<string, number>();
   if (
@@ -103,18 +104,51 @@ function capCountryRepeats(
     counts.set(targetCountry.country, 1);
   }
 
-  return candidates.filter((candidate) => {
+  const selected: RegionalPeer[] = [];
+  for (const candidate of candidates) {
+    if (selected.length >= limit) {
+      break;
+    }
     const country = candidate.country.country;
     if (!country) {
-      return false;
+      continue;
     }
     const count = counts.get(country) ?? 0;
     if (count >= MAX_COUNTRY_REPEATS) {
-      return false;
+      continue;
     }
     counts.set(country, count + 1);
-    return true;
-  });
+    selected.push(candidate);
+  }
+  return selected;
+}
+
+function fillCountryCap(
+  selected: RegionalPeer[],
+  fallback: RegionalPeer[],
+  targetCountry: CountrySignal,
+  limit: number,
+): RegionalPeer[] {
+  const result = capCountryRepeats(selected, targetCountry, limit);
+  if (result.length >= limit) {
+    return result;
+  }
+
+  const seen = new Set(result.map((peer) => peer.profile.username));
+  for (const peer of fallback) {
+    if (seen.has(peer.profile.username)) {
+      continue;
+    }
+    const extended = capCountryRepeats([...result, peer], targetCountry, limit);
+    if (extended.length === result.length + 1) {
+      result.push(peer);
+      seen.add(peer.profile.username);
+    }
+    if (result.length >= limit) {
+      break;
+    }
+  }
+  return result;
 }
 
 function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): string[] {
@@ -222,9 +256,7 @@ function rankedCandidates(
       left.profile.username.localeCompare(right.profile.username),
   );
 
-  // Apply the country cap after ranking so the strongest eligible peer in each
-  // country keeps its place; later profiles from that country are skipped.
-  return capCountryRepeats(ranked, targetCountry);
+  return ranked;
 }
 
 export function findRegionalCategoryPeer(
@@ -333,6 +365,7 @@ function regionalScore(peer: RegionalPeer): number {
 // two higher and two lower real peers instead; the rows remain ordered by score.
 function selectRegionalPeers(
   candidates: RegionalPeer[],
+  targetCountry: CountrySignal,
   targetScore: number,
   limit: number,
   targetPostsNotExposed: boolean,
@@ -344,7 +377,7 @@ function selectRegionalPeers(
   );
 
   if (!targetPostsNotExposed) {
-    return byScore.slice(0, limit);
+    return capCountryRepeats(byScore, targetCountry, limit);
   }
 
   const higher = byScore.filter((peer) => regionalScore(peer) > targetScore);
@@ -361,7 +394,10 @@ function selectRegionalPeers(
       (left, right) =>
         Math.abs(regionalScore(left) - targetScore) - Math.abs(regionalScore(right) - targetScore),
     );
-  return [...selected, ...remaining].slice(0, limit);
+
+  // Apply the three-country limit after bracketing so the target keeps two
+  // genuinely higher and two genuinely lower peers whenever they exist.
+  return fillCountryCap(selected, remaining, targetCountry, limit);
 }
 
 export function buildRegionalRanking(
@@ -375,6 +411,7 @@ export function buildRegionalRanking(
   const targetRegionalScore = regionalRankScore(targetFactors, metrics.authenticityPct);
   const peers = selectRegionalPeers(
     rankedCandidates(target, metrics, pool),
+    inferCountrySignal(target),
     targetRegionalScore,
     limit,
     target.recentPosts.length === 0,

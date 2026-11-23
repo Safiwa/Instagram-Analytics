@@ -15,7 +15,9 @@ export const RANK_WEIGHTS = {
 
 // The regional profile panel adds a disclosed authenticity term so a profile
 // with fewer estimated fake followers can outrank a nearly identical account
-// with a weaker audience. Global boards and compare rankings stay five-signal.
+// with a weaker audience. A missing authenticity value is not a zero: it is
+// excluded from the blend so unavailable data never silently penalizes a real
+// profile. Global boards and compare rankings stay five-signal.
 export const REGIONAL_AUTHENTICITY_WEIGHT = 0.1;
 
 export type RankFactorInput = {
@@ -120,10 +122,13 @@ export function regionalRankScore(
   entry: RankFactorInput,
   authenticityPct: number | null,
 ): number {
-  const authenticity = clamp(authenticityPct ?? 0, 0, 100);
+  const base = rankScore(entry);
+  if (authenticityPct === null || !Number.isFinite(authenticityPct)) {
+    return base;
+  }
+  const authenticity = clamp(authenticityPct, 0, 100);
   return round2(
-    rankScore(entry) * (1 - REGIONAL_AUTHENTICITY_WEIGHT) +
-      authenticity * REGIONAL_AUTHENTICITY_WEIGHT,
+    base * (1 - REGIONAL_AUTHENTICITY_WEIGHT) + authenticity * REGIONAL_AUTHENTICITY_WEIGHT,
   );
 }
 
