@@ -36,7 +36,7 @@ describe("follower scoring", () => {
     const verdict = scoreFollower(bot);
     expect(verdict.fake).toBe(true);
     expect(verdict.reasons).toEqual(
-      expect.arrayContaining(["no-posts", "numeric-handle", "no-profile-photo", "follow-ratio"]),
+      expect.arrayContaining(["no-posts", "long-number-handle", "no-profile-photo", "follow-ratio"]),
     );
   });
 
@@ -47,15 +47,34 @@ describe("follower scoring", () => {
   it("treats birth-year handles as normal but other 4-digit suffixes as a weak sign", () => {
     expect(scoreFollower({ username: "ahmed1994" }).reasons).toEqual([]);
     expect(scoreFollower({ username: "ahmed2741" }).reasons).toEqual(["digit-suffix-handle"]);
-    expect(scoreFollower({ username: "user_5512093" }).reasons).toEqual(["numeric-handle"]);
-    expect(scoreFollower({ username: "48291077" }).reasons).toEqual(["numeric-handle"]);
+    expect(scoreFollower({ username: "nour55120" }).reasons).toEqual(["numeric-handle"]);
+    expect(scoreFollower({ username: "nour551204" }).reasons).toEqual(["numeric-handle"]);
+  });
+
+  it("counts a handle ending in more than 6 digits as fake on its own", () => {
+    expect(scoreFollower({ ...real, username: "user_5512093" })).toMatchObject({
+      fake: true,
+      reasons: ["long-number-handle"],
+    });
+    expect(scoreFollower({ ...real, username: "48291077" }).fake).toBe(true);
+    // 6 digits is below the rule and is only a strong sign.
+    expect(scoreFollower({ ...real, username: "nour551204" }).fake).toBe(false);
+  });
+
+  it("counts a follower with no profile photo as fake on its own", () => {
+    expect(scoreFollower({ ...real, hasProfilePic: false })).toMatchObject({
+      fake: true,
+      reasons: ["no-profile-photo"],
+    });
+    // Unknown photo status (field not provided) is not penalised.
+    expect(scoreFollower({ ...real, hasProfilePic: undefined }).fake).toBe(false);
   });
 
   it("does not call an account fake for zero following or zero posts alone", () => {
     expect(scoreFollower({ ...real, following: 0 }).fake).toBe(false);
     expect(scoreFollower({ ...real, posts: 0 }).fake).toBe(false);
     // Two strong signals together cross the threshold.
-    expect(scoreFollower({ ...real, username: "mona99381722", posts: 0 }).score).toBeGreaterThanOrEqual(
+    expect(scoreFollower({ ...real, username: "mona99381", posts: 0 }).score).toBeGreaterThanOrEqual(
       FAKE_THRESHOLD,
     );
   });

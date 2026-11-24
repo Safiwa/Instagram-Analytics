@@ -23,6 +23,7 @@ export type FollowerSample = {
 
 export type FollowerReason =
   | "no-posts"
+  | "long-number-handle"
   | "numeric-handle"
   | "digit-suffix-handle"
   | "no-profile-photo"
@@ -34,7 +35,8 @@ export type FollowerReason =
 
 export const FOLLOWER_REASON_LABEL: Record<FollowerReason, string> = {
   "no-posts": "No posts",
-  "numeric-handle": "Handle is mostly or ends in a long run of digits",
+  "long-number-handle": "Handle ends in more than 6 digits",
+  "numeric-handle": "Handle is mostly digits or ends in 5-6 digits",
   "digit-suffix-handle": "Handle ends in 4 digits that are not a birth year",
   "no-profile-photo": "No profile photo",
   "follow-ratio": "Follows far more accounts than follow it",
@@ -44,11 +46,14 @@ export const FOLLOWER_REASON_LABEL: Record<FollowerReason, string> = {
   "empty-private": "Private with no posts and no photo",
 };
 
+// Site rule: a handle ending in more than 6 digits, or a follower with no
+// profile photo, is counted as fake on that signal alone (weight = threshold).
 const WEIGHTS: Record<FollowerReason, number> = {
   "no-posts": 3,
+  "long-number-handle": 5,
   "numeric-handle": 3,
   "digit-suffix-handle": 1.5,
-  "no-profile-photo": 2,
+  "no-profile-photo": 5,
   "follow-ratio": 2,
   "near-follow-cap": 1.5,
   "empty-profile": 1,
@@ -57,8 +62,9 @@ const WEIGHTS: Record<FollowerReason, number> = {
   "empty-private": 1,
 };
 
-// Score at which a follower counts as fake. Two strong signals (e.g. no posts
-// and a bot-style handle) reach it; weak signals alone do not.
+// Score at which a follower counts as fake. A long-number handle or a missing
+// profile photo reaches it alone; otherwise two strong signals (e.g. no posts
+// and a bot-style handle) are needed, and weak signals alone never are.
 export const FAKE_THRESHOLD = 5;
 
 // Below this many sampled followers the share is too uncertain to report.
@@ -72,7 +78,12 @@ function handleSignal(username: string): FollowerReason | null {
   const digits = (handle.match(/\d/g) ?? []).length;
   const letters = (handle.match(/[a-z]/g) ?? []).length;
 
-  // e.g. "sara83920174", "user_5512093", "48291077".
+  // More than 6 trailing digits, e.g. "sara83920174", "user_5512093".
+  if (/\d{7,}$/.test(handle)) {
+    return "long-number-handle";
+  }
+
+  // e.g. "nour55120", "8829_x77" (mostly digits).
   if (/\d{5,}$/.test(handle) || (digits >= 5 && digits >= letters)) {
     return "numeric-handle";
   }
