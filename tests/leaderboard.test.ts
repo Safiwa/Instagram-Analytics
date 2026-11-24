@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { countryBoardRankScore } from "../src/core/analytics/rank";
 import {
   isIncompletePool,
   rankProfiles,
@@ -155,6 +156,9 @@ describe("weighted leaderboard ranking", () => {
       "baneenstars",
     ]);
     expect(board.regional.uae.map((entry) => entry.username)).toEqual(["wessamq", "baneenstars"]);
+    for (const entry of [...board.regional["middle-east"], ...board.regional.uae]) {
+      expect(entry.boardScore).toBe(countryBoardRankScore(entry));
+    }
     expect(board.regional.usa.map((entry) => entry.username)).toEqual([
       "taylorswift",
       "selenagomez",

@@ -189,6 +189,9 @@ export type LeaderboardEntry = {
   followerChangePct: number;
   followerChangeEstimated: boolean;
   rankScore: number;
+  // Score used to order Middle East and UAE top-ten boards: 70% followers,
+  // then the remaining weighted signals at 30%.
+  boardScore: number;
   // Editorial country signal from public handle/profile text. Instagram does
   // not publish an account country field, so unavailable values stay explicit.
   country: string | null;
@@ -304,6 +307,7 @@ function toEntry(profile: CreatorProfile, now: number): LeaderboardEntry | null 
     followerChangePct: factors.followerChangePct,
     followerChangeEstimated: factors.followerChangeEstimated,
     rankScore: rankScore(factors),
+    boardScore: countryBoardRankScore(factors),
     country: countrySignal.country,
     countryBasis: countrySignal.basis,
     countryLabel: countrySignal.country ?? "Country not published",

@@ -226,7 +226,11 @@ export async function GlobalPulse() {
                 icon={MapPin}
                 entries={entries}
                 emptyMessage={`No tracked account in ${definition.label.replace(" · top 10", "")} yet. Check back shortly.`}
-                valueFor={(entry) => entry.rankScore.toFixed(0)}
+                valueFor={(entry) =>
+                  definition.id === "middle-east" || definition.id === "uae"
+                    ? entry.boardScore.toFixed(0)
+                    : entry.rankScore.toFixed(0)
+                }
                 label="Rank score"
                 metaFor={(entry) => signalMeta(entry)}
                 testId={`region-${definition.id}-list`}

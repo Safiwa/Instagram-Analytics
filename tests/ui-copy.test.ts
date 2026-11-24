@@ -126,6 +126,8 @@ describe("Middle East board caption", () => {
   it("omits the subtitle element on the Middle East card", () => {
     expect(globalPulse).toContain("{subtitle ? (");
     expect(globalPulse).toContain('if (definition.id === "middle-east") return undefined;');
+    expect(globalPulse).toContain("? entry.boardScore.toFixed(0)");
+    expect(globalPulse.match(/entry\.rankScore\.toFixed\(0\)/g)).toHaveLength(3);
     expect(globalPulse).not.toContain("subtitle={`${definition.description}. ${REGION_RANK_SUBTITLE}.`}");
   });
 
