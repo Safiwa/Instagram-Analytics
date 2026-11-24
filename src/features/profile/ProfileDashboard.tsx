@@ -28,7 +28,7 @@ import {
 } from "recharts";
 import { InstagramLink } from "../../components/InstagramLink";
 import { MetricCard } from "../../components/MetricCard";
-import { inferCountrySignal } from "../../core/analytics/country";
+import { inferCountrySignal, isMiddleEastAccount } from "../../core/analytics/country";
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
 import type { IndexPosition } from "../../core/analytics/benchmark";
 import type { GrowthAnalysis } from "../../core/analytics/growth";
@@ -142,6 +142,8 @@ export function ProfileDashboard({
     : "";
   const engagementUnavailable = metrics.engagementSource === "unavailable";
   const benchmarkCountry = inferCountrySignal(profile).country;
+  // The Middle East benchmark is shown only for Middle East accounts.
+  const showRegionalBenchmark = isMiddleEastAccount(profile);
   const benchmarkScope = benchmarkCountry
     ? `Both the closest peer and ranking table are limited to accounts with the same inferred country (${benchmarkCountry}).`
     : "Instagram has not published an “Account based in” value for this profile, so the closest available country or region tier is used instead.";
@@ -331,7 +333,9 @@ export function ProfileDashboard({
         >
           {profile.isPrivate
             ? "This account is private. Public follower and post counts are available, but posts and engagement are hidden, so modeled metrics are unavailable."
-            : hasStoredEngagement
+            : profile.connectedInsights
+              ? "This account's owner connected it to this site, so audience demographics, reach, views, saves and shares below come from Instagram Insights. Followers, likes and comments are public data. Fake followers, authenticity, and 12-month growth remain modeled estimates."
+              : hasStoredEngagement
               ? `Instagram hid this account's posts on this lookup. Saves, reach, and audience demographics are not exposed. The engagement figures are this site's stored measurement from ${storedOn}; fake followers, authenticity, and growth are not modeled without public posts.`
               : profile.source === "public"
                 ? "Public web data from Instagram's public profile page. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."
@@ -701,14 +705,58 @@ export function ProfileDashboard({
         </div>
       </section>
 
-      {profile.audience ? (
+      {profile.connectedInsights ? (
         <section
-          data-testid="audience"
-          className="grid gap-6 rounded-2xl border border-slate-200 bg-white p-6 md:grid-cols-3"
+          data-testid="connected-insights"
+          className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm"
         >
-          <AudienceBars title="Top countries" slices={profile.audience.topCountries} />
-          <AudienceBars title="Age groups" slices={profile.audience.ageGroups} />
-          <AudienceBars title="Gender" slices={profile.audience.gender} />
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <BadgeCheck className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+              <h3 className="text-sm font-semibold text-slate-950">Verified Instagram Insights</h3>
+            </div>
+            <p className="text-xs text-slate-500">
+              Shared by @{profile.username} · last {profile.connectedInsights.windowDays} days ·
+              updated {formatDate(`${profile.connectedInsights.capturedOn}T00:00:00Z`)}
+            </p>
+          </div>
+          <dl className="mt-4 grid gap-4 sm:grid-cols-3 xl:grid-cols-6">
+            {(
+              [
+                ["Reach", profile.connectedInsights.reach],
+                ["Views", profile.connectedInsights.views],
+                ["Accounts engaged", profile.connectedInsights.accountsEngaged],
+                ["Interactions", profile.connectedInsights.totalInteractions],
+                ["Saves", profile.connectedInsights.saves],
+                ["Shares", profile.connectedInsights.shares],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-xs text-slate-500">{label}</dt>
+                <dd className="mt-1 text-lg font-semibold text-slate-950">{formatCompact(value)}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-3 text-[11px] text-slate-400">
+            From Instagram Insights via the account owner&apos;s own connection, not estimated. A dash
+            (—) means Instagram did not return that metric.
+          </p>
+        </section>
+      ) : null}
+
+      {profile.audience ? (
+        <section data-testid="audience" className="rounded-2xl border border-slate-200 bg-white p-6">
+          {profile.connectedInsights ? (
+            <p className="mb-4 text-xs text-slate-500">
+              Follower demographics from Instagram Insights, shared by @{profile.username}. Instagram
+              returns the top values only, so shares are of those values.
+            </p>
+          ) : null}
+          <div className="grid gap-6 md:grid-cols-3">
+            <AudienceBars title="Top countries" slices={profile.audience.topCountries} />
+            <AudienceBars title="Age groups" slices={profile.audience.ageGroups} />
+            <AudienceBars title="Gender" slices={profile.audience.gender} />
+          </div>
         </section>
       ) : null}
 
@@ -899,219 +947,221 @@ export function ProfileDashboard({
         )}
       </section>
 
-      <section
-        data-testid="regional-benchmark"
-        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-      >
-        <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-            <MapPin className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
-              Middle East category benchmark
-            </p>
-            <h3 className="mt-1 text-base font-semibold text-slate-950">
-              Closest Middle East profile and where this account sits
-            </h3>
-          </div>
-        </div>
-
-        {regionalPeer ? (
-          <>
-            <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href={`/profile/${regionalPeer.profile.username}`}
-                    className="group inline-flex items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
-                  >
-                    {regionalPeer.profile.displayName}
-                    <ArrowUpRight
-                      className="h-3 w-3 text-slate-400 group-hover:text-emerald-600"
-                      aria-hidden="true"
-                    />
-                  </Link>
-                  <InstagramLink
-                    username={regionalPeer.profile.username}
-                    className="text-emerald-600 hover:text-emerald-800"
-                  />
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                    {regionalPeer.matchScore}% regional match
-                  </span>
-                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                    {regionalPeer.category}
-                  </span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    {regionalPeer.country.label}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500">@{regionalPeer.profile.username}</p>
-                {regionalPeer.sharedActivity.length > 0 ? (
-                  <p className="text-xs text-slate-500">
-                    Shared activity: {regionalPeer.sharedActivity.join(", ")}
-                  </p>
-                ) : null}
-                <p className="text-xs leading-relaxed text-slate-600">
-                  Why this peer: {regionalPeer.matchReasons.join(", ")}.
-                </p>
-              </div>
-              <Link
-                href={`/compare?handles=${profile.username},${regionalPeer.profile.username}`}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-              >
-                <TrendingUp className="h-4 w-4" aria-hidden="true" />
-                Compare side by side
-              </Link>
+      {showRegionalBenchmark ? (
+        <section
+          data-testid="regional-benchmark"
+          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <MapPin className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
+                Middle East category benchmark
+              </p>
+              <h3 className="mt-1 text-base font-semibold text-slate-950">
+                Closest Middle East profile and where this account sits
+              </h3>
             </div>
+          </div>
 
-            <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-              <div className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                <span>Key comparison</span>
-                <span>This profile</span>
-                <span>{regionalPeer.profile.displayName}</span>
-                <span>Insight</span>
-              </div>
-              {regionalComparison.map((comparison) => {
-                const unavailablePostMetric =
-                  metrics.engagementSource === "unavailable" &&
-                  ["Engagement rate", "Avg likes", "Avg comments"].includes(comparison.label);
-                const hidden =
-                  noPublicPosts &&
-                  (comparison.label === "Follower change" || unavailablePostMetric);
-                return (
-                  <div
-                    key={comparison.label}
-                    className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 px-4 py-3 text-xs last:border-0"
-                  >
-                    <span className="font-medium text-slate-700">{comparison.label}</span>
-                    <span className="font-semibold text-slate-950">
-                      {hidden ? "—" : comparison.target}
+          {regionalPeer ? (
+            <>
+              <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      href={`/profile/${regionalPeer.profile.username}`}
+                      className="group inline-flex items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
+                    >
+                      {regionalPeer.profile.displayName}
+                      <ArrowUpRight
+                        className="h-3 w-3 text-slate-400 group-hover:text-emerald-600"
+                        aria-hidden="true"
+                      />
+                    </Link>
+                    <InstagramLink
+                      username={regionalPeer.profile.username}
+                      className="text-emerald-600 hover:text-emerald-800"
+                    />
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                      {regionalPeer.matchScore}% regional match
                     </span>
-                    <span className="font-semibold text-slate-950">{comparison.peer}</span>
-                    <span className="text-slate-500">
-                      {hidden
-                        ? comparison.label === "Follower change"
-                          ? "Not available"
-                          : "Posts not exposed"
-                        : comparison.insight}
+                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                      {regionalPeer.category}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      {regionalPeer.country.label}
                     </span>
                   </div>
-                );
-              })}
-            </div>
-            <p className="mt-2 text-[11px] text-slate-400">
-              {hasStoredEngagement
-                ? `Engagement rate, avg likes, and avg comments for this profile are this site's stored measurement from ${storedOn}. Follower change is unavailable without public posts.`
-                : noPublicPosts
-                  ? "Post-based values are unavailable because this account's posts were not exposed."
-                  : "Follower change is modeled from public signals for non-demo profiles; see the estimates panel below for details."}
-            </p>
-          </>
-        ) : (
-          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No comparable Middle East profile is available right now. Check back shortly.
-          </p>
-        )}
-
-        {regionalRanking ? (
-          <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-950">
-                  Rank #{regionalRanking.targetRank} of {regionalRanking.total} of similar Middle East profiles
-                </p>
-                <p className="text-xs text-slate-500">
-                  Regional rank score · estimated authenticity adjusts rank when available
-                </p>
-                {noPublicPosts ? (
-                  <p className="mt-1 text-[11px] text-amber-700">
-                    {hasStoredEngagement
-                      ? `Posts were not exposed. Engagement uses this site's stored measurement from ${storedOn}; growth and Reels are unavailable.`
-                      : "This profile's post-based signals were not exposed, so its score reflects only the public signals available."}
+                  <p className="text-xs text-slate-500">@{regionalPeer.profile.username}</p>
+                  {regionalPeer.sharedActivity.length > 0 ? (
+                    <p className="text-xs text-slate-500">
+                      Shared activity: {regionalPeer.sharedActivity.join(", ")}
+                    </p>
+                  ) : null}
+                  <p className="text-xs leading-relaxed text-slate-600">
+                    Why this peer: {regionalPeer.matchReasons.join(", ")}.
                   </p>
+                </div>
+                <Link
+                  href={`/compare?handles=${profile.username},${regionalPeer.profile.username}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                >
+                  <TrendingUp className="h-4 w-4" aria-hidden="true" />
+                  Compare side by side
+                </Link>
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+                <div className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <span>Key comparison</span>
+                  <span>This profile</span>
+                  <span>{regionalPeer.profile.displayName}</span>
+                  <span>Insight</span>
+                </div>
+                {regionalComparison.map((comparison) => {
+                  const unavailablePostMetric =
+                    metrics.engagementSource === "unavailable" &&
+                    ["Engagement rate", "Avg likes", "Avg comments"].includes(comparison.label);
+                  const hidden =
+                    noPublicPosts &&
+                    (comparison.label === "Follower change" || unavailablePostMetric);
+                  return (
+                    <div
+                      key={comparison.label}
+                      className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 px-4 py-3 text-xs last:border-0"
+                    >
+                      <span className="font-medium text-slate-700">{comparison.label}</span>
+                      <span className="font-semibold text-slate-950">
+                        {hidden ? "—" : comparison.target}
+                      </span>
+                      <span className="font-semibold text-slate-950">{comparison.peer}</span>
+                      <span className="text-slate-500">
+                        {hidden
+                          ? comparison.label === "Follower change"
+                            ? "Not available"
+                            : "Posts not exposed"
+                          : comparison.insight}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-400">
+                {hasStoredEngagement
+                  ? `Engagement rate, avg likes, and avg comments for this profile are this site's stored measurement from ${storedOn}. Follower change is unavailable without public posts.`
+                  : noPublicPosts
+                    ? "Post-based values are unavailable because this account's posts were not exposed."
+                    : "Follower change is modeled from public signals for non-demo profiles; see the estimates panel below for details."}
+              </p>
+            </>
+          ) : (
+            <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
+              No comparable Middle East profile is available right now. Check back shortly.
+            </p>
+          )}
+
+          {regionalRanking ? (
+            <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">
+                    Rank #{regionalRanking.targetRank} of {regionalRanking.total} of similar Middle East profiles
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Regional rank score · estimated authenticity adjusts rank when available
+                  </p>
+                  {noPublicPosts ? (
+                    <p className="mt-1 text-[11px] text-amber-700">
+                      {hasStoredEngagement
+                        ? `Posts were not exposed. Engagement uses this site's stored measurement from ${storedOn}; growth and Reels are unavailable.`
+                        : "This profile's post-based signals were not exposed, so its score reflects only the public signals available."}
+                    </p>
+                  ) : null}
+                </div>
+                {regionalRanking.outperformedPercent !== null ? (
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                    Ahead of {regionalRanking.outperformedPercent}% of these peers
+                  </span>
                 ) : null}
               </div>
-              {regionalRanking.outperformedPercent !== null ? (
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                  Ahead of {regionalRanking.outperformedPercent}% of these peers
-                </span>
-              ) : null}
-            </div>
-            <ol className="divide-y divide-slate-100">
-              {regionalRanking.rows.map((row, index) => (
-                <li
-                  key={row.profile.username}
-                  className={`flex items-center gap-3 px-4 py-3 ${
-                    row.isTarget ? "bg-emerald-50/70" : ""
-                  }`}
-                >
-                  <span
-                    className={`w-6 shrink-0 text-sm font-semibold ${
-                      row.isTarget ? "text-emerald-700" : "text-slate-400"
+              <ol className="divide-y divide-slate-100">
+                {regionalRanking.rows.map((row, index) => (
+                  <li
+                    key={row.profile.username}
+                    className={`flex items-center gap-3 px-4 py-3 ${
+                      row.isTarget ? "bg-emerald-50/70" : ""
                     }`}
                   >
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <Link
-                        href={`/profile/${row.profile.username}`}
-                        className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
-                      >
-                        <span className="truncate">{row.profile.displayName}</span>
-                        <ArrowUpRight
-                          className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-emerald-600"
-                          aria-hidden="true"
+                    <span
+                      className={`w-6 shrink-0 text-sm font-semibold ${
+                        row.isTarget ? "text-emerald-700" : "text-slate-400"
+                      }`}
+                    >
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <Link
+                          href={`/profile/${row.profile.username}`}
+                          className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
+                        >
+                          <span className="truncate">{row.profile.displayName}</span>
+                          <ArrowUpRight
+                            className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-emerald-600"
+                            aria-hidden="true"
+                          />
+                          {row.isTarget ? (
+                            <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-emerald-700">
+                              This profile
+                            </span>
+                          ) : null}
+                        </Link>
+                        <InstagramLink
+                          username={row.profile.username}
+                          className="text-emerald-600 hover:text-emerald-800"
                         />
-                        {row.isTarget ? (
-                          <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-emerald-700">
-                            This profile
-                          </span>
-                        ) : null}
-                      </Link>
-                      <InstagramLink
-                        username={row.profile.username}
-                        className="text-emerald-600 hover:text-emerald-800"
-                      />
+                      </div>
+                      <p className="truncate text-xs text-slate-500">
+                        @{row.profile.username} · {row.category} ·{" "}
+                        {formatCompact(row.profile.followers)} followers
+                        {row.matchScore !== null ? ` · ${row.matchScore}% match` : ""}
+                      </p>
+                      <p className="truncate text-[11px] text-slate-400">
+                        {row.country.label} · {engagementSignal(formatCompact(row.avgLikes), row)} avg likes ·{" "}
+                        {engagementSignal(formatCompact(row.avgComments), row)} avg comments ·{" "}
+                        {changeSignal(formatPercent(row.followerChangePct), row)}
+                        {row.followerChangeEstimated ? " est." : ""} follower change
+                        {row.isTarget && row.engagementSource === "stored-snapshot"
+                          ? ` · engagement stored ${storedOn}`
+                          : ""}
+                        {!row.isTarget && row.postsNotExposed ? " · posts not exposed" : ""}
+                      </p>
                     </div>
-                    <p className="truncate text-xs text-slate-500">
-                      @{row.profile.username} · {row.category} ·{" "}
-                      {formatCompact(row.profile.followers)} followers
-                      {row.matchScore !== null ? ` · ${row.matchScore}% match` : ""}
-                    </p>
-                    <p className="truncate text-[11px] text-slate-400">
-                      {row.country.label} · {engagementSignal(formatCompact(row.avgLikes), row)} avg likes ·{" "}
-                      {engagementSignal(formatCompact(row.avgComments), row)} avg comments ·{" "}
-                      {changeSignal(formatPercent(row.followerChangePct), row)}
-                      {row.followerChangeEstimated ? " est." : ""} follower change
-                      {row.isTarget && row.engagementSource === "stored-snapshot"
-                        ? ` · engagement stored ${storedOn}`
-                        : ""}
-                      {!row.isTarget && row.postsNotExposed ? " · posts not exposed" : ""}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm font-semibold text-slate-950">
-                      {row.rankScore.toFixed(1)}
-                    </p>
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                      Regional rank score
-                    </p>
-                    <p className="mt-0.5 text-[10px] text-slate-500">
-                      {engagementSignal(formatPercent(row.engagementRate), row)} ER
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : (
-          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No Middle East ranking is available right now. Check back shortly.
-          </p>
-        )}
-      </section>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold text-slate-950">
+                        {row.rankScore.toFixed(1)}
+                      </p>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                        Regional rank score
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-slate-500">
+                        {engagementSignal(formatPercent(row.engagementRate), row)} ER
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : (
+            <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
+              No Middle East ranking is available right now. Check back shortly.
+            </p>
+          )}
+        </section>
+      ) : null}
     </div>
   );
 }

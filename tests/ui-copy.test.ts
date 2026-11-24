@@ -57,6 +57,11 @@ describe("no-post profile disclosure", () => {
     expect(dashboard.toLowerCase()).not.toContain("modash");
   });
 
+  it("shows the Middle East benchmark only for Middle East accounts", () => {
+    expect(dashboard).toContain("const showRegionalBenchmark = isMiddleEastAccount(profile);");
+    expect(dashboard).toMatch(/\{showRegionalBenchmark \? \(\s*<section\s+data-testid="regional-benchmark"/);
+  });
+
   it("uses the exact similar-profile rank copy", () => {
     expect(dashboard).toContain(
       'Rank #{regionalRanking.targetRank} of {regionalRanking.total} of similar Middle East profiles',

@@ -60,6 +60,21 @@ export type StoredEngagement = {
   averageComments: number;
 };
 
+// First-party Instagram Insights the account owner shared by connecting their
+// account (Instagram API with Unified Login). Totals cover the 28 days before
+// capturedOn; null means Instagram did not return that metric.
+export type ConnectedInsights = {
+  capturedOn: string;
+  connectedSince: string;
+  windowDays: number;
+  reach: number | null;
+  views: number | null;
+  accountsEngaged: number | null;
+  totalInteractions: number | null;
+  saves: number | null;
+  shares: number | null;
+};
+
 export type CreatorProfile = {
   username: string;
   displayName: string;
@@ -90,5 +105,7 @@ export type CreatorProfile = {
   // usually absent and fake followers fall back to the profile-level model.
   followerSample?: FollowerSample[];
   audience?: Audience;
+  // Present only for accounts whose owner connected them to this site.
+  connectedInsights?: ConnectedInsights;
   storedEngagement?: StoredEngagement;
 };

@@ -633,3 +633,21 @@ export function countryReason(
       return `different country signal (${candidate.label})`;
   }
 }
+
+// Whether the Middle East benchmark applies to this account: its published or
+// inferred country is a Middle East country (UAE included), or it is one of the
+// curated Middle East handles. Accounts elsewhere, or with no country signal at
+// all, do not get the Middle East panel.
+export function isMiddleEastAccount(profile: CreatorProfile): boolean {
+  const region = regionForHandle(profile.username);
+  if (region === "middle-east" || region === "uae") {
+    return true;
+  }
+  const inferred = inferCountrySignal(profile);
+  return (
+    inferred.region === "middle-east" ||
+    inferred.region === "uae" ||
+    (inferred.country !== null &&
+      (MIDDLE_EAST_COUNTRIES as readonly string[]).includes(inferred.country))
+  );
+}

@@ -1,5 +1,6 @@
 import { after } from "next/server";
 import { EmptyState } from "../../../components/EmptyState";
+import { isMiddleEastAccount } from "../../../core/analytics/country";
 import { excludedExclusiveHandles } from "../../../core/analytics/exclusive";
 import { analyzeGrowth } from "../../../core/analytics/growth";
 import { computeMetrics, type ProfileMetrics } from "../../../core/analytics/metrics";
@@ -70,7 +71,9 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     getTrackedProfiles(),
     resolved.source === "demo" ? Promise.resolve([]) : getIndexSample(),
   ]);
-  const regionalPool = await getRegionalProfiles();
+  // The Middle East panel is hidden for accounts outside the region, so its
+  // peer pool is only loaded for Middle East accounts.
+  const regionalPool = isMiddleEastAccount(profile) ? await getRegionalProfiles() : [];
   const metrics = computeMetrics(profile);
   const position =
     metrics.engagementSource === "unavailable"

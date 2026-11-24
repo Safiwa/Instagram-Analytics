@@ -16,6 +16,7 @@ describe("primary navigation", () => {
       { href: "/#collaborations", label: "Collaborations" },
       { href: "/#metric-engine", label: "Analytics" },
       { href: "/compare", label: "Compare" },
+      { href: "/connect", label: "For creators" },
     ]);
   });
 

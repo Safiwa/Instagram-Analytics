@@ -253,6 +253,11 @@ request plus a few embed requests.
 | `/` | Agency home and analysis dashboard: creator/brand collaboration positioning, lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, benchmark tiers, sources, confidence |
 | `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and Middle East category benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
 | `/discover` | Search the in-house index by name/category, country, audience size; sort by followers, engagement, recency |
+| `/connect` | "For creators": connect an Instagram professional account to share verified insights; shows connection status and a disconnect button |
+| `/privacy` | Privacy policy, including the data-deletion section Meta links to |
+| `/api/instagram/connect`, `/api/instagram/callback` | Unified Login (Facebook Login for Business) start and callback |
+| `/api/instagram/disconnect` | POST: delete the signed-in creator's connection and insights |
+| `/api/instagram/deauthorize`, `/api/instagram/data-deletion` | Meta callbacks (signed_request) that delete a creator's connection |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region weighted rank table and remaining comparable suggestions |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
@@ -527,7 +532,11 @@ fixtures are never stored.
 
 - Every profile page and comparison lookup stores today's snapshot after the
   response is sent (`after()` from `next/server`), so pages are not slowed down.
-- `/api/collect` runs daily at 02:15 UTC (`vercel.json`). It marks the homepage
+- `/api/collect` runs daily at 02:15 UTC as the `daily-collector` Vercel Schedule
+  (`vercel.json` → `schedules`; the weekly digest is the `weekly-digest` schedule). Both
+  were migrated from legacy Cron Jobs with `requestMethod: "GET"` and still receive
+  `Authorization: Bearer $CRON_SECRET`. Run either on demand from Vercel → Schedules →
+  Run Schedule. It marks the homepage
   leaderboard and UAE/GCC handles as tracked, then refreshes tracked profiles and
   anything searched in the last 30 days, oldest snapshot first, within a 40-second
   budget. Handles that do not fit are first in line the next day.
@@ -571,7 +580,12 @@ fixtures are never stored.
    npm run db:migrate
    ```
 
-   It is idempotent: already-applied files are skipped.
+   It is idempotent: already-applied files are skipped. Since migration `0002`,
+   every build also runs it: `npm run build` runs `scripts/db-migrate.mjs
+   --if-configured` before `next build`, so each Vercel deployment (and each preview
+   database branch) gets new migrations before the code that needs them. Without
+   `DATABASE_URL` the step is skipped. Note: a local `npm run build` with
+   `DATABASE_URL` set applies migrations to that database too.
 3. Make sure `CRON_SECRET` is set in Vercel (it is shared with the weekly digest),
    then redeploy. Test the collector:
 
@@ -580,6 +594,66 @@ fixtures are never stored.
    ```
 
    Expected: `{"ok":true,"due":N,"stored":N,"failed":0,"deferred":0}`.
+
+## Creator connections (verified Instagram Insights)
+
+Public pages cannot show audience demographics, reach, views, saves or shares. A creator
+who owns an Instagram **professional** (Creator or Business) account can connect it on
+`/connect`. Their profile page then shows a **Verified Instagram Insights** card
+(28-day reach, views, accounts engaged, interactions, saves, shares) and the
+**audience** section (top countries, age groups, gender), labelled as shared by the
+account owner. The PDF report includes the audience.
+
+**How it works: Instagram API with Unified Login**
+
+Meta no longer offers "API setup with Instagram login" to newer apps; this app uses
+the **Instagram API with Unified Login**, built on Facebook Login for Business.
+
+- The button opens `https://www.facebook.com/dialog/oauth` with the app ID and the
+  login configuration ID (`INSTAGRAM_LOGIN_CONFIG_ID`). The creator logs in with
+  Instagram or Facebook, picks their business portfolio and Instagram account, and
+  approves. No Facebook Page is needed, but a business portfolio is.
+- Configuration permissions: `instagram_basic`, `instagram_manage_insights`, and
+  `instagram_manage_messages` (required by Meta for this setup; the site never reads
+  or sends messages).
+- The callback exchanges the code at `graph.facebook.com/{v}/oauth/access_token` for a
+  Business Integration System User Access Token (does not expire), reads
+  `client_business_id` from `/me` and the shared accounts from
+  `/me/assigned_instagram_accounts`, stores the token AES-256-GCM encrypted per
+  Instagram account (`connected_accounts`, migrations `0002`/`0003`), pulls insights
+  at once, and sets a signed 30-day session cookie.
+- The daily collector refreshes each connected account's insights into
+  `account_insights` (one row per day). Connected handles are also tracked for daily
+  public snapshots. A revoked token (error 190) shows "Please reconnect".
+- Follower demographics need 100+ followers (Meta's rule). Metrics Instagram does not
+  return show a dash, never zero.
+- Disconnect, Meta's deauthorize callback, or a data deletion request delete the
+  connection, token and insights immediately (matched by Instagram account id or the
+  integration's app-scoped id).
+
+**Configured in the Meta app (Vibz Profile Insights)**
+
+- Business portfolio: Campaign Masters UAE.
+- Use case Instagram API → API setup with Unified login → configuration
+  "Instagram API (Unified Login)", ID `1141747911599517`, redirect URL
+  `https://www.instagram-analytics.com/api/instagram/callback`.
+- Facebook Login for Business → Settings: deauthorize callback
+  `…/api/instagram/deauthorize`, data deletion request URL `…/api/instagram/data-deletion`.
+
+**Vercel environment**
+
+`META_APP_ID`, `INSTAGRAM_LOGIN_CONFIG_ID` (not secret), `META_APP_SECRET` and
+`CONNECT_SECRET` (32+ random characters; secrets). Without all four plus
+`DATABASE_URL`, `/connect` shows "not enabled".
+
+**Access levels**
+
+Saving the configuration gives Standard Access, which works only for people with a role
+on the app (add the Instagram account as an Instagram Tester under App roles and accept
+the invite in Instagram → Settings → Website permissions → Apps and websites → Tester
+Invites). To let any creator connect, request **Advanced Access** for each permission
+in App Review (privacy policy: `https://www.instagram-analytics.com/privacy`) and switch
+the app to Live mode; Meta may require business verification for the portfolio.
 
 ## Weekly digest (free 30-day trial)
 
