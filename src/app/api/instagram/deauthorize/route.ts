@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   if (!payload?.user_id) {
     return Response.json({ error: "Invalid signed_request." }, { status: 400 });
   }
-  const username = await deleteConnectedAccount({ igUserId: String(payload.user_id) });
-  log.info("instagram deauthorize processed", { handle: username ?? "not connected" });
+  const removed = await deleteConnectedAccount({ metaId: String(payload.user_id) });
+  log.info("instagram deauthorize processed", { removed: removed.length });
   return Response.json({ ok: true });
 }

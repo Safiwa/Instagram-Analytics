@@ -1,12 +1,32 @@
-// Business Login for Instagram and the Instagram API with Instagram Login.
-// Docs: developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login
-// Every call is server-side; tokens never reach the browser or the logs.
+// Instagram API with Unified Login (Facebook Login for Business + an Instagram
+// "Login Compatible" configuration). Creators log in with Instagram or Facebook,
+// choose their business portfolio and Instagram professional account, and the
+// app receives a Business Integration System User Access Token for that
+// portfolio. Docs: developers.facebook.com/documentation/instagram-platform/
+// instagram-api-with-unified-login. Every call is server-side; tokens never
+// reach the browser or the logs.
 
-export const CONNECT_SCOPES = ["instagram_business_basic", "instagram_business_manage_insights"] as const;
+// Permissions in the configuration (set in the App Dashboard, not by this code).
+// instagram_manage_messages is required by Meta for this setup; this site never
+// reads or sends messages.
+export const CONFIG_PERMISSIONS = [
+  "instagram_basic",
+  "instagram_manage_insights",
+  "instagram_manage_messages",
+] as const;
+
 const DEFAULT_REDIRECT = "https://www.instagram-analytics.com/api/instagram/callback";
 const TIMEOUT_MS = 10_000;
+// System-user tokens from this configuration never expire. When Meta does not
+// return expires_in, the stored expiry is set far in the future.
+const NON_EXPIRING_MS = 100 * 365 * 24 * 60 * 60 * 1000;
 
-export type ConnectConfig = { appId: string; appSecret: string; redirectUri: string };
+export type ConnectConfig = {
+  appId: string;
+  appSecret: string;
+  configId: string;
+  redirectUri: string;
+};
 
 export class InstagramApiError extends Error {
   constructor(
@@ -20,116 +40,56 @@ export class InstagramApiError extends Error {
 }
 
 export function connectConfig(): ConnectConfig | null {
-  const appId = process.env.INSTAGRAM_APP_ID?.trim();
-  const appSecret = process.env.INSTAGRAM_APP_SECRET?.trim();
-  if (!appId || !appSecret) {
+  const appId = process.env.META_APP_ID?.trim();
+  const appSecret = process.env.META_APP_SECRET?.trim();
+  const configId = process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim();
+  if (!appId || !appSecret || !configId) {
     return null;
   }
-  return { appId, appSecret, redirectUri: process.env.INSTAGRAM_REDIRECT_URI?.trim() || DEFAULT_REDIRECT };
+  return {
+    appId,
+    appSecret,
+    configId,
+    redirectUri: process.env.INSTAGRAM_REDIRECT_URI?.trim() || DEFAULT_REDIRECT,
+  };
 }
 
 function graphVersion(): string {
   return process.env.IG_GRAPH_VERSION?.trim() || "v27.0";
 }
 
+function graphUrl(path: string): URL {
+  return new URL(`https://graph.facebook.com/${graphVersion()}/${path}`);
+}
+
+// Same format as the Login URL Meta generates for the configuration.
 export function authorizeUrl(config: ConnectConfig, state: string): string {
-  const url = new URL("https://www.instagram.com/oauth/authorize");
+  const url = new URL("https://www.facebook.com/dialog/oauth");
   url.searchParams.set("client_id", config.appId);
+  url.searchParams.set("config_id", config.configId);
   url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", CONNECT_SCOPES.join(","));
-  url.searchParams.set("enable_fb_login", "false");
+  url.searchParams.set("override_default_response_type", "true");
   url.searchParams.set("state", state);
+  url.searchParams.set("prompt", "login");
   return url.toString();
 }
 
 async function readJson(response: Response): Promise<Record<string, unknown>> {
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  const error = data.error as { message?: string; code?: number } | string | undefined;
+  const error = data.error as { message?: string; code?: number } | undefined;
   if (!response.ok || error) {
-    const message =
-      typeof error === "object" && error?.message
-        ? error.message
-        : typeof data.error_message === "string"
-          ? data.error_message
-          : `Instagram API request failed (${response.status}).`;
-    throw new InstagramApiError(message, response.status, typeof error === "object" ? error?.code : undefined);
+    throw new InstagramApiError(
+      error?.message ?? `Meta API request failed (${response.status}).`,
+      response.status,
+      error?.code,
+    );
   }
   return data;
 }
 
-export type ShortLivedToken = { accessToken: string; userId: string; permissions: string[] };
-
-export async function exchangeCode(config: ConnectConfig, code: string): Promise<ShortLivedToken> {
-  const body = new URLSearchParams({
-    client_id: config.appId,
-    client_secret: config.appSecret,
-    grant_type: "authorization_code",
-    redirect_uri: config.redirectUri,
-    code,
-  });
-  const data = await readJson(
-    await fetch("https://api.instagram.com/oauth/access_token", {
-      method: "POST",
-      body,
-      cache: "no-store",
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    }),
-  );
-  // Documented as { data: [{ access_token, user_id, permissions }] }; older
-  // responses were flat. Accept both.
-  const entry = (Array.isArray(data.data) ? data.data[0] : data) as Record<string, unknown> | undefined;
-  const accessToken = entry?.access_token;
-  const userId = entry?.user_id;
-  if (typeof accessToken !== "string" || (typeof userId !== "string" && typeof userId !== "number")) {
-    throw new InstagramApiError("Instagram returned no access token.", 502);
-  }
-  const permissions = entry?.permissions;
-  return {
-    accessToken,
-    userId: String(userId),
-    permissions: Array.isArray(permissions)
-      ? permissions.map(String)
-      : typeof permissions === "string"
-        ? permissions.split(",").map((value) => value.trim()).filter(Boolean)
-        : [],
-  };
-}
-
-export type LongLivedToken = { accessToken: string; expiresAt: Date };
-
-function toLongLived(data: Record<string, unknown>, now: Date): LongLivedToken {
-  const accessToken = data.access_token;
-  const expiresIn = Number(data.expires_in);
-  if (typeof accessToken !== "string" || !Number.isFinite(expiresIn)) {
-    throw new InstagramApiError("Instagram returned no long-lived token.", 502);
-  }
-  return { accessToken, expiresAt: new Date(now.getTime() + expiresIn * 1000) };
-}
-
-// Short-lived → 60-day token (server-side only, needs the app secret).
-export async function exchangeLongLived(
-  config: ConnectConfig,
-  shortToken: string,
-  now = new Date(),
-): Promise<LongLivedToken> {
-  const url = new URL("https://graph.instagram.com/access_token");
-  url.searchParams.set("grant_type", "ig_exchange_token");
-  url.searchParams.set("client_secret", config.appSecret);
-  url.searchParams.set("access_token", shortToken);
-  return toLongLived(await readJson(await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) })), now);
-}
-
-// Extends a long-lived token by another 60 days. Allowed once it is 24h old.
-export async function refreshLongLived(token: string, now = new Date()): Promise<LongLivedToken> {
-  const url = new URL("https://graph.instagram.com/refresh_access_token");
-  url.searchParams.set("grant_type", "ig_refresh_token");
-  url.searchParams.set("access_token", token);
-  return toLongLived(await readJson(await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) })), now);
-}
-
-async function graphGet(path: string, token: string, params: Record<string, string>): Promise<Record<string, unknown>> {
-  const url = new URL(`https://graph.instagram.com/${graphVersion()}/${path}`);
+async function graphGet(path: string, token: string, params: Record<string, string> = {}): Promise<Record<string, unknown>> {
+  const url = graphUrl(path);
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value);
   }
@@ -142,31 +102,64 @@ async function graphGet(path: string, token: string, params: Record<string, stri
   );
 }
 
-export type InstagramMe = {
-  userId: string;
-  username: string;
-  name: string | null;
-  accountType: string | null;
-  followers: number | null;
+export type AccessToken = { accessToken: string; expiresAt: Date };
+
+// Server-to-server code exchange with the Meta app ID and secret.
+export async function exchangeCode(config: ConnectConfig, code: string, now = new Date()): Promise<AccessToken> {
+  const url = graphUrl("oauth/access_token");
+  url.searchParams.set("client_id", config.appId);
+  url.searchParams.set("client_secret", config.appSecret);
+  url.searchParams.set("redirect_uri", config.redirectUri);
+  url.searchParams.set("code", code);
+  const data = await readJson(await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) }));
+  const accessToken = data.access_token;
+  if (typeof accessToken !== "string" || !accessToken) {
+    throw new InstagramApiError("Meta returned no access token.", 502);
+  }
+  const expiresIn = Number(data.expires_in);
+  return {
+    accessToken,
+    expiresAt: new Date(now.getTime() + (Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn * 1000 : NON_EXPIRING_MS)),
+  };
+}
+
+export type ConnectedClient = {
+  // App-scoped id of the business integration system user (Meta's callbacks
+  // may identify the connection by it).
+  metaUserId: string;
+  clientBusinessId: string | null;
+  instagramAccounts: { id: string; username: string }[];
 };
 
-export async function fetchMe(token: string): Promise<InstagramMe> {
-  const data = await graphGet("me", token, {
-    fields: "user_id,username,name,account_type,followers_count",
-  });
-  const username = typeof data.username === "string" ? data.username.toLowerCase() : null;
-  const userId = data.user_id ?? data.id;
-  if (!username || (typeof userId !== "string" && typeof userId !== "number")) {
-    throw new InstagramApiError("Instagram returned no account details.", 502);
+// With a system-user token /me is the integration, not the Instagram account:
+// the shared Instagram accounts come from /me/assigned_instagram_accounts.
+export async function fetchConnectedClient(token: string): Promise<ConnectedClient> {
+  const [me, assigned] = await Promise.all([
+    graphGet("me", token, { fields: "client_business_id" }),
+    graphGet("me/assigned_instagram_accounts", token, { fields: "id,username" }),
+  ]);
+  const metaUserId = me.id;
+  if (typeof metaUserId !== "string" && typeof metaUserId !== "number") {
+    throw new InstagramApiError("Meta returned no account details.", 502);
   }
-  const followers = Number(data.followers_count);
+  const accounts: { id: string; username: string }[] = [];
+  for (const item of Array.isArray(assigned.data) ? assigned.data : []) {
+    const entry = item as { id?: unknown; username?: unknown };
+    if ((typeof entry.id === "string" || typeof entry.id === "number") && typeof entry.username === "string") {
+      accounts.push({ id: String(entry.id), username: entry.username.toLowerCase() });
+    }
+  }
   return {
-    userId: String(userId),
-    username,
-    name: typeof data.name === "string" ? data.name : null,
-    accountType: typeof data.account_type === "string" ? data.account_type : null,
-    followers: Number.isFinite(followers) ? followers : null,
+    metaUserId: String(metaUserId),
+    clientBusinessId: typeof me.client_business_id === "string" ? me.client_business_id : null,
+    instagramAccounts: accounts,
   };
+}
+
+export async function fetchFollowers(igAccountId: string, token: string): Promise<number | null> {
+  const data = await graphGet(igAccountId, token, { fields: "followers_count" });
+  const followers = Number(data.followers_count);
+  return Number.isFinite(followers) ? followers : null;
 }
 
 // --- Insights ---------------------------------------------------------------
@@ -214,10 +207,10 @@ export function parseBreakdown(data: Record<string, unknown>): DemographicSlice[
 }
 
 // Account totals for the last 28 days. Each metric is requested on its own so
-// one unavailable metric (e.g. "views" while Meta lists it in development)
-// cannot hide the others; unavailable metrics are null, never zero.
+// one unavailable metric cannot hide the others; unavailable metrics are null,
+// never zero.
 export async function fetchAccountMetrics(
-  igUserId: string,
+  igAccountId: string,
   token: string,
   now = new Date(),
 ): Promise<Record<AccountMetric, number | null>> {
@@ -225,7 +218,7 @@ export async function fetchAccountMetrics(
   const since = until - METRIC_WINDOW_DAYS * 24 * 60 * 60;
   const settled = await Promise.allSettled(
     ACCOUNT_METRICS.map((metric) =>
-      graphGet(`${igUserId}/insights`, token, {
+      graphGet(`${igAccountId}/insights`, token, {
         metric,
         period: "day",
         metric_type: "total_value",
@@ -243,10 +236,10 @@ export async function fetchAccountMetrics(
 }
 
 // Follower demographics (Meta requires 100+ followers; smaller accounts get none).
-export async function fetchDemographics(igUserId: string, token: string): Promise<Demographics> {
+export async function fetchDemographics(igAccountId: string, token: string): Promise<Demographics> {
   const settled = await Promise.allSettled(
     DEMOGRAPHIC_BREAKDOWNS.map((breakdown) =>
-      graphGet(`${igUserId}/insights`, token, {
+      graphGet(`${igAccountId}/insights`, token, {
         metric: "follower_demographics",
         period: "lifetime",
         timeframe: "this_month",

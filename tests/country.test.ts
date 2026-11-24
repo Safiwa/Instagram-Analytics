@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isMiddleEastAccount,
   countryRelationship,
   hasPublishedCountryEvidence,
   inferCountrySignal,
@@ -52,7 +53,11 @@ describe("country signal inference", () => {
     expect(signal.basis).toBe("account");
 
     const notShared = inferCountrySignal(
-      profile({ username: "dubai.style", accountCountry: "Not shared", bio: "Fashion in Paris" }),
+      profile({
+        username: "dubai.style",
+        accountCountry: "Not shared",
+        bio: "Fashion in Paris",
+      }),
     );
     expect(notShared.basis).toBe("handle");
   });
@@ -73,7 +78,11 @@ describe("country signal inference", () => {
 
   it("uses the handle before profile text when no country is published in posts", () => {
     const signal = inferCountrySignal(
-      profile({ username: "dubai.style", accountCountry: null, bio: "Fashion in Paris" }),
+      profile({
+        username: "dubai.style",
+        accountCountry: null,
+        bio: "Fashion in Paris",
+      }),
     );
 
     expect(signal.country).toBe("United Arab Emirates");
@@ -84,11 +93,15 @@ describe("country signal inference", () => {
     expect(inferCountrySignal(profile({ username: "small.uae" })).country).toBe(
       "United Arab Emirates",
     );
-    expect(inferCountrySignal(profile({ username: "mall.stories" })).country).toBeNull();
+    expect(
+      inferCountrySignal(profile({ username: "mall.stories" })).country,
+    ).toBeNull();
   });
 
   it("uses public posts, then the handle, then profile text when no account country is shared", () => {
-    const fromProfile = inferCountrySignal(profile({ bio: "Food blogger in Amman" }));
+    const fromProfile = inferCountrySignal(
+      profile({ bio: "Food blogger in Amman" }),
+    );
     expect(fromProfile.country).toBe("Jordan");
     expect(fromProfile.basis).toBe("profile");
 
@@ -114,13 +127,21 @@ describe("country signal inference", () => {
   });
 
   it("maps public Middle East handle words to their country", () => {
-    expect(inferCountrySignal(profile({ username: "visitsyria" })).country).toBe("Syria");
-    expect(inferCountrySignal(profile({ username: "explorepalestine" })).country).toBe(
-      "Palestine",
-    );
-    expect(inferCountrySignal(profile({ username: "visitmorocco" })).country).toBe("Morocco");
-    expect(inferCountrySignal(profile({ username: "visitlibya" })).country).toBe("Libya");
-    expect(inferCountrySignal(profile({ username: "tehran.studio" })).country).toBe("Iran");
+    expect(
+      inferCountrySignal(profile({ username: "visitsyria" })).country,
+    ).toBe("Syria");
+    expect(
+      inferCountrySignal(profile({ username: "explorepalestine" })).country,
+    ).toBe("Palestine");
+    expect(
+      inferCountrySignal(profile({ username: "visitmorocco" })).country,
+    ).toBe("Morocco");
+    expect(
+      inferCountrySignal(profile({ username: "visitlibya" })).country,
+    ).toBe("Libya");
+    expect(
+      inferCountrySignal(profile({ username: "tehran.studio" })).country,
+    ).toBe("Iran");
   });
 
   it("marks curated-only attribution so country boards can require public evidence", () => {
@@ -144,7 +165,9 @@ describe("country signal inference", () => {
   it("resolves the real UAE creator band around @alaaabuharb", () => {
     const handles = ["sarahmalas", "randdalati", "rima_alosta", "lookatsascha"];
     for (const username of handles) {
-      const signal = inferCountrySignal(profile({ username, bio: "Based in Dubai" }));
+      const signal = inferCountrySignal(
+        profile({ username, bio: "Based in Dubai" }),
+      );
       expect(signal.country).toBe("United Arab Emirates");
       expect(signal.region).toBe("uae");
       expect(signal.basis).toBe("profile");
@@ -158,7 +181,10 @@ describe("country signal inference", () => {
         bio: "Engineer by Education, Entrepreneur by Profession",
         recentPosts: [
           post(["#TechnicalGuruji", "#TGFamily"]),
-          { ...post(["#vivo", "#Zeiss", "#India"]), caption: "Launching on 26th November" },
+          {
+            ...post(["#vivo", "#Zeiss", "#India"]),
+            caption: "Launching on 26th November",
+          },
           {
             ...post(["#TechnicalGuruji"]),
             location: "Ladakh, India",
@@ -177,8 +203,15 @@ describe("country signal inference", () => {
         username: "arabnews",
         bio: "The Middle East's leading English daily",
         recentPosts: [
-          { ...post(), caption: "Iran says it will use all available means to respond" },
-          { ...post(), caption: "Tehran and Washington exchange messages through mediators" },
+          {
+            ...post(),
+            caption: "Iran says it will use all available means to respond",
+          },
+          {
+            ...post(),
+            caption:
+              "Tehran and Washington exchange messages through mediators",
+          },
         ],
       }),
     );
@@ -193,8 +226,14 @@ describe("country signal inference", () => {
         username: "airagymn",
         recentPosts: [
           {
-            ...post(["#dubaimiraclegarden", "#miraclegarden", "#dubaireels", "#whatsondubai"]),
-            caption: "Iran and Tehran are the story topic, not the account country.",
+            ...post([
+              "#dubaimiraclegarden",
+              "#miraclegarden",
+              "#dubaireels",
+              "#whatsondubai",
+            ]),
+            caption:
+              "Iran and Tehran are the story topic, not the account country.",
           },
           { ...post(["#uaewinter"]), caption: "A winter post." },
           { ...post(["#whatsondubai"]), caption: "A city guide." },
@@ -220,7 +259,8 @@ describe("country signal inference", () => {
         recentPosts: [
           {
             ...post(["#ChatGPT_Partner"]),
-            caption: "Desde Rosario hasta Miami, y todos los destinos que hay en el medio.",
+            caption:
+              "Desde Rosario hasta Miami, y todos los destinos que hay en el medio.",
           },
         ],
       }),
@@ -238,7 +278,9 @@ describe("country signal inference", () => {
     expect(clear.basis).toBe("posts");
 
     const tied = inferCountrySignal(
-      profile({ recentPosts: [post(["#Doha", "#Qatar"]), post(["#Amman", "#Jordan"])] }),
+      profile({
+        recentPosts: [post(["#Doha", "#Qatar"]), post(["#Amman", "#Jordan"])],
+      }),
     );
     expect(tied.country).toBeNull();
     expect(tied.basis).toBeNull();
@@ -262,7 +304,9 @@ describe("published Middle East evidence", () => {
 
   it("accepts only exact Middle East countries with a published basis", () => {
     expect(hasPublishedCountryEvidence(account)).toBe(true);
-    expect(hasPublishedCountryEvidence({ ...account, basis: "curated" })).toBe(false);
+    expect(hasPublishedCountryEvidence({ ...account, basis: "curated" })).toBe(
+      false,
+    );
     expect(
       hasPublishedCountryEvidence({
         country: null,
@@ -310,5 +354,47 @@ describe("country relationships", () => {
         region: "europe",
       }),
     ).toBe("different-country");
+  });
+});
+
+describe("Middle East benchmark eligibility", () => {
+  const base: CreatorProfile = {
+    username: "someone.new",
+    displayName: "Someone",
+    category: "Creator",
+    bio: "",
+    followers: 50_000,
+    following: 100,
+    postsCount: 100,
+    isVerified: false,
+    source: "public",
+    followerHistory: [],
+    recentPosts: [],
+  };
+
+  it("shows the Middle East panel for Middle East accounts only", () => {
+    expect(
+      isMiddleEastAccount({ ...base, accountCountry: "United Arab Emirates" }),
+    ).toBe(true);
+    expect(isMiddleEastAccount({ ...base, accountCountry: "Lebanon" })).toBe(
+      true,
+    );
+    expect(
+      isMiddleEastAccount({ ...base, accountCountry: "Saudi Arabia" }),
+    ).toBe(true);
+    expect(
+      isMiddleEastAccount({ ...base, accountCountry: "United States" }),
+    ).toBe(false);
+    expect(isMiddleEastAccount({ ...base, accountCountry: "India" })).toBe(
+      false,
+    );
+  });
+
+  it("hides it when no country signal exists, unless the handle is a curated Middle East account", () => {
+    expect(isMiddleEastAccount({ ...base, username: "natgeo" })).toBe(false);
+    expect(isMiddleEastAccount({ ...base, username: "emirates" })).toBe(true);
+    expect(isMiddleEastAccount({ ...base, username: "raw.lebanon" })).toBe(
+      true,
+    );
   });
 });

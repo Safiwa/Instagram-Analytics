@@ -65,15 +65,17 @@ export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
       <Section title="Creators who connect their account">
         <p>
           If you connect your Instagram professional account with &quot;Connect with Instagram&quot;,
-          you grant the permissions instagram_business_basic and instagram_business_manage_insights.
-          With them we read your username, account type and follower count, your follower
+          you log in with Instagram or Facebook through Meta and grant the permissions
+          instagram_basic and instagram_manage_insights for the account and business portfolio you
+          choose. Meta also requires the instagram_manage_messages permission for this kind of
+          login; we never read or send messages. We read your username and follower count, your follower
           demographics (country, city, age, gender) and 28-day account insights (reach, views,
           accounts engaged, interactions, likes, comments, saves, shares). We show these on your
           public profile page on this site, labelled as shared by you.
         </p>
         <p>
-          We store your Instagram access token encrypted (AES-256-GCM) and use it only to refresh
-          these insights once a day. We cannot post, comment, send messages or change anything on
+          We store the access token Meta issues for your business portfolio encrypted (AES-256-GCM)
+          and use it only to refresh these insights once a day. We cannot post, comment, send messages or change anything on
           your account, and we never see your password.
         </p>
       </Section>
@@ -97,9 +99,10 @@ export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
         <p>
           Connected creators can delete everything we hold from their connection at any time on the{" "}
           <a href="/connect" className="font-medium text-indigo-600">For creators</a> page with
-          &quot;Disconnect and delete my insights&quot;. Removing our app in Instagram (Settings →
-          Website permissions → Apps and websites) also deletes it automatically, as does a data
-          deletion request sent through Instagram or Facebook.
+          &quot;Disconnect and delete my insights&quot;. Removing our app&apos;s access in Meta
+          (Business settings → Integrations, or Instagram → Settings → Website permissions → Apps
+          and websites) also deletes it automatically, as does a data deletion request sent
+          through Instagram or Facebook.
         </p>
         <p>
           To ask us to remove public snapshots of your account, or for any other privacy request,

@@ -1,10 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { saveConnectedAccount } from "../../../../core/db/connected";
 import {
+  CONFIG_PERMISSIONS,
   connectConfig,
   exchangeCode,
-  exchangeLongLived,
-  fetchMe,
+  fetchConnectedClient,
 } from "../../../../core/instagram/api";
 import { signValue, verifySignedValue } from "../../../../core/instagram/crypto";
 import {
@@ -19,8 +19,6 @@ import { log } from "../../../../core/logging/logger";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const PROFESSIONAL_TYPES = new Set(["BUSINESS", "MEDIA_CREATOR", "CREATOR"]);
 
 function finish(request: NextRequest, query: string): NextResponse {
   const response = NextResponse.redirect(new URL(`/connect?${query}`, request.url));
@@ -45,27 +43,33 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const short = await exchangeCode(config, code.replace(/#_$/, ""));
-    const long = await exchangeLongLived(config, short.accessToken);
-    const me = await fetchMe(long.accessToken);
-    if (me.accountType && !PROFESSIONAL_TYPES.has(me.accountType.toUpperCase())) {
-      return finish(request, "error=not-professional");
+    const token = await exchangeCode(config, code);
+    const client = await fetchConnectedClient(token.accessToken);
+    if (client.instagramAccounts.length === 0) {
+      return finish(request, "error=no-account");
     }
 
-    const account = await saveConnectedAccount({
-      igUserId: me.userId,
-      username: me.username,
-      accountType: me.accountType,
-      accessToken: long.accessToken,
-      tokenExpiresAt: long.expiresAt,
-      scopes: short.permissions,
-    });
-    // First insights pull right away, so the creator sees their data at once.
-    await syncConnectedAccount({ ...account, accessToken: long.accessToken, tokenRefreshedAt: new Date().toISOString() });
-    log.info("instagram account connected", { handle: me.username });
+    // One token covers every Instagram account the creator shared.
+    let firstAccountId: string | null = null;
+    for (const instagram of client.instagramAccounts) {
+      const account = await saveConnectedAccount({
+        igUserId: instagram.id,
+        username: instagram.username,
+        accountType: "PROFESSIONAL",
+        accessToken: token.accessToken,
+        tokenExpiresAt: token.expiresAt,
+        scopes: [...CONFIG_PERMISSIONS],
+        clientBusinessId: client.clientBusinessId,
+        metaUserId: client.metaUserId,
+      });
+      firstAccountId ??= account.id;
+      // First insights pull right away, so the creator sees their data at once.
+      await syncConnectedAccount({ ...account, accessToken: token.accessToken });
+      log.info("instagram account connected", { handle: instagram.username });
+    }
 
     const response = finish(request, "connected=1");
-    response.cookies.set(SESSION_COOKIE, signValue(account.id, SESSION_TTL_SECONDS), {
+    response.cookies.set(SESSION_COOKIE, signValue(firstAccountId!, SESSION_TTL_SECONDS), {
       ...COOKIE_OPTIONS,
       maxAge: SESSION_TTL_SECONDS,
     });

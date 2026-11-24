@@ -54,6 +54,8 @@ export async function saveConnectedAccount(input: {
   accessToken: string;
   tokenExpiresAt: Date;
   scopes: string[];
+  clientBusinessId?: string | null;
+  metaUserId?: string | null;
 }): Promise<ConnectedAccount> {
   const sql = getSql();
   if (!sql) {
@@ -61,8 +63,9 @@ export async function saveConnectedAccount(input: {
   }
   const [row] = await sql(
     `insert into connected_accounts (
-       ig_user_id, username, account_type, access_token_enc, token_expires_at, scopes
-     ) values ($1, $2, $3, $4, $5, $6)
+       ig_user_id, username, account_type, access_token_enc, token_expires_at, scopes,
+       client_business_id, meta_user_id
+     ) values ($1, $2, $3, $4, $5, $6, $7, $8)
      on conflict (ig_user_id) do update set
        username = excluded.username,
        account_type = excluded.account_type,
@@ -70,6 +73,8 @@ export async function saveConnectedAccount(input: {
        token_expires_at = excluded.token_expires_at,
        token_refreshed_at = now(),
        scopes = excluded.scopes,
+       client_business_id = excluded.client_business_id,
+       meta_user_id = excluded.meta_user_id,
        last_error = null,
        updated_at = now()
      returning ${ACCOUNT_COLUMNS}`,
@@ -80,6 +85,8 @@ export async function saveConnectedAccount(input: {
       encryptToken(input.accessToken),
       input.tokenExpiresAt.toISOString(),
       input.scopes,
+      input.clientBusinessId ?? null,
+      input.metaUserId ?? null,
     ],
   );
   // Connected creators are always in the daily collector's rotation.
@@ -171,15 +178,21 @@ export async function listAccountsDueForSync(limit: number, now = new Date()): P
   return accounts;
 }
 
-export async function deleteConnectedAccount(where: { id?: string; igUserId?: string }): Promise<string | null> {
+// Deletes by our id (disconnect) or by a Meta id from a deauthorize/data
+// deletion callback, which may be the Instagram account id or the
+// integration's app-scoped id. Returns the usernames removed.
+export async function deleteConnectedAccount(where: { id?: string; metaId?: string }): Promise<string[]> {
   const sql = getSql();
-  if (!sql || (!where.id && !where.igUserId)) {
-    return null;
+  if (!sql || (!where.id && !where.metaId)) {
+    return [];
   }
   const rows = where.id
     ? await sql(`delete from connected_accounts where id = $1 returning username`, [where.id])
-    : await sql(`delete from connected_accounts where ig_user_id = $1 returning username`, [where.igUserId]);
-  return typeof rows[0]?.username === "string" ? rows[0].username : null;
+    : await sql(
+        `delete from connected_accounts where ig_user_id = $1 or meta_user_id = $1 returning username`,
+        [where.metaId],
+      );
+  return rows.map((row) => String(row.username));
 }
 
 export type StoredConnectedInsights = {

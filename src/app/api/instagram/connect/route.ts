@@ -10,7 +10,7 @@ import {
 
 export const runtime = "nodejs";
 
-// Starts Business Login for Instagram. A signed, short-lived state cookie
+// Starts the Instagram API with Unified Login (Facebook Login for Business). A signed, short-lived state cookie
 // protects the callback against cross-site request forgery.
 export function GET(request: NextRequest) {
   const config = connectConfig();

@@ -118,7 +118,7 @@ Fixture anchor `nora.style`: `followers=10000`, `fakeFollowers=350`, followers `
 | **G15** | In-house history store | Optional Neon Postgres (`DATABASE_URL`); migration `0001_profile_snapshots.sql` (profiles, profile_snapshots, posts, post_snapshots; one snapshot per profile/post per UTC day); profile + compare lookups store snapshots via `after()`; daily `/api/collect` cron (`CRON_SECRET`, 40 s budget, oldest first, tracked + 30-day searched handles); only Instagram-measured values stored (no third-party engagement, no demo); history read fails soft (5 s timeout → page unchanged); `Tracking since` header line; measured 30-day growth from a 30-45 day old snapshot replaces the estimate and its `Est.` badge. | `tests/db.test.ts` (PGlite, real migration), full suite, typecheck, eslint, build, local route smoke |
 | **G16** | In-house dashboards, no third-party data | Daily follower/engagement history chart (30D/90D/1Y) + 1/7/30/90-day change table from stored snapshots; engagement percentile vs own index per audience tier (min 8 profiles, self excluded); homepage tier table from own index replaces Modash ranges; stored-engagement fallback (latest snapshot with posts, ≤60 days, dated "Stored") replaces the hard-coded Modash snapshot in metrics, UI, rankings and PDF; Middle East peer gaps filled from the index instead of the static capture; `/discover` search over the index; all index readers fail soft. `modash-snapshot.ts` and `regional-peer-snapshots.ts` deleted. | `tests/index-store.test.ts` (PGlite), full suite, typecheck, eslint, build, route smoke |
 | **G17** | Vercel Schedules + deploy-time migrations | `vercel.json` `crons` replaced by `schedules` (`weekly-digest`, `daily-collector`, `requestMethod: GET`, same UTC times, `CRON_SECRET` bearer unchanged); `npm run build` runs `db-migrate.mjs --if-configured` before `next build` (Vercel's Next.js preset runs `npm run build`, not `vercel-build`). | Preview deployment build applies `0002` on its Neon branch |
-| **G18** | Creator connections (verified insights) | Business Login for Instagram (`instagram_business_basic`, `instagram_business_manage_insights`), signed state + session cookies, 60-day token AES-256-GCM encrypted (`CONNECT_SECRET`), 7-day refresh in the daily collector, follower demographics (country/age/gender/city) + 28-day account metrics per day in `account_insights`; profile `connected-insights` card and audience section; `/connect`, `/privacy`; disconnect, deauthorize and data-deletion callbacks delete everything; metrics Instagram omits stay null. | `tests/connect.test.ts` (14 cases: crypto, OAuth shapes, insights parsing, PGlite storage/sync/refresh, routes end to end), full suite, build, route smoke |
+| **G18** | Creator connections (verified insights) | Instagram API with Unified Login (Meta retired Instagram login for newer apps): Facebook Login for Business dialog with `config_id`, code exchange on `graph.facebook.com`, Business Integration System User token (non-expiring) encrypted with `CONNECT_SECRET`, accounts from `/me/assigned_instagram_accounts`, `client_business_id` + app-scoped id stored (migration `0003`); configuration permissions `instagram_basic`, `instagram_manage_insights`, `instagram_manage_messages` (Meta-required, unused); follower demographics + 28-day metrics per day in `account_insights`; profile `connected-insights` card + audience; `/connect`, `/privacy`; disconnect, deauthorize and data-deletion callbacks delete everything; metrics Instagram omits stay null. | `tests/connect.test.ts` (16 cases incl. full callback on PGlite), full suite, build, route smoke |
 
 Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12 → G13 → G14 → G15 → G16 → G17 → G18**. No step is marked done until its verification passes.
 
@@ -244,7 +244,8 @@ src/
 | `DIGEST_FROM_EMAIL` | required for digest delivery | Verified Resend sender address |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | required on Vercel | Upstash REST credentials for durable signup storage |
 | `CRON_SECRET` | required for digest delivery | Vercel Cron bearer token and unsubscribe-link signing secret |
-| `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` | optional | Instagram App ID/secret (API setup with Instagram login) enabling creator connections |
+| `META_APP_ID` / `META_APP_SECRET` | optional | Meta app ID/secret for the Unified Login code exchange (creator connections) |
+| `INSTAGRAM_LOGIN_CONFIG_ID` | optional | Facebook Login for Business configuration ID (`1141747911599517`) |
 | `INSTAGRAM_REDIRECT_URI` | optional | Defaults to `https://www.instagram-analytics.com/api/instagram/callback`; must match the Meta dashboard |
 | `CONNECT_SECRET` | required for connections | 32+ chars; encrypts creator tokens and signs cookies; rotating it disconnects everyone |
 | `DATABASE_URL` | optional | Neon Postgres connection string for the in-house history store and `/api/collect`; run `npm run db:migrate` once |
@@ -273,10 +274,10 @@ smoke-test steps.
 - `[P15]` **Deployment operator step:** connect a Neon database in Vercel → Storage (adds
   `DATABASE_URL`), run `npm run db:migrate` once, confirm `CRON_SECRET`, redeploy, and
   call `/api/collect` with the bearer secret.
-- `[P18]` **Deployment operator step:** add the Instagram product (API setup with Instagram
-  login) to the Meta app, register the redirect, deauthorize and data-deletion URLs, set
-  `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`, `CONNECT_SECRET` in Vercel, add test accounts as
-  Instagram testers, then request Advanced Access for `instagram_business_manage_insights`.
+- `[P18]` **Deployment operator step:** Meta side done 2026-11-25 (portfolio Campaign Masters UAE,
+  Unified Login configuration `1141747911599517`, redirect/deauthorize/data-deletion URLs). Remaining:
+  `META_APP_SECRET` and `CONNECT_SECRET` in Vercel (owner enters secrets), Instagram Tester role
+  for test accounts, then App Review for Advanced Access + Live mode.
 - `[P10]` **Optional:** a real-credential official-API smoke test. Public lookup and all
   mocked API paths are verified. The official path remains structurally tested but does
   not gate v1.2, because the product no longer requires Meta credentials.
@@ -287,7 +288,7 @@ smoke-test steps.
 
 | Gate | Command / probe | Result |
 |---|---|---|
-| Schedules + creator connections (G17, G18) | Local gates on branch `feat/creator-connect` (2026-11-25) | **265 tests** (26 files; new `connect.test.ts` 14 cases), typecheck, eslint, build pass; `next start` smoke without credentials: `/connect` 200 "not enabled", `/connect?error=denied` shows message, `/privacy` 200, `/privacy?deletion=<code>` shows confirmation, `/api/instagram/connect` 307 → `/connect?error=not-enabled`, bad `signed_request` 400. Live connection pending operator step `[P18]`. |
+| Schedules + creator connections (G17, G18) | Local gates on branch `feat/creator-connect` (2026-11-25) | **265 tests** (26 files; new `connect.test.ts` 16 cases), typecheck, eslint, build pass; `next start` smoke without credentials: `/connect` 200 "not enabled", `/connect?error=denied` shows message, `/privacy` 200, `/privacy?deletion=<code>` shows confirmation, `/api/instagram/connect` 307 → `/connect?error=not-enabled`, bad `signed_request` 400. Live connection pending operator step `[P18]`. |
 | In-house dashboards (G16) | Local gates on branch `feat/in-house-dashboards` (2026-11-25) | **251 tests** (25 files; new `index-store.test.ts` with 13 PGlite cases; Modash and static-capture tests removed with their modules), typecheck, eslint, build pass; `next start` smoke without `DATABASE_URL`: `/` 200 with no index panel, `/discover` 200 with "not enabled" notice, `/profile/nora.style` and `/compare` 200 unchanged. |
 | In-house history store (G15) | Local gates on branch `feat/database-snapshots` (2026-11-25) | **246 tests** (26 files, new `db.test.ts` with 12 PGlite cases: storage, one-per-day upsert, API/public post merge by shortcode, hidden likes → null, third-party engagement never stored, demo/no-DB no-op, DB failure → false, ordered history + first day, measured 30-day change, estimate kept before 30 days and beyond 45, due-handle queue, collector budget/deferral/retry), typecheck, eslint, build pass; `next start` smoke without `DATABASE_URL`: `/`, `/profile/nora.style`, `/compare` 200 unchanged, `/api/collect` 503 until enabled. Production activation pending operator step `[P15]`. |
 | Unit + integration tests | `npm test` | **9 files, 59 tests passed** |

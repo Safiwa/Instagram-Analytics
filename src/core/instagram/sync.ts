@@ -2,42 +2,30 @@ import {
   listAccountsDueForSync,
   markSynced,
   storeAccountInsights,
-  updateToken,
   type ConnectedAccountWithToken,
 } from "../db/connected";
 import { utcDay } from "../db/snapshots";
 import { log } from "../logging/logger";
-import { fetchAccountMetrics, fetchDemographics, fetchMe, refreshLongLived } from "./api";
+import { fetchAccountMetrics, fetchDemographics, fetchFollowers, InstagramApiError } from "./api";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-// Refresh a week after the last refresh: well inside the 60-day lifetime and
-// past Meta's 24-hour minimum, so a few missed runs never let a token lapse.
-export const TOKEN_REFRESH_AFTER_DAYS = 7;
-
-// Pulls today's insights for one connected account, refreshing its token first
-// when due. Never throws: failures are recorded on the account and logged.
+// Pulls today's insights for one connected Instagram account. The Unified
+// Login system-user token does not expire, so there is nothing to refresh; if
+// Meta rejects it (creator removed access), the error is recorded and the
+// creator is asked to reconnect. Never throws.
 export async function syncConnectedAccount(
   account: ConnectedAccountWithToken,
   now = new Date(),
 ): Promise<boolean> {
-  let token = account.accessToken;
   try {
-    const refreshedAt = Date.parse(account.tokenRefreshedAt);
-    if (!Number.isFinite(refreshedAt) || now.getTime() - refreshedAt >= TOKEN_REFRESH_AFTER_DAYS * DAY_MS) {
-      const refreshed = await refreshLongLived(token, now);
-      token = refreshed.accessToken;
-      await updateToken(account.id, refreshed.accessToken, refreshed.expiresAt);
-    }
-
-    const me = await fetchMe(token);
-    const [metrics, demographics] = await Promise.all([
-      fetchAccountMetrics(me.userId, token, now),
-      fetchDemographics(me.userId, token),
+    const [followers, metrics, demographics] = await Promise.all([
+      fetchFollowers(account.igUserId, account.accessToken),
+      fetchAccountMetrics(account.igUserId, account.accessToken, now),
+      fetchDemographics(account.igUserId, account.accessToken),
     ]);
     await storeAccountInsights({
       accountId: account.id,
       day: utcDay(now),
-      followers: me.followers,
+      followers,
       metrics,
       demographics,
     });
@@ -48,7 +36,12 @@ export async function syncConnectedAccount(
     });
     return true;
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown";
+    const message =
+      error instanceof InstagramApiError && error.code === 190
+        ? "Access was removed or expired. Please reconnect."
+        : error instanceof Error
+          ? error.message
+          : "unknown";
     await markSynced(account.id, message).catch(() => undefined);
     log.warn("connected account sync failed", { handle: account.username, message });
     return false;

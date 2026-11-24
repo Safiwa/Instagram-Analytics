@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   const accountId = sessionAccountId(request.cookies.get(SESSION_COOKIE)?.value);
   if (accountId) {
-    const username = await deleteConnectedAccount({ id: accountId });
+    const [username] = await deleteConnectedAccount({ id: accountId });
     log.info("instagram account disconnected", { handle: username ?? "unknown" });
   }
   const response = NextResponse.redirect(new URL("/connect?disconnected=1", request.url), 303);

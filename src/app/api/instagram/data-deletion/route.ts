@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Invalid signed_request." }, { status: 400 });
   }
   const userId = String(payload.user_id);
-  await deleteConnectedAccount({ igUserId: userId });
+  await deleteConnectedAccount({ metaId: userId });
   const confirmationCode = createHash("sha256").update(`${userId}:${payload.issued_at ?? ""}`).digest("hex").slice(0, 16);
   log.info("instagram data deletion processed", { code: confirmationCode });
   return Response.json({

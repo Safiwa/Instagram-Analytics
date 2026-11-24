@@ -20,9 +20,9 @@ const MESSAGES: Record<string, { tone: "ok" | "warn"; text: string }> = {
   "not-enabled": { tone: "warn", text: "Creator connections are not enabled on this site yet." },
   denied: { tone: "warn", text: "Instagram did not grant access, so nothing was connected." },
   expired: { tone: "warn", text: "That sign-in link expired. Please start again." },
-  "not-professional": {
+  "no-account": {
     tone: "warn",
-    text: "Only Instagram professional accounts (Creator or Business) can share insights. Switch your account type in Instagram settings, then try again.",
+    text: "No Instagram account was shared. Only Instagram professional accounts (Creator or Business) can connect: select your account in the login window and try again.",
   },
   failed: { tone: "warn", text: "Instagram could not complete the connection. Please try again in a few minutes." },
 };
@@ -93,8 +93,12 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-slate-500">Access renews automatically until</dt>
-              <dd className="font-medium text-slate-900">{formatDate(account.tokenExpiresAt)}</dd>
+              <dt className="text-xs text-slate-500">Access</dt>
+              <dd className="font-medium text-slate-900">
+                {new Date(account.tokenExpiresAt).getUTCFullYear() >= 2100
+                  ? "Active until you disconnect"
+                  : `Until ${formatDate(account.tokenExpiresAt)}`}
+              </dd>
             </div>
           </dl>
           {account.lastError ? (
@@ -129,7 +133,9 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
             Connect with Instagram
           </a>
           <p className="mt-3 text-xs text-slate-500">
-            You sign in on instagram.com. This site never sees your password.
+            You sign in with Instagram or Facebook on Meta&apos;s own page, then choose your business
+            portfolio and the Instagram professional account to share. This site never sees your
+            password.
           </p>
         </section>
       ) : (
@@ -160,15 +166,20 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
             <h3 className="text-sm font-semibold text-slate-950">What we never do</h3>
           </div>
           <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600">
-            <li>Post, comment, message or change anything on your account</li>
-            <li>See your password or your direct messages</li>
+            <li>Post, comment or change anything on your account</li>
+            <li>
+              Read or send direct messages. Meta requires every app using this login to request the
+              messages permission; we never use it
+            </li>
+            <li>See your password</li>
             <li>Keep your data after you disconnect: it is deleted at once</li>
           </ul>
         </div>
       </section>
       <p className="text-xs text-slate-500">
         Details are in our <Link href="/privacy" className="font-medium text-indigo-600">privacy policy</Link>.
-        You can also remove access from Instagram: Settings → Website permissions → Apps and websites.
+        You can also remove our access in Meta: Business settings → Integrations, or Instagram →
+        Settings → Website permissions → Apps and websites.
       </p>
     </div>
   );

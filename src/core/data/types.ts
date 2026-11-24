@@ -61,7 +61,7 @@ export type StoredEngagement = {
 };
 
 // First-party Instagram Insights the account owner shared by connecting their
-// account (Business Login for Instagram). Totals cover the 28 days before
+// account (Instagram API with Unified Login). Totals cover the 28 days before
 // capturedOn; null means Instagram did not return that metric.
 export type ConnectedInsights = {
   capturedOn: string;

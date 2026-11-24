@@ -255,7 +255,7 @@ request plus a few embed requests.
 | `/discover` | Search the in-house index by name/category, country, audience size; sort by followers, engagement, recency |
 | `/connect` | "For creators": connect an Instagram professional account to share verified insights; shows connection status and a disconnect button |
 | `/privacy` | Privacy policy, including the data-deletion section Meta links to |
-| `/api/instagram/connect`, `/api/instagram/callback` | Business Login for Instagram start and callback |
+| `/api/instagram/connect`, `/api/instagram/callback` | Unified Login (Facebook Login for Business) start and callback |
 | `/api/instagram/disconnect` | POST: delete the signed-in creator's connection and insights |
 | `/api/instagram/deauthorize`, `/api/instagram/data-deletion` | Meta callbacks (signed_request) that delete a creator's connection |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region weighted rank table and remaining comparable suggestions |
@@ -599,44 +599,61 @@ fixtures are never stored.
 
 Public pages cannot show audience demographics, reach, views, saves or shares. A creator
 who owns an Instagram **professional** (Creator or Business) account can connect it on
-`/connect` with Business Login for Instagram. Their profile page then shows a
-**Verified Instagram Insights** card (28-day reach, views, accounts engaged,
-interactions, saves, shares) and the **audience** section (top countries, age groups,
-gender), labelled as shared by the account owner. The PDF report includes the audience.
+`/connect`. Their profile page then shows a **Verified Instagram Insights** card
+(28-day reach, views, accounts engaged, interactions, saves, shares) and the
+**audience** section (top countries, age groups, gender), labelled as shared by the
+account owner. The PDF report includes the audience.
 
-**How it works**
+**How it works: Instagram API with Unified Login**
 
-- Scopes: `instagram_business_basic`, `instagram_business_manage_insights`.
-- The callback exchanges the code for a 60-day token, stores it AES-256-GCM encrypted in
-  `connected_accounts` (migration `0002`), pulls insights at once, and sets a signed
-  30-day session cookie so the creator can see and manage their connection.
-- The daily collector (`/api/collect`) then refreshes each connected account's insights
-  into `account_insights` (one row per day) and refreshes the token every 7 days, so it
-  never reaches its 60-day expiry. Connected handles are also added to the tracked
-  rotation for daily public snapshots.
-- Follower demographics need 100+ followers (Meta's rule); smaller accounts show the
-  insights card without the audience section. Metrics Instagram does not return are
-  shown as a dash, never zero.
-- Disconnect, removing the app in Instagram (deauthorize callback) or a Meta data
-  deletion request all delete the connection, token and insights immediately.
+Meta no longer offers "API setup with Instagram login" to newer apps; this app uses
+the **Instagram API with Unified Login**, built on Facebook Login for Business.
 
-**Meta app setup (one time)**
+- The button opens `https://www.facebook.com/dialog/oauth` with the app ID and the
+  login configuration ID (`INSTAGRAM_LOGIN_CONFIG_ID`). The creator logs in with
+  Instagram or Facebook, picks their business portfolio and Instagram account, and
+  approves. No Facebook Page is needed, but a business portfolio is.
+- Configuration permissions: `instagram_basic`, `instagram_manage_insights`, and
+  `instagram_manage_messages` (required by Meta for this setup; the site never reads
+  or sends messages).
+- The callback exchanges the code at `graph.facebook.com/{v}/oauth/access_token` for a
+  Business Integration System User Access Token (does not expire), reads
+  `client_business_id` from `/me` and the shared accounts from
+  `/me/assigned_instagram_accounts`, stores the token AES-256-GCM encrypted per
+  Instagram account (`connected_accounts`, migrations `0002`/`0003`), pulls insights
+  at once, and sets a signed 30-day session cookie.
+- The daily collector refreshes each connected account's insights into
+  `account_insights` (one row per day). Connected handles are also tracked for daily
+  public snapshots. A revoked token (error 190) shows "Please reconnect".
+- Follower demographics need 100+ followers (Meta's rule). Metrics Instagram does not
+  return show a dash, never zero.
+- Disconnect, Meta's deauthorize callback, or a data deletion request delete the
+  connection, token and insights immediately (matched by Instagram account id or the
+  integration's app-scoped id).
 
-1. developers.facebook.com → your app → **Add product → Instagram → API setup with
-   Instagram login**.
-2. Under **Set up Instagram business login → Business login settings**, add the OAuth
-   redirect URI `https://www.instagram-analytics.com/api/instagram/callback`, and set
-   the deauthorize callback to `https://www.instagram-analytics.com/api/instagram/deauthorize`
-   and the data deletion request URL to
-   `https://www.instagram-analytics.com/api/instagram/data-deletion`.
-3. Copy the **Instagram App ID** and **Instagram app secret** into Vercel as
-   `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET`, and add `CONNECT_SECRET` (32+ random
-   characters, e.g. `openssl rand -base64 48`). Redeploy.
-4. Until Meta grants **Advanced Access** for `instagram_business_manage_insights`, only
-   Instagram accounts added to the app (App roles → Instagram testers, then accepted in
-   Instagram → Settings → Website permissions) can connect. Request Advanced Access in
-   **App Review** with the privacy policy URL `https://www.instagram-analytics.com/privacy`
-   and a screen recording of the connect flow.
+**Configured in the Meta app (Vibz Profile Insights)**
+
+- Business portfolio: Campaign Masters UAE.
+- Use case Instagram API → API setup with Unified login → configuration
+  "Instagram API (Unified Login)", ID `1141747911599517`, redirect URL
+  `https://www.instagram-analytics.com/api/instagram/callback`.
+- Facebook Login for Business → Settings: deauthorize callback
+  `…/api/instagram/deauthorize`, data deletion request URL `…/api/instagram/data-deletion`.
+
+**Vercel environment**
+
+`META_APP_ID`, `INSTAGRAM_LOGIN_CONFIG_ID` (not secret), `META_APP_SECRET` and
+`CONNECT_SECRET` (32+ random characters; secrets). Without all four plus
+`DATABASE_URL`, `/connect` shows "not enabled".
+
+**Access levels**
+
+Saving the configuration gives Standard Access, which works only for people with a role
+on the app (add the Instagram account as an Instagram Tester under App roles and accept
+the invite in Instagram → Settings → Website permissions → Apps and websites → Tester
+Invites). To let any creator connect, request **Advanced Access** for each permission
+in App Review (privacy policy: `https://www.instagram-analytics.com/privacy`) and switch
+the app to Live mode; Meta may require business verification for the portfolio.
 
 ## Weekly digest (free 30-day trial)
 
