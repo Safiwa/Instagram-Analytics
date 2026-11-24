@@ -272,9 +272,11 @@ export function ProfileDashboard({
             label="Fake-follower estimate"
             value={describeFakeFollowers(metrics)}
             note={
-              metrics.authenticityEstimated
-                ? "Modeled range from public signals, not a count"
-                : undefined
+              metrics.followerAudit
+                ? `Audit of ${metrics.followerAudit.sampleSize.toLocaleString("en-US")} sampled followers · 95% range`
+                : metrics.authenticityEstimated
+                  ? "Modeled range from public signals, not a count"
+                  : undefined
             }
           />
         </div>

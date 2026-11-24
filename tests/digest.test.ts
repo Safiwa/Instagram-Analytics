@@ -23,6 +23,8 @@ const metrics = {
   fakeFollowersPct: null,
   fakeFollowersRange: null,
   fakeFollowerRisk: null,
+  fakeFollowerSource: null,
+  followerAudit: null,
   followerGrowthPct: 4.56,
   authenticityPct: null,
   growthEstimated: true,

@@ -1,3 +1,5 @@
+import type { FollowerSample } from "../analytics/followerAudit";
+
 export type Post = {
   id: string;
   type: "Reel" | "Carousel" | "Photo" | "Video";
@@ -67,6 +69,10 @@ export type CreatorProfile = {
   fakeFollowers?: number;
   followerHistory: MonthlyPoint[];
   recentPosts: Post[];
+  // A random sample of the account's followers, when a data source supplies
+  // one. Instagram's API cannot list another account's followers, so this is
+  // usually absent and fake followers fall back to the profile-level model.
+  followerSample?: FollowerSample[];
   audience?: Audience;
   thirdPartyEngagement?: ThirdPartyEngagement;
 };
