@@ -331,7 +331,9 @@ export function ProfileDashboard({
         >
           {profile.isPrivate
             ? "This account is private. Public follower and post counts are available, but posts and engagement are hidden, so modeled metrics are unavailable."
-            : hasStoredEngagement
+            : profile.connectedInsights
+              ? "This account's owner connected it to this site, so audience demographics, reach, views, saves and shares below come from Instagram Insights. Followers, likes and comments are public data. Fake followers, authenticity, and 12-month growth remain modeled estimates."
+              : hasStoredEngagement
               ? `Instagram hid this account's posts on this lookup. Saves, reach, and audience demographics are not exposed. The engagement figures are this site's stored measurement from ${storedOn}; fake followers, authenticity, and growth are not modeled without public posts.`
               : profile.source === "public"
                 ? "Public web data from Instagram's public profile page. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."
@@ -701,14 +703,58 @@ export function ProfileDashboard({
         </div>
       </section>
 
-      {profile.audience ? (
+      {profile.connectedInsights ? (
         <section
-          data-testid="audience"
-          className="grid gap-6 rounded-2xl border border-slate-200 bg-white p-6 md:grid-cols-3"
+          data-testid="connected-insights"
+          className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm"
         >
-          <AudienceBars title="Top countries" slices={profile.audience.topCountries} />
-          <AudienceBars title="Age groups" slices={profile.audience.ageGroups} />
-          <AudienceBars title="Gender" slices={profile.audience.gender} />
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <BadgeCheck className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+              <h3 className="text-sm font-semibold text-slate-950">Verified Instagram Insights</h3>
+            </div>
+            <p className="text-xs text-slate-500">
+              Shared by @{profile.username} · last {profile.connectedInsights.windowDays} days ·
+              updated {formatDate(`${profile.connectedInsights.capturedOn}T00:00:00Z`)}
+            </p>
+          </div>
+          <dl className="mt-4 grid gap-4 sm:grid-cols-3 xl:grid-cols-6">
+            {(
+              [
+                ["Reach", profile.connectedInsights.reach],
+                ["Views", profile.connectedInsights.views],
+                ["Accounts engaged", profile.connectedInsights.accountsEngaged],
+                ["Interactions", profile.connectedInsights.totalInteractions],
+                ["Saves", profile.connectedInsights.saves],
+                ["Shares", profile.connectedInsights.shares],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-xs text-slate-500">{label}</dt>
+                <dd className="mt-1 text-lg font-semibold text-slate-950">{formatCompact(value)}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-3 text-[11px] text-slate-400">
+            From Instagram Insights via the account owner&apos;s own connection, not estimated. A dash
+            (—) means Instagram did not return that metric.
+          </p>
+        </section>
+      ) : null}
+
+      {profile.audience ? (
+        <section data-testid="audience" className="rounded-2xl border border-slate-200 bg-white p-6">
+          {profile.connectedInsights ? (
+            <p className="mb-4 text-xs text-slate-500">
+              Follower demographics from Instagram Insights, shared by @{profile.username}. Instagram
+              returns the top values only, so shares are of those values.
+            </p>
+          ) : null}
+          <div className="grid gap-6 md:grid-cols-3">
+            <AudienceBars title="Top countries" slices={profile.audience.topCountries} />
+            <AudienceBars title="Age groups" slices={profile.audience.ageGroups} />
+            <AudienceBars title="Gender" slices={profile.audience.gender} />
+          </div>
         </section>
       ) : null}
 

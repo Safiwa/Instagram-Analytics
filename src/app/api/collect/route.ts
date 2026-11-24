@@ -2,6 +2,7 @@ import { resolveProfile } from "../../../core/data/adapter";
 import { LEADERBOARD_HANDLES, UAE_GCC_HANDLES } from "../../../core/data/leaderboard";
 import { isDatabaseConfigured } from "../../../core/db/client";
 import { runCollector } from "../../../core/db/collector";
+import { syncDueConnectedAccounts } from "../../../core/instagram/sync";
 import { log } from "../../../core/logging/logger";
 
 export const runtime = "nodejs";
@@ -25,8 +26,11 @@ export async function GET(request: Request) {
     const result = await runCollector({
       trackedHandles: [...LEADERBOARD_HANDLES, ...UAE_GCC_HANDLES],
       resolve: resolveProfile,
+      budgetMs: 35_000,
     });
-    return Response.json({ ok: true, ...result });
+    // Connected creators: refresh tokens when due and store today's insights.
+    const connected = await syncDueConnectedAccounts({ budgetMs: 12_000 });
+    return Response.json({ ok: true, ...result, connected });
   } catch (error) {
     log.error("daily collector failed", {
       message: error instanceof Error ? error.message : "unknown",

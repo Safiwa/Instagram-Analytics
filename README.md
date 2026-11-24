@@ -253,6 +253,11 @@ request plus a few embed requests.
 | `/` | Agency home and analysis dashboard: creator/brand collaboration positioning, lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, benchmark tiers, sources, confidence |
 | `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and Middle East category benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
 | `/discover` | Search the in-house index by name/category, country, audience size; sort by followers, engagement, recency |
+| `/connect` | "For creators": connect an Instagram professional account to share verified insights; shows connection status and a disconnect button |
+| `/privacy` | Privacy policy, including the data-deletion section Meta links to |
+| `/api/instagram/connect`, `/api/instagram/callback` | Business Login for Instagram start and callback |
+| `/api/instagram/disconnect` | POST: delete the signed-in creator's connection and insights |
+| `/api/instagram/deauthorize`, `/api/instagram/data-deletion` | Meta callbacks (signed_request) that delete a creator's connection |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region weighted rank table and remaining comparable suggestions |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
@@ -527,7 +532,11 @@ fixtures are never stored.
 
 - Every profile page and comparison lookup stores today's snapshot after the
   response is sent (`after()` from `next/server`), so pages are not slowed down.
-- `/api/collect` runs daily at 02:15 UTC (`vercel.json`). It marks the homepage
+- `/api/collect` runs daily at 02:15 UTC as the `daily-collector` Vercel Schedule
+  (`vercel.json` → `schedules`; the weekly digest is the `weekly-digest` schedule). Both
+  were migrated from legacy Cron Jobs with `requestMethod: "GET"` and still receive
+  `Authorization: Bearer $CRON_SECRET`. Run either on demand from Vercel → Schedules →
+  Run Schedule. It marks the homepage
   leaderboard and UAE/GCC handles as tracked, then refreshes tracked profiles and
   anything searched in the last 30 days, oldest snapshot first, within a 40-second
   budget. Handles that do not fit are first in line the next day.
@@ -571,7 +580,10 @@ fixtures are never stored.
    npm run db:migrate
    ```
 
-   It is idempotent: already-applied files are skipped.
+   It is idempotent: already-applied files are skipped. Since migration `0002`,
+   Vercel deployments also run it automatically: the `vercel-build` script runs
+   `scripts/db-migrate.mjs --if-configured` before `next build`, so each deployment
+   (and each preview database branch) gets new migrations before the code that needs them.
 3. Make sure `CRON_SECRET` is set in Vercel (it is shared with the weekly digest),
    then redeploy. Test the collector:
 
@@ -580,6 +592,49 @@ fixtures are never stored.
    ```
 
    Expected: `{"ok":true,"due":N,"stored":N,"failed":0,"deferred":0}`.
+
+## Creator connections (verified Instagram Insights)
+
+Public pages cannot show audience demographics, reach, views, saves or shares. A creator
+who owns an Instagram **professional** (Creator or Business) account can connect it on
+`/connect` with Business Login for Instagram. Their profile page then shows a
+**Verified Instagram Insights** card (28-day reach, views, accounts engaged,
+interactions, saves, shares) and the **audience** section (top countries, age groups,
+gender), labelled as shared by the account owner. The PDF report includes the audience.
+
+**How it works**
+
+- Scopes: `instagram_business_basic`, `instagram_business_manage_insights`.
+- The callback exchanges the code for a 60-day token, stores it AES-256-GCM encrypted in
+  `connected_accounts` (migration `0002`), pulls insights at once, and sets a signed
+  30-day session cookie so the creator can see and manage their connection.
+- The daily collector (`/api/collect`) then refreshes each connected account's insights
+  into `account_insights` (one row per day) and refreshes the token every 7 days, so it
+  never reaches its 60-day expiry. Connected handles are also added to the tracked
+  rotation for daily public snapshots.
+- Follower demographics need 100+ followers (Meta's rule); smaller accounts show the
+  insights card without the audience section. Metrics Instagram does not return are
+  shown as a dash, never zero.
+- Disconnect, removing the app in Instagram (deauthorize callback) or a Meta data
+  deletion request all delete the connection, token and insights immediately.
+
+**Meta app setup (one time)**
+
+1. developers.facebook.com → your app → **Add product → Instagram → API setup with
+   Instagram login**.
+2. Under **Set up Instagram business login → Business login settings**, add the OAuth
+   redirect URI `https://www.instagram-analytics.com/api/instagram/callback`, and set
+   the deauthorize callback to `https://www.instagram-analytics.com/api/instagram/deauthorize`
+   and the data deletion request URL to
+   `https://www.instagram-analytics.com/api/instagram/data-deletion`.
+3. Copy the **Instagram App ID** and **Instagram app secret** into Vercel as
+   `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET`, and add `CONNECT_SECRET` (32+ random
+   characters, e.g. `openssl rand -base64 48`). Redeploy.
+4. Until Meta grants **Advanced Access** for `instagram_business_manage_insights`, only
+   Instagram accounts added to the app (App roles → Instagram testers, then accepted in
+   Instagram → Settings → Website permissions) can connect. Request Advanced Access in
+   **App Review** with the privacy policy URL `https://www.instagram-analytics.com/privacy`
+   and a screen recording of the connect flow.
 
 ## Weekly digest (free 30-day trial)
 
