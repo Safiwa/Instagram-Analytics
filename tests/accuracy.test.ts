@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { estimatePublicSignals } from "../src/core/analytics/estimates";
+import { engagementTrend, estimatePublicSignals } from "../src/core/analytics/estimates";
 import { analyzeGrowth } from "../src/core/analytics/growth";
 import { computeMetrics, describeFakeFollowers } from "../src/core/analytics/metrics";
-import { likesVisible, quartileDispersion } from "../src/core/analytics/posts";
+import { likesVisible, quartileDispersion, withoutViralOutlier } from "../src/core/analytics/posts";
 import type { CreatorProfile, Post } from "../src/core/data/types";
 
 const NOW = new Date("2026-11-24T12:00:00.000Z");
@@ -124,5 +124,23 @@ describe("30-day vs 12-month consistency", () => {
       const digits = String(Math.abs(growth.monthGrowthFollowers)).replace(/0+$/, "");
       expect(digits.length).toBeLessThanOrEqual(2);
     }
+  });
+});
+
+describe("interaction trend", () => {
+  it("ignores a single viral outlier when comparing older and recent posts", () => {
+    const posts = creator().recentPosts;
+    // Visible posts without the viral reel: older median 15,154 interactions,
+    // recent median 8,244, so about -45.6% instead of -70.7% with it.
+    const trend = engagementTrend(posts)!;
+    expect(trend).toBeCloseTo(-45.6, 0);
+    expect(trend).toBeGreaterThan(-60);
+  });
+
+  it("keeps every post when no post stands far above the rest", () => {
+    const even = [post(0, 100, 5), post(1, 120, 5), post(2, 90, 5), post(3, 110, 5), post(4, 250, 5)];
+    expect(withoutViralOutlier(even, (item) => item.likes)).toHaveLength(5);
+    const spiky = [...even.slice(0, 4), post(4, 5_000, 5)];
+    expect(withoutViralOutlier(spiky, (item) => item.likes)).toHaveLength(4);
   });
 });
