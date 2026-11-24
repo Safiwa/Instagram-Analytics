@@ -31,7 +31,8 @@ import { MetricCard } from "../../components/MetricCard";
 import { inferCountrySignal } from "../../core/analytics/country";
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
 import type { GrowthAnalysis } from "../../core/analytics/growth";
-import { round2, type ProfileMetrics } from "../../core/analytics/metrics";
+import { describeFakeFollowers, round2, type ProfileMetrics } from "../../core/analytics/metrics";
+import { likesVisible } from "../../core/analytics/posts";
 import type { PeerMatch, PeerRanking } from "../../core/analytics/peer";
 import type {
   KeyComparison,
@@ -123,7 +124,7 @@ export function ProfileDashboard({
 }: ProfileDashboardProps) {
   const interactions = profile.recentPosts.map((post) => ({
     label: formatDate(post.postedAt, false),
-    likes: post.likes,
+    likes: likesVisible(post) ? post.likes : 0,
     comments: post.comments,
     saves: post.saves,
   }));
@@ -269,8 +270,14 @@ export function ProfileDashboard({
           <Stat
             icon={Video}
             label="Fake-follower estimate"
-            value={formatCompact(metrics.fakeFollowers)}
-            note={metrics.authenticityEstimated ? "Modeled from public signals" : undefined}
+            value={describeFakeFollowers(metrics)}
+            note={
+              metrics.followerAudit
+                ? `Audit of ${metrics.followerAudit.sampleSize.toLocaleString("en-US")} sampled followers · 95% range`
+                : metrics.authenticityEstimated
+                  ? "Modeled range from public signals, not a count"
+                  : undefined
+            }
           />
         </div>
       </section>
@@ -337,9 +344,19 @@ export function ProfileDashboard({
               ? "No public posts available"
               : hasThirdPartyEngagement
                 ? "Modash estimate · likes + comments / followers"
-                : metrics.engagementBasis === "likes+comments"
-                  ? "Public likes + comments / followers"
-                  : "Avg likes + comments + saves / followers"
+                : `${
+                    metrics.engagementBasis === "likes+comments"
+                      ? "Public likes + comments / followers"
+                      : "Avg likes + comments + saves / followers"
+                  }${
+                    metrics.typicalEngagementRate === null
+                      ? ""
+                      : ` · typical post ${formatPercent(metrics.typicalEngagementRate)}`
+                  }${
+                    metrics.hiddenLikePosts > 0
+                      ? ` · ${metrics.hiddenLikePosts} post${metrics.hiddenLikePosts === 1 ? "" : "s"} with hidden likes excluded`
+                      : ""
+                  }`
           }
         />
         <MetricCard
@@ -387,7 +404,9 @@ export function ProfileDashboard({
               ? "No public posts available"
               : hasThirdPartyEngagement
                 ? "Modash estimate · average per post"
-                : "Average per public post"
+                : metrics.hiddenLikePosts > 0
+                  ? "Average of posts that show likes"
+                  : "Average per public post"
           }
         />
         <MetricCard
@@ -431,7 +450,7 @@ export function ProfileDashboard({
             <p className="mt-1 text-xs text-slate-500">
               {growth.monthGrowthFollowers === null
                 ? "Not available"
-                : `${growth.monthGrowthFollowers >= 0 ? "+" : ""}${growth.monthGrowthFollowers.toLocaleString("en-US")} followers ${growth.growthEstimated ? "(Est.)" : ""}`}
+                : `${growth.growthEstimated ? "≈ " : ""}${growth.monthGrowthFollowers >= 0 ? "+" : ""}${growth.monthGrowthFollowers.toLocaleString("en-US")} followers ${growth.growthEstimated ? "(Est.)" : ""}`}
             </p>
           </div>
           <div className="rounded-xl bg-slate-50 p-4">
@@ -649,7 +668,9 @@ export function ProfileDashboard({
                       </span>
                     </td>
                     <td className="max-w-md py-3 pr-4 text-slate-950">{post.caption}</td>
-                    <td className="py-3 pr-4 text-right">{formatCompact(post.likes)}</td>
+                    <td className="py-3 pr-4 text-right">
+                      {likesVisible(post) ? formatCompact(post.likes) : "Hidden"}
+                    </td>
                     <td className="py-3 pr-4 text-right">{formatCompact(post.comments)}</td>
                     {hasSaves ? (
                       <td className="py-3 text-right">{formatCompact(post.saves)}</td>

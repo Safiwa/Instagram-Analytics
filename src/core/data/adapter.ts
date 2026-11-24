@@ -92,6 +92,7 @@ export async function resolveProfile(handle: string): Promise<ProfileResolution>
             ? {
                 ...live,
                 isVerified: identity.isVerified,
+                verificationUnknown: false,
                 profilePictureUrl: identity.profilePictureUrl ?? live.profilePictureUrl,
                 accountCountry: identity.accountCountry ?? live.accountCountry ?? null,
               }

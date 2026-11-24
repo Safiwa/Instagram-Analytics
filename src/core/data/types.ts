@@ -1,9 +1,14 @@
+import type { FollowerSample } from "../analytics/followerAudit";
+
 export type Post = {
   id: string;
   type: "Reel" | "Carousel" | "Photo" | "Video";
   caption: string;
   postedAt: string;
   likes: number;
+  // True when Instagram hides this post's like count (common on paid
+  // partnerships). `likes` is then 0 and must not be read as zero likes.
+  likesHidden?: boolean;
   comments: number;
   saves?: number;
   reach?: number;
@@ -51,6 +56,9 @@ export type CreatorProfile = {
   following: number;
   postsCount: number;
   isVerified: boolean;
+  // True when the data source could not tell whether the badge exists
+  // (Business Discovery never returns it). isVerified is then false.
+  verificationUnknown?: boolean;
   isPrivate?: boolean;
   source: "demo" | "public" | "live";
   profilePictureUrl?: string;
@@ -61,6 +69,10 @@ export type CreatorProfile = {
   fakeFollowers?: number;
   followerHistory: MonthlyPoint[];
   recentPosts: Post[];
+  // A random sample of the account's followers, when a data source supplies
+  // one. Instagram's API cannot list another account's followers, so this is
+  // usually absent and fake followers fall back to the profile-level model.
+  followerSample?: FollowerSample[];
   audience?: Audience;
   thirdPartyEngagement?: ThirdPartyEngagement;
 };
