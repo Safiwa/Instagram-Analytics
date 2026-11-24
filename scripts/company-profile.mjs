@@ -8,6 +8,9 @@ import { PDFDocument, degrees, rgb, StandardFonts } from "pdf-lib";
 const OUT = "Campaign-Masters-UAE-Company-Profile.pdf";
 const LOGO = "assets/campaign-masters-logo.png";
 const ARABIC_FONT = "assets/NotoNaskhArabic.ttf";
+const IG_HANDLE = "@campaignmastersagency";
+const IG_URL = `https://www.instagram.com/${IG_HANDLE.slice(1)}/`;
+const IG_HEADER = `IG ${IG_HANDLE}  |  ${IG_URL}`;
 
 const W = 595.28;
 const H = 841.89;
@@ -151,6 +154,7 @@ const logoImage = await doc.embedPng(readFileSync(LOGO));
   drawLogo(p, 48, 54, 46);
   text(p, "CAMPAIGN MASTERS UAE", 110, 72, 17, bold, C.white, { characterSpacing: 0.6 });
   text(p, "CREATOR PARTNERSHIPS  |  EVENT ACTIVATIONS", 110, 90, 9, regular, C.slateLight, { characterSpacing: 1.1 });
+  text(p, IG_HEADER, 110, 108, 8.5, regular, C.slateLight, { characterSpacing: 0.25 });
   text(p, "COMPANY PROFILE  /  2026", W - 48 - widthOf("COMPANY PROFILE  /  2026", 9, bold), 74, 9, bold, C.slateLight, { characterSpacing: 1 });
 
   eyebrow(p, "UAE-based  |  Middle East reach", 48, 205, true);
@@ -460,6 +464,7 @@ function renderBilingualPage(page, index) {
   const pageNumber = String(index + 2).padStart(2, "0");
   return `<div class="page">
     <div class="topbar"></div>
+    <div class="ig-head">${escapeHtml(IG_HEADER)}</div>
     <div class="page-no">${pageNumber}</div>
     <div class="header">
       <div class="header-side">
@@ -535,6 +540,7 @@ async function renderBilingualPages() {
       radial-gradient(circle at 82% 72%, rgba(56,211,232,.08) 0 1.6mm, transparent 1.8mm);
   }
   .topbar { position: absolute; left: 0; top: 0; width: 100%; height: 2mm; background: #5952f2; }
+  .ig-head { position: absolute; left: 13mm; top: 7mm; font-size: 2.15mm; font-weight: 700; letter-spacing: .1mm; color: #7a879c; }
   .page-no { position: absolute; right: 13mm; top: 7mm; font-size: 2.4mm; font-weight: 800; color: #7a879c; letter-spacing: .2mm; }
   .header { position: absolute; left: 13mm; right: 13mm; top: 15mm; height: 36mm; display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; overflow: hidden; }
   .header-side.arabic { direction: rtl; text-align: right; font-family: "NotoNaskh", serif; }
