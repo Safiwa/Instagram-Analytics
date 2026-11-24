@@ -50,13 +50,11 @@ describe("no-post profile disclosure", () => {
     expect(dashboard).toContain('"Posts not exposed"');
   });
 
-  it("labels a Modash-filled no-post profile instead of claiming Instagram measurements", () => {
-    expect(dashboard).toContain("Modash estimate");
-    expect(dashboard).toContain("Modash est. engagement");
-    expect(dashboard).toContain("not Instagram measurements");
-    expect(dashboard).toContain(
-      "a Modash estimate, not directly comparable with this peer's public-post average",
-    );
+  it("labels a stored-snapshot no-post profile with its measurement date, never a third party", () => {
+    expect(dashboard).toContain("this site&apos;s own measurement from");
+    expect(dashboard).toContain("` · engagement stored ${storedOn}`");
+    expect(dashboard).toContain("this site's stored measurement from ${storedOn}, not today's public posts");
+    expect(dashboard.toLowerCase()).not.toContain("modash");
   });
 
   it("uses the exact similar-profile rank copy", () => {

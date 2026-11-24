@@ -1,5 +1,6 @@
 import { parseHandles, resolveProfile } from "../../../core/data/adapter";
 import type { CreatorProfile } from "../../../core/data/types";
+import { withStoredHistory } from "../../../core/db/enrich";
 import { log } from "../../../core/logging/logger";
 import { buildReport } from "../../../features/report/reportDocument";
 
@@ -15,7 +16,12 @@ export async function GET(request: Request) {
   }
 
   const resolutions = await Promise.all(
-    parsed.handles.map((handle) => resolveProfile(handle)),
+    parsed.handles.map(async (handle) => {
+      const resolution = await resolveProfile(handle);
+      return resolution.status === "found"
+        ? { ...resolution, profile: await withStoredHistory(resolution.profile) }
+        : resolution;
+    }),
   );
   const profiles: CreatorProfile[] = [];
   const missing: string[] = [];

@@ -252,6 +252,7 @@ request plus a few embed requests.
 |---|---|
 | `/` | Agency home and analysis dashboard: creator/brand collaboration positioning, lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, benchmark tiers, sources, confidence |
 | `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and Middle East category benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
+| `/discover` | Search the in-house index by name/category, country, audience size; sort by followers, engagement, recency |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region weighted rank table and remaining comparable suggestions |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
@@ -364,10 +365,11 @@ bursts of Business Discovery calls (`code 4`), so refreshes are deliberately pac
   changing `LEADERBOARD_HANDLES` or the rebuild logic bumps it, and any profile no longer in the
   curated list is filtered out on the next merge.
 
-The homepage engagement-rate tier table uses published Modash ranges by follower tier (Nano 5-10%,
-Micro 3-7%, Macro 1-3%, Mega 0.5-2%) with a link to the source. This app uses average likes and
-comments divided by followers over up to 12 recent posts, so the comparison is directional, not
-exact. The matching tier also appears as a hint on each profile's engagement card.
+The homepage engagement-rate tier table ("Our engagement index") is built from this site's own
+stored snapshots: the latest measured engagement rate of every profile stored in the last 30 days,
+grouped into Nano (1K-10K), Micro (10K-100K), Macro (100K-1M) and Mega (1M+). Each tier shows the
+middle half (25th-75th percentile) and median once it holds at least 8 profiles; until then it
+shows "Building · n/8". No third-party ranges are used. See "In-house history database" below.
 
 The homepage hero leads with a compact, top-positioned headline "Leading Instagram analytics platform
 in the UAE — performance-driven tools and a practical growth plan", followed by the lookup prompt.
@@ -517,9 +519,9 @@ measurements instead of third-party tools. It is optional: without
 | `posts` | post (keyed by shortcode) | type, date, permalink, caption, hashtags, location |
 | `post_snapshots` | post per UTC day | likes (null when hidden), comments, views |
 
-Only values measured from Instagram are written. Third-party engagement shown on
-screen when Instagram hides all posts is never stored, and demo fixtures are never
-stored.
+Only values measured from Instagram on that day are written. The stored-engagement
+fallback shown when Instagram hides all posts is never written back, and demo
+fixtures are never stored.
 
 **When rows are written**
 
@@ -537,6 +539,24 @@ stored.
   measured against it, the `Est.` badge disappears and the hint reads
   "Measured from stored snapshots". Until then the disclosed estimate stays.
 - The 12-month growth figure stays a disclosed estimate until enough history exists.
+- Follower history panel (`tracking-history`): once a profile has two or more daily
+  snapshots, the profile page shows a daily followers chart with engagement rate on a
+  second axis (30D / 90D / 1Y ranges) and a change table for 1, 7, 30 and 90 days.
+  Each window uses the latest stored snapshot at least that old; shorter histories
+  show "Not enough history".
+- Engagement vs our index (`index-position`): the profile's percentile among indexed
+  profiles of the same audience tier (itself excluded), with the tier median and
+  middle half. Shown only when the tier holds at least 8 other profiles.
+- Stored engagement: when Instagram hides every post on a lookup, engagement rate and
+  averages come from the profile's most recent stored snapshot with visible posts
+  (up to 60 days old), labelled "Stored" with the measurement date on the page, in
+  rankings and in the PDF. This replaced the earlier hard-coded third-party figures.
+- Middle East peer panel: curated peers missing from the tracked pool are filled from
+  the index (`loadIndexedProfiles`) instead of a hand-captured static file.
+- `/discover` ("Find creators" in the header): search the index by name, handle or
+  category, country (from Instagram's "Account based in"), audience size, and sort by
+  followers, engagement or recency. Private profiles and profiles not measured in 30
+  days are excluded. Without `DATABASE_URL` the page explains that search is not enabled.
 
 **Setup (one time)**
 

@@ -36,11 +36,11 @@ export function postKey(post: Post): string {
   return match?.[1] ?? post.id;
 }
 
-// Only values measured from Instagram are stored. Third-party engagement (used
-// on screen when Instagram hides every post) is deliberately left out.
+// Only values measured from Instagram today are stored. A stored-engagement
+// fallback (shown when Instagram hides every post) is never written back.
 export function snapshotValues(profile: CreatorProfile) {
   const posts = profile.recentPosts;
-  const metrics = computeMetrics({ ...profile, thirdPartyEngagement: undefined });
+  const metrics = computeMetrics({ ...profile, storedEngagement: undefined });
   const measured = metrics.engagementSource === "public-posts";
   const views = posts
     .map((post) => post.viewCount)

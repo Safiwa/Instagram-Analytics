@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { modashBenchmark } from "../src/core/analytics/benchmark";
 import {
   isIncompletePool,
   rankProfiles,
@@ -380,16 +379,5 @@ describe("country leaderboards", () => {
     const board = rankProfiles([], NOW);
     expect(Object.keys(board.regional)).toEqual(["usa", "europe", "middle-east", "uae"]);
     expect(board.regional.uae).toEqual([]);
-  });
-});
-
-describe("Modash benchmark tiers", () => {
-  it("maps follower counts to the published audience tiers", () => {
-    expect(modashBenchmark(500)).toBeNull();
-    expect(modashBenchmark(5_000)?.label).toBe("Nano");
-    expect(modashBenchmark(50_000)?.label).toBe("Micro");
-    expect(modashBenchmark(500_000)?.label).toBe("Macro");
-    expect(modashBenchmark(50_000_000)?.label).toBe("Mega");
-    expect(modashBenchmark(1_000_000)?.range).toBe("0.5-2%");
   });
 });

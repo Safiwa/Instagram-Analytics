@@ -157,6 +157,11 @@ export function regionForHandle(username: string): Region | null {
 
 // The Middle East board covers every configured Middle East country, including
 // the UAE. The UAE board remains a narrower editorial view of the same accounts.
+// Every curated handle shown on a region board (the Middle East board includes UAE).
+export function regionBoardHandles(board: Region): string[] {
+  return Object.keys(ACCOUNT_REGIONS).filter((handle) => isInRegionBoard(handle, board));
+}
+
 export function isInRegionBoard(username: string, board: Region): boolean {
   const region = regionForHandle(username);
   if (region === board) {

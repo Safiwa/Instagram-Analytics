@@ -30,6 +30,7 @@ import { InstagramLink } from "../../components/InstagramLink";
 import { MetricCard } from "../../components/MetricCard";
 import { inferCountrySignal } from "../../core/analytics/country";
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
+import type { IndexPosition } from "../../core/analytics/benchmark";
 import type { GrowthAnalysis } from "../../core/analytics/growth";
 import { describeFakeFollowers, round2, type ProfileMetrics } from "../../core/analytics/metrics";
 import { likesVisible } from "../../core/analytics/posts";
@@ -41,6 +42,7 @@ import type {
 } from "../../core/analytics/regional";
 import type { AudienceSlice, CreatorProfile } from "../../core/data/types";
 import { formatCompact, formatDate, formatPercent } from "../../core/format";
+import { IndexPositionCard, TrackingHistoryPanel } from "./TrackingHistory";
 
 const TOOLTIP_STYLE = {
   borderRadius: 12,
@@ -63,6 +65,7 @@ type ProfileDashboardProps = {
   regionalPeer: RegionalPeer | null;
   regionalComparison: KeyComparison[];
   regionalRanking: RegionalRanking | null;
+  indexPosition?: IndexPosition | null;
 };
 
 function Stat({
@@ -121,6 +124,7 @@ export function ProfileDashboard({
   regionalPeer,
   regionalComparison,
   regionalRanking,
+  indexPosition = null,
 }: ProfileDashboardProps) {
   const interactions = profile.recentPosts.map((post) => ({
     label: formatDate(post.postedAt, false),
@@ -132,15 +136,18 @@ export function ProfileDashboard({
   const hasViews = profile.recentPosts.some((post) => typeof post.viewCount === "number");
   const noPublicPosts =
     profile.source !== "demo" && !profile.isPrivate && profile.recentPosts.length === 0;
-  const hasThirdPartyEngagement = metrics.engagementSource === "third-party";
+  const hasStoredEngagement = metrics.engagementSource === "stored-snapshot";
+  const storedOn = metrics.storedEngagement
+    ? formatDate(`${metrics.storedEngagement.measuredOn}T00:00:00Z`)
+    : "";
   const engagementUnavailable = metrics.engagementSource === "unavailable";
   const benchmarkCountry = inferCountrySignal(profile).country;
   const benchmarkScope = benchmarkCountry
     ? `Both the closest peer and ranking table are limited to accounts with the same inferred country (${benchmarkCountry}).`
     : "Instagram has not published an “Account based in” value for this profile, so the closest available country or region tier is used instead.";
   // rankFactors falls back to zero when Instagram exposes no posts. That zero is
-  // a placeholder, not a measurement. Engagement from a disclosed third party is
-  // real source data and stays visible; follower change and Reels remain hidden.
+  // a placeholder, not a measurement. Engagement from a dated stored snapshot is
+  // a real earlier measurement and stays visible; follower change and Reels remain hidden.
   type SignalRow = {
     isTarget: boolean;
     postsNotExposed: boolean;
@@ -153,8 +160,8 @@ export function ProfileDashboard({
   const momentumLabel =
     growth.momentum === "unknown" ? "Not enough data" : growth.momentum.charAt(0).toUpperCase() + growth.momentum.slice(1);
   const peerDelta = peer ? round2(metrics.engagementRate - peer.metrics.engagementRate) : null;
-  const peerInsight = hasThirdPartyEngagement
-    ? "a Modash estimate, not directly comparable with this peer's public-post average"
+  const peerInsight = hasStoredEngagement
+    ? `this site's stored measurement from ${storedOn}, not today's public posts`
     : noPublicPosts
       ? "not comparable because this account's posts were not exposed"
       : peerDelta === null
@@ -294,22 +301,13 @@ export function ProfileDashboard({
           data-testid="no-posts-notice"
           className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
         >
-          {hasThirdPartyEngagement && metrics.thirdPartyEngagement ? (
+          {hasStoredEngagement && metrics.storedEngagement ? (
             <>
               Instagram did not expose this account&apos;s posts on this lookup. Engagement rate,
-              average likes, and average comments below are{" "}
-              <a
-                href={metrics.thirdPartyEngagement.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium underline"
-              >
-                {metrics.thirdPartyEngagement.source} estimates
-              </a>{" "}
-              from its public engagement-rate calculator (report updated{" "}
-              {formatDate(metrics.thirdPartyEngagement.reportUpdatedAt)}), not Instagram
-              measurements. Reels, fake followers, authenticity, and follower growth remain
-              unavailable. A dash (—) means the data was not exposed, not zero.
+              average likes, and average comments below are this site&apos;s own measurement from
+              public posts on <strong>{storedOn}</strong>, the most recent stored snapshot with
+              visible posts. Reels, fake followers, authenticity, and follower growth from posts
+              remain unavailable. A dash (—) means the data was not exposed, not zero.
             </>
           ) : (
             <>
@@ -333,8 +331,8 @@ export function ProfileDashboard({
         >
           {profile.isPrivate
             ? "This account is private. Public follower and post counts are available, but posts and engagement are hidden, so modeled metrics are unavailable."
-            : hasThirdPartyEngagement
-              ? "Instagram profile data is public-web sourced. Saves, reach, audience demographics, and measured follower history are not exposed. The engagement figures are third-party Modash estimates; fake followers, authenticity, and growth are not modeled without public posts."
+            : hasStoredEngagement
+              ? `Instagram hid this account's posts on this lookup. Saves, reach, and audience demographics are not exposed. The engagement figures are this site's stored measurement from ${storedOn}; fake followers, authenticity, and growth are not modeled without public posts.`
               : profile.source === "public"
                 ? "Public web data from Instagram's public profile page. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."
                 : "Official API data via Instagram Business Discovery. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."}
@@ -345,12 +343,12 @@ export function ProfileDashboard({
         <MetricCard
           label="Engagement rate"
           value={engagementUnavailable ? "—" : formatPercent(metrics.engagementRate)}
-          badge={hasThirdPartyEngagement ? "Est." : undefined}
+          badge={hasStoredEngagement ? "Stored" : undefined}
           hint={
             engagementUnavailable
               ? "No public posts available"
-              : hasThirdPartyEngagement
-                ? "Modash estimate · likes + comments / followers"
+              : hasStoredEngagement
+                ? `Measured ${storedOn} · likes + comments / followers`
                 : `${
                     metrics.engagementBasis === "likes+comments"
                       ? "Public likes + comments / followers"
@@ -407,12 +405,12 @@ export function ProfileDashboard({
         <MetricCard
           label="Avg likes"
           value={engagementUnavailable ? "—" : formatCompact(metrics.avgLikes)}
-          badge={hasThirdPartyEngagement ? "Est." : undefined}
+          badge={hasStoredEngagement ? "Stored" : undefined}
           hint={
             engagementUnavailable
               ? "No public posts available"
-              : hasThirdPartyEngagement
-                ? "Modash estimate · average per post"
+              : hasStoredEngagement
+                ? `Measured ${storedOn} · average per post`
                 : metrics.hiddenLikePosts > 0
                   ? "Average of posts that show likes"
                   : "Average per public post"
@@ -421,16 +419,20 @@ export function ProfileDashboard({
         <MetricCard
           label="Avg comments"
           value={engagementUnavailable ? "—" : formatCompact(metrics.avgComments)}
-          badge={hasThirdPartyEngagement ? "Est." : undefined}
+          badge={hasStoredEngagement ? "Stored" : undefined}
           hint={
             engagementUnavailable
               ? "No public posts available"
-              : hasThirdPartyEngagement
-                ? "Modash estimate · average per post"
+              : hasStoredEngagement
+                ? `Measured ${storedOn} · average per post`
                 : "Average per public post"
           }
         />
       </section>
+
+      {indexPosition ? (
+        <IndexPositionCard position={indexPosition} engagementRate={metrics.engagementRate} />
+      ) : null}
 
       <section
         data-testid="growth-analysis"
@@ -584,6 +586,8 @@ export function ProfileDashboard({
               </ResponsiveContainer>
             </div>
           </div>
+        ) : profile.tracking && profile.tracking.points.length >= 2 ? (
+          <TrackingHistoryPanel tracking={profile.tracking} followers={profile.followers} />
         ) : (
           <div
             data-testid="growth-unavailable"
@@ -594,6 +598,9 @@ export function ProfileDashboard({
               {metrics.growthEstimated ? "Modeled 12-month estimate" : "Not available"}
             </p>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
+              {profile.tracking
+                ? `Daily tracking started ${formatDate(`${profile.tracking.since}T00:00:00Z`)}. The measured history chart and follower-change table appear after the second daily snapshot. `
+                : ""}
               {metrics.growthEstimated
                 ? `Instagram does not publish historical follower counts. The ${formatPercent(
                     metrics.followerGrowthPct,
@@ -803,8 +810,8 @@ export function ProfileDashboard({
                 </p>
                 {noPublicPosts ? (
                   <p className="mt-1 text-[11px] text-amber-700">
-                    {hasThirdPartyEngagement
-                      ? "Posts were not exposed. Engagement uses a disclosed Modash estimate; growth and Reels are unavailable."
+                    {hasStoredEngagement
+                      ? `Posts were not exposed. Engagement uses this site's stored measurement from ${storedOn}; growth and Reels are unavailable.`
                       : "This profile's post-based signals were not exposed, so its score reflects only the public signals available."}
                   </p>
                 ) : null}
@@ -862,8 +869,8 @@ export function ProfileDashboard({
                       {engagementSignal(formatCompact(row.avgComments), row)} avg comments ·{" "}
                       {changeSignal(formatPercent(row.followerChangePct), row)}
                       {row.followerChangeEstimated ? " est." : ""} follower change
-                      {row.isTarget && row.engagementSource === "third-party"
-                        ? " · Modash est. engagement"
+                      {row.isTarget && row.engagementSource === "stored-snapshot"
+                        ? ` · engagement stored ${storedOn}`
                         : ""}
                       {!row.isTarget && row.postsNotExposed ? " · posts not exposed" : ""}
                     </p>
@@ -994,8 +1001,8 @@ export function ProfileDashboard({
               })}
             </div>
             <p className="mt-2 text-[11px] text-slate-400">
-              {hasThirdPartyEngagement
-                ? "Engagement rate, avg likes, and avg comments for this profile are Modash estimates, not Instagram measurements. Follower change is unavailable without public posts."
+              {hasStoredEngagement
+                ? `Engagement rate, avg likes, and avg comments for this profile are this site's stored measurement from ${storedOn}. Follower change is unavailable without public posts.`
                 : noPublicPosts
                   ? "Post-based values are unavailable because this account's posts were not exposed."
                   : "Follower change is modeled from public signals for non-demo profiles; see the estimates panel below for details."}
@@ -1019,8 +1026,8 @@ export function ProfileDashboard({
                 </p>
                 {noPublicPosts ? (
                   <p className="mt-1 text-[11px] text-amber-700">
-                    {hasThirdPartyEngagement
-                      ? "Posts were not exposed. Engagement uses a disclosed Modash estimate; growth and Reels are unavailable."
+                    {hasStoredEngagement
+                      ? `Posts were not exposed. Engagement uses this site's stored measurement from ${storedOn}; growth and Reels are unavailable.`
                       : "This profile's post-based signals were not exposed, so its score reflects only the public signals available."}
                   </p>
                 ) : null}
@@ -1078,8 +1085,8 @@ export function ProfileDashboard({
                       {engagementSignal(formatCompact(row.avgComments), row)} avg comments ·{" "}
                       {changeSignal(formatPercent(row.followerChangePct), row)}
                       {row.followerChangeEstimated ? " est." : ""} follower change
-                      {row.isTarget && row.engagementSource === "third-party"
-                        ? " · Modash est. engagement"
+                      {row.isTarget && row.engagementSource === "stored-snapshot"
+                        ? ` · engagement stored ${storedOn}`
                         : ""}
                       {!row.isTarget && row.postsNotExposed ? " · posts not exposed" : ""}
                     </p>

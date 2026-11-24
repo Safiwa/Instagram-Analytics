@@ -7,6 +7,7 @@ export type NavItem = {
 // comparison workspace. Hash links point at the real section ids below.
 export const PRIMARY_NAV: NavItem[] = [
   { href: "/", label: "Discover" },
+  { href: "/discover", label: "Find creators" },
   { href: "/#global-pulse", label: "Leaderboards" },
   { href: "/#collaborations", label: "Collaborations" },
   { href: "/#metric-engine", label: "Analytics" },

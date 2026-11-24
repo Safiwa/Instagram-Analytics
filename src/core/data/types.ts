@@ -49,13 +49,12 @@ export type Audience = {
   gender: AudienceSlice[];
 };
 
-// A disclosed third-party estimate used only when Instagram exposes no posts.
-// It is never treated as an Instagram measurement and never feeds the modeled
-// fake-follower, authenticity, or growth calculations.
-export type ThirdPartyEngagement = {
-  source: string;
-  sourceUrl: string;
-  reportUpdatedAt: string;
+// This site's own last measured engagement for the profile, read from a stored
+// daily snapshot. Used only when Instagram exposes no posts on a lookup, always
+// labelled with the day it was measured, and never fed into the modeled
+// fake-follower, authenticity, or growth calculations or stored again.
+export type StoredEngagement = {
+  measuredOn: string;
   engagementRatePct: number;
   averageLikes: number;
   averageComments: number;
@@ -91,5 +90,5 @@ export type CreatorProfile = {
   // usually absent and fake followers fall back to the profile-level model.
   followerSample?: FollowerSample[];
   audience?: Audience;
-  thirdPartyEngagement?: ThirdPartyEngagement;
+  storedEngagement?: StoredEngagement;
 };

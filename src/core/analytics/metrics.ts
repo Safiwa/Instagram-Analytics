@@ -17,14 +17,14 @@ function average(values: number[]): number {
 
 export function computeMetrics(profile: CreatorProfile) {
   const posts = profile.recentPosts;
-  // Third-party engagement fills only the three engagement cards when Instagram
+  // A stored snapshot fills only the three engagement cards when Instagram
   // exposes no posts. It must not become a fake post or feed public-signal models.
-  const thirdPartyEngagement =
+  const storedEngagement =
     profile.source !== "demo" &&
     !profile.isPrivate &&
     profile.followers > 0 &&
     posts.length === 0
-      ? (profile.thirdPartyEngagement ?? null)
+      ? (profile.storedEngagement ?? null)
       : null;
   // Posts with hidden like counts report 0 likes. Averaging those zeros would
   // understate likes and engagement, so likes use only posts that show them.
@@ -32,23 +32,23 @@ export function computeMetrics(profile: CreatorProfile) {
   const hiddenLikePosts = posts.length - visibleLikePosts.length;
   const postAvgLikes = round2(average(visibleLikePosts.map((post) => post.likes)));
   const postAvgComments = round2(average(posts.map((post) => post.comments)));
-  const avgLikes = thirdPartyEngagement ? thirdPartyEngagement.averageLikes : postAvgLikes;
-  const avgComments = thirdPartyEngagement ? thirdPartyEngagement.averageComments : postAvgComments;
+  const avgLikes = storedEngagement ? storedEngagement.averageLikes : postAvgLikes;
+  const avgComments = storedEngagement ? storedEngagement.averageComments : postAvgComments;
   const savesComplete = posts.length > 0 && posts.every((post) => typeof post.saves === "number");
   const avgSaves = savesComplete ? round2(average(posts.map((post) => post.saves ?? 0))) : null;
-  const engagementBasis = thirdPartyEngagement
-    ? "third-party:likes+comments"
+  const engagementBasis = storedEngagement
+    ? "stored:likes+comments"
     : avgSaves === null
       ? "likes+comments"
       : "likes+comments+saves";
-  const engagementSource = thirdPartyEngagement
-    ? "third-party"
+  const engagementSource = storedEngagement
+    ? "stored-snapshot"
     : posts.length > 0
       ? "public-posts"
       : "unavailable";
 
-  const engagementRate = thirdPartyEngagement
-    ? round2(thirdPartyEngagement.engagementRatePct)
+  const engagementRate = storedEngagement
+    ? round2(storedEngagement.engagementRatePct)
     : profile.followers === 0
       ? 0
       : round2(((avgLikes + avgComments + (avgSaves ?? 0)) / profile.followers) * 100);
@@ -56,7 +56,7 @@ export function computeMetrics(profile: CreatorProfile) {
   // The average is pulled up by a single viral post. The typical (median) post
   // shows what a normal upload earns; both are reported side by side.
   const typicalEngagementRate =
-    thirdPartyEngagement || visibleLikePosts.length === 0 || profile.followers === 0
+    storedEngagement || visibleLikePosts.length === 0 || profile.followers === 0
       ? null
       : round2(
           (median(visibleLikePosts.map((post) => post.likes + post.comments)) /
@@ -134,7 +134,7 @@ export function computeMetrics(profile: CreatorProfile) {
     hiddenLikePosts,
     engagementBasis,
     engagementSource,
-    thirdPartyEngagement,
+    storedEngagement,
     fakeFollowers,
     fakeFollowersPct,
     fakeFollowersRange,
