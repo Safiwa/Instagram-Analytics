@@ -11,6 +11,7 @@ describe("primary navigation", () => {
   it("links the page-based sections and the comparison workspace", () => {
     expect(PRIMARY_NAV).toEqual([
       { href: "/", label: "Discover" },
+      { href: "/discover", label: "Find creators" },
       { href: "/#global-pulse", label: "Leaderboards" },
       { href: "/#collaborations", label: "Collaborations" },
       { href: "/#metric-engine", label: "Analytics" },
@@ -37,6 +38,8 @@ describe("primary navigation", () => {
     expect(isNavItemActive("/", "/")).toBe(true);
     expect(isNavItemActive("/compare", "/")).toBe(false);
     expect(isNavItemActive("/compare", "/compare")).toBe(true);
+    expect(isNavItemActive("/discover", "/discover")).toBe(true);
+    expect(isNavItemActive("/discover", "/")).toBe(false);
     expect(isNavItemActive("/compare/results", "/compare")).toBe(true);
     expect(isNavItemActive("/comparison", "/compare")).toBe(false);
   });

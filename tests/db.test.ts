@@ -122,13 +122,11 @@ describe("snapshot storage", () => {
     expect(row.rows[0].likes).toBeNull();
   });
 
-  it("never stores third-party engagement as an in-house measurement", async () => {
+  it("never writes a stored-engagement fallback back as a new measurement", async () => {
     const noPosts = profile({
       recentPosts: [],
-      thirdPartyEngagement: {
-        source: "Modash",
-        sourceUrl: "https://example.com",
-        reportUpdatedAt: "2026-10-27T00:00:00Z",
+      storedEngagement: {
+        measuredOn: "2026-11-01",
         engagementRatePct: 1.2,
         averageLikes: 47,
         averageComments: 22,

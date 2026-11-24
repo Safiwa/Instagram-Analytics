@@ -3,7 +3,7 @@
 > Snapshot: **2026-11-24** (system date confirmed via `shell`)
 > Phase: **COMPLETE for v1.5** — public reader, free local proxy bridge for cloud hosts, optional official API, demo fixtures, disclosed public-signal estimates, and the free 30-day weekly digest.  
 > Locked user decisions: **no Meta keys required** · **public Instagram handle lookup** · **analysis + comparison + PDF report** · **English / LTR** · **no paid scraping credits** · **Vercel + authenticated local proxy through a free Cloudflare Tunnel** · **weekly digest via Resend + Upstash with a display-only 30-day trial**.  
-> Reference positioning: Not Just Analytics = functional core; Modash + Collabstr = visual/dashboard inspiration only.
+> Reference positioning: Not Just Analytics = functional core; Modash + Collabstr = visual/dashboard inspiration only. Since G16 no third-party data is used: benchmarks and fallbacks come from the in-house index.
 
 ---
 
@@ -116,8 +116,9 @@ Fixture anchor `nora.style`: `followers=10000`, `fakeFollowers=350`, followers `
 | **G13** | Free cloud-host proxy bridge | When `INSTAGRAM_PROXY_URL` is set, all profile/embed/web-profile requests go to the authenticated `/api/instagram-proxy` endpoint through a Cloudflare Tunnel; `PROXY_SECRET` is required in both environments; the endpoint allowlists only public Instagram profile/`web_profile_info`/embed URLs; 401/402/403/5xx and network failures fall back to direct fetch; transient 404/429/empty-shell responses retry once; no secret in logs; no credits or paid keys. | `tests/proxy.test.ts`, `tests/public.test.ts` proxy routing/fallback/retry cases, `npm run build` |
 | **G14** | Weekly digest + 30-day trial | Home page email/handle section with consent and honeypot; 30-day trial shown but not enforced; cron-only Monday sender reuses one profile resolution per handle; email includes engagement rate, week-over-week follower decrease, and follower growth with `Est.` label; signed one-click unsubscribe; Resend and Upstash settings keep secrets server-side; top header no longer shows the “Public web” badge. | `tests/digest.test.ts`, route list from `npm run build`, `npx eslint .` |
 | **G15** | In-house history store | Optional Neon Postgres (`DATABASE_URL`); migration `0001_profile_snapshots.sql` (profiles, profile_snapshots, posts, post_snapshots; one snapshot per profile/post per UTC day); profile + compare lookups store snapshots via `after()`; daily `/api/collect` cron (`CRON_SECRET`, 40 s budget, oldest first, tracked + 30-day searched handles); only Instagram-measured values stored (no third-party engagement, no demo); history read fails soft (5 s timeout → page unchanged); `Tracking since` header line; measured 30-day growth from a 30-45 day old snapshot replaces the estimate and its `Est.` badge. | `tests/db.test.ts` (PGlite, real migration), full suite, typecheck, eslint, build, local route smoke |
+| **G16** | In-house dashboards, no third-party data | Daily follower/engagement history chart (30D/90D/1Y) + 1/7/30/90-day change table from stored snapshots; engagement percentile vs own index per audience tier (min 8 profiles, self excluded); homepage tier table from own index replaces Modash ranges; stored-engagement fallback (latest snapshot with posts, ≤60 days, dated "Stored") replaces the hard-coded Modash snapshot in metrics, UI, rankings and PDF; Middle East peer gaps filled from the index instead of the static capture; `/discover` search over the index; all index readers fail soft. `modash-snapshot.ts` and `regional-peer-snapshots.ts` deleted. | `tests/index-store.test.ts` (PGlite), full suite, typecheck, eslint, build, route smoke |
 
-Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12 → G13 → G14 → G15**. No step is marked done until its verification passes.
+Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12 → G13 → G14 → G15 → G16**. No step is marked done until its verification passes.
 
 ---
 
@@ -137,7 +138,8 @@ src/
 │  ├─ api/digest/subscribe/route.ts      # POST → validate → store 30-day trial signup
 │  ├─ api/digest/send/route.ts           # CRON_SECRET-only Monday sender
 │  ├─ api/digest/unsubscribe/route.ts    # signed token → delete subscription
-│  └─ api/collect/route.ts               # CRON_SECRET-only daily snapshot collector
+│  ├─ api/collect/route.ts               # CRON_SECRET-only daily snapshot collector
+│  └─ discover/page.tsx                  # search the in-house index
 ├─ features/
 │  ├─ discovery/HandleLookup.tsx         # "use client" — validated username → /profile/[username]
 │  ├─ profile/ProfileDashboard.tsx       # ONE file: header + KPIs + estimate panel + charts + posts
@@ -163,6 +165,9 @@ src/
 │  ├─ db/client.ts                       # optional Neon HTTP client (DATABASE_URL), 5 s query timeout
 │  ├─ db/snapshots.ts                    # snapshot upserts, tracking-history read, due-handle queue
 │  ├─ db/collector.ts                    # daily collector loop with time budget
+│  ├─ db/indexStore.ts                   # index reads: stored engagement, benchmark sample, profiles, discover search
+│  ├─ db/enrich.ts                       # attach stored history + stored engagement to a resolved profile
+│  ├─ analytics/benchmark.ts             # audience tiers, quartiles, percentile vs own index
 │  ├─ analytics/history.ts               # measured 30-day change from stored snapshots
 │  ├─ format.ts                          # nullable-aware compact numbers, percentages, dates
 │  └─ logging/logger.ts                  # bounded async queue, levels info/warn/error
@@ -181,7 +186,8 @@ src/
    ├─ compare.test.ts
    ├─ exclusive.test.ts
    ├─ digest.test.ts
-   └─ db.test.ts
+   ├─ db.test.ts
+   └─ index-store.test.ts
 ```
 
 **Rules**
@@ -262,6 +268,7 @@ smoke-test steps.
 
 | Gate | Command / probe | Result |
 |---|---|---|
+| In-house dashboards (G16) | Local gates on branch `feat/in-house-dashboards` (2026-11-25) | **251 tests** (25 files; new `index-store.test.ts` with 13 PGlite cases; Modash and static-capture tests removed with their modules), typecheck, eslint, build pass; `next start` smoke without `DATABASE_URL`: `/` 200 with no index panel, `/discover` 200 with "not enabled" notice, `/profile/nora.style` and `/compare` 200 unchanged. |
 | In-house history store (G15) | Local gates on branch `feat/database-snapshots` (2026-11-25) | **246 tests** (26 files, new `db.test.ts` with 12 PGlite cases: storage, one-per-day upsert, API/public post merge by shortcode, hidden likes → null, third-party engagement never stored, demo/no-DB no-op, DB failure → false, ordered history + first day, measured 30-day change, estimate kept before 30 days and beyond 45, due-handle queue, collector budget/deferral/retry), typecheck, eslint, build pass; `next start` smoke without `DATABASE_URL`: `/`, `/profile/nora.style`, `/compare` 200 unchanged, `/api/collect` 503 until enabled. Production activation pending operator step `[P15]`. |
 | Unit + integration tests | `npm test` | **9 files, 59 tests passed** |
 | Static types | `npm run typecheck` | **exit 0** |

@@ -54,3 +54,52 @@ export function measuredMonthChange(
     pct: round2((followers / baseline.followers) * 100),
   };
 }
+
+export type FollowerChange = {
+  window: number;
+  baselineDate: string | null;
+  followers: number | null;
+  pct: number | null;
+};
+
+export const CHANGE_WINDOWS = [1, 7, 30, 90] as const;
+
+// Change in followers over each window, measured from stored daily snapshots:
+// the latest snapshot at least `window` days old is the baseline, today's
+// follower count the end point. Windows without such a snapshot stay null.
+export function followerChanges(
+  points: readonly DailyPoint[],
+  currentFollowers: number,
+  now = new Date(),
+): FollowerChange[] {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return CHANGE_WINDOWS.map((window) => {
+    let baseline: DailyPoint | null = null;
+    for (const point of points) {
+      const age = Math.round((today - dayStart(point.date)) / DAY_MS);
+      if (age >= window && point.followers > 0) {
+        baseline = point;
+      }
+    }
+    if (!baseline || currentFollowers <= 0) {
+      return { window, baselineDate: null, followers: null, pct: null };
+    }
+    const followers = currentFollowers - baseline.followers;
+    return {
+      window,
+      baselineDate: baseline.date,
+      followers,
+      pct: round2((followers / baseline.followers) * 100),
+    };
+  });
+}
+
+// Points inside the last `days` days, for the chart range selector.
+export function pointsInRange(
+  points: readonly DailyPoint[],
+  days: number,
+  now = new Date(),
+): DailyPoint[] {
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return points.filter((point) => (today - dayStart(point.date)) / DAY_MS <= days);
+}

@@ -7,7 +7,6 @@ import {
   buildRegionalRanking,
   findRegionalCategoryPeer,
 } from "../src/core/analytics/regional";
-import { getModashEngagement } from "../src/core/data/modash-snapshot";
 import { isMiddleEastProfile } from "../src/core/data/regional";
 import { MIDDLE_EAST_COUNTRIES } from "../src/core/data/regions";
 import type { CreatorProfile, MonthlyPoint, Post } from "../src/core/data/types";
@@ -566,7 +565,12 @@ describe("Middle East authenticity-aware ranking", () => {
         accountCountry: null,
       }),
       recentPosts: [],
-      thirdPartyEngagement: getModashEngagement("zuhaboutique2024") ?? undefined,
+      storedEngagement: {
+        measuredOn: "2026-11-20",
+        engagementRatePct: 1.2177911317490667,
+        averageLikes: 47,
+        averageComments: 22,
+      },
     };
     const high = profile("khalus_recipes", 47_996, ["recipe and food in Dubai"], {
       displayName: "Khalid C",
@@ -618,7 +622,7 @@ describe("Middle East authenticity-aware ranking", () => {
       ]),
     );
     expect(ranking?.targetRank).toBe(3);
-    expect(ranking!.rows.find((row) => row.isTarget)?.engagementSource).toBe("third-party");
+    expect(ranking!.rows.find((row) => row.isTarget)?.engagementSource).toBe("stored-snapshot");
     expect(ranking!.rows.find((row) => row.profile.username === "raw.lebanon")?.postsNotExposed).toBe(
       true,
     );
@@ -632,7 +636,12 @@ describe("Middle East authenticity-aware ranking", () => {
         accountCountry: null,
       }),
       recentPosts: [],
-      thirdPartyEngagement: getModashEngagement("zuhaboutique2024") ?? undefined,
+      storedEngagement: {
+        measuredOn: "2026-11-20",
+        engagementRatePct: 1.2177911317490667,
+        averageLikes: 47,
+        averageComments: 22,
+      },
     };
     const pool = [
       target,

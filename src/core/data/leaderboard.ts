@@ -126,7 +126,7 @@ export const LEADERBOARD_HANDLES = [
   "rima_alosta",
   "lookatsascha",
   // Real, explicitly labeled creators in @zuhaboutique2024's 30.8–57.1K band.
-  // They bracket the disclosed Modash-backed rank without widening the gate.
+  // They bracket its rank without widening the gate.
   "khalus_recipes",
   "ladyandhersweetescapes",
   "airagymn",

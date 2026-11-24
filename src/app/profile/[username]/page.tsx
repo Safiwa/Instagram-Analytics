@@ -13,7 +13,10 @@ import { resolveProfile } from "../../../core/data/adapter";
 import { getTrackedProfiles } from "../../../core/data/leaderboard";
 import { getRegionalProfiles } from "../../../core/data/regional";
 import type { CreatorProfile } from "../../../core/data/types";
-import { loadTrackingHistory, recordProfileSnapshot } from "../../../core/db/snapshots";
+import { indexPosition } from "../../../core/analytics/benchmark";
+import { withStoredHistory } from "../../../core/db/enrich";
+import { getIndexSample } from "../../../core/db/indexStore";
+import { recordProfileSnapshot } from "../../../core/db/snapshots";
 import { ProfileDashboard } from "../../../features/profile/ProfileDashboard";
 
 export const maxDuration = 60;
@@ -62,13 +65,17 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   // never slows the page down. Demo fixtures are never stored.
   after(() => recordProfileSnapshot(resolved, { lookup: true }));
 
-  const [tracking, tracked] = await Promise.all([
-    resolved.source === "demo" ? Promise.resolve(null) : loadTrackingHistory(resolved.username),
+  const [profile, tracked, sample] = await Promise.all([
+    withStoredHistory(resolved),
     getTrackedProfiles(),
+    resolved.source === "demo" ? Promise.resolve([]) : getIndexSample(),
   ]);
   const regionalPool = await getRegionalProfiles();
-  const profile: CreatorProfile = tracking ? { ...resolved, tracking } : resolved;
   const metrics = computeMetrics(profile);
+  const position =
+    metrics.engagementSource === "unavailable"
+      ? null
+      : indexPosition(profile.username, profile.followers, metrics.engagementRate, sample);
   const growth = analyzeGrowth(profile);
   const initial = buildBenchmarks(profile, metrics, tracked, regionalPool);
   const excluded = excludedExclusiveHandles(initial);
@@ -97,6 +104,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       regionalPeer={regionalPeer}
       regionalComparison={regionalComparison}
       regionalRanking={regionalRanking}
+      indexPosition={position}
     />
   );
 }

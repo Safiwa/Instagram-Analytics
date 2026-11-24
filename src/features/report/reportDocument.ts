@@ -455,7 +455,7 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
 
   const reportRows = profiles.map((profile) => ({ profile, metrics: computeMetrics(profile) }));
   const hasEstimates = reportRows.some((row) => row.metrics.estimateConfidence !== null);
-  const hasThirdParty = reportRows.some((row) => row.metrics.thirdPartyEngagement !== null);
+  const hasStored = reportRows.some((row) => row.metrics.storedEngagement !== null);
   const label = sourceLabel(profiles);
   const generated = new Date().toISOString().slice(0, 10);
 
@@ -547,9 +547,9 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
   );
   y = summaryCardTop - summaryCardHeight - 14;
 
-  if (hasThirdParty) {
+  if (hasStored) {
     line(
-      "Third-party engagement figures in this report are estimates from a named external calculator, not Instagram measurements.",
+      "Where Instagram hid every post on this lookup, engagement figures are this site's own last stored measurement, dated per profile.",
       8,
       regular,
       MUTED,
@@ -602,9 +602,9 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
       PANEL,
     );
     badgeX += sourceWidth + 6;
-    if (metrics.growthEstimated || metrics.authenticityEstimated || metrics.thirdPartyEngagement) {
+    if (metrics.growthEstimated || metrics.authenticityEstimated || metrics.storedEngagement) {
       badge(
-        metrics.thirdPartyEngagement ? "Third-party estimate" : "Est. metrics",
+        metrics.storedEngagement ? "Stored measurement" : "Est. metrics",
         badgeX,
         avatarTop - 39,
         ACCENT,
@@ -622,7 +622,7 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
       MARGIN + cardWidth + gap,
       kpiTop,
       cardWidth,
-      metrics.thirdPartyEngagement ? "ENGAGEMENT (3RD PARTY EST.)" : "ENGAGEMENT",
+      metrics.storedEngagement ? "ENGAGEMENT (STORED)" : "ENGAGEMENT",
       engagementValue(profile, metrics),
       true,
     );
@@ -674,17 +674,17 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
       8,
     );
 
-    if (metrics.thirdPartyEngagement) {
-      const thirdParty = metrics.thirdPartyEngagement;
+    if (metrics.storedEngagement) {
+      const stored = metrics.storedEngagement;
       line(
-        `Third-party estimate from ${toAscii(thirdParty.source, "External source")}: ${formatPercent(thirdParty.engagementRatePct, "N/A")} engagement, ${formatCompact(thirdParty.averageLikes, "N/A")} avg likes, ${formatCompact(thirdParty.averageComments, "N/A")} avg comments.`,
+        `Last stored measurement: ${formatPercent(stored.engagementRatePct, "N/A")} engagement, ${formatCompact(stored.averageLikes, "N/A")} avg likes, ${formatCompact(stored.averageComments, "N/A")} avg comments.`,
         8.5,
         regular,
         INK_SOFT,
         4,
       );
       line(
-        `Source ${toAscii(thirdParty.sourceUrl, "")} | Report date ${toAscii(thirdParty.reportUpdatedAt, "")} | Not an Instagram measurement.`,
+        `Measured by this site from public posts on ${toAscii(stored.measuredOn, "")}; Instagram hid the posts on this lookup.`,
         8,
         regular,
         MUTED,
@@ -905,7 +905,7 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
       const cells = [
         `@${profile.username}`,
         formatCompact(profile.followers, "N/A"),
-        engagementValue(profile, metrics) + (metrics.thirdPartyEngagement ? " est." : ""),
+        engagementValue(profile, metrics) + (metrics.storedEngagement ? " (stored)" : ""),
         formatPercent(metrics.followerGrowthPct, "N/A") + (metrics.growthEstimated ? " est." : ""),
         formatPercent(metrics.authenticityPct, "N/A") + (metrics.authenticityEstimated ? " est." : ""),
         profileSourceLabel(profile),
@@ -918,7 +918,7 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
     }
     y -= 8;
     paragraph(
-      "Comparison rows use the same source-aware rules as the individual sections. Do not treat a modeled est. value or a third-party estimate as an Instagram-measured metric.",
+      "Comparison rows use the same source-aware rules as the individual sections. Do not treat a modeled est. value as an Instagram-measured metric; stored values are dated earlier measurements.",
       8,
       MUTED,
       8,
@@ -930,8 +930,8 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
   const disclosures = [
     "Measured data: follower, following and post counts plus likes, comments and any exposed saves from public posts.",
     "Modeled estimates: fake followers, authenticity and growth use disclosed public signals only when Instagram publishes no measured history. Confidence, methodology and signals are listed per profile.",
-    "Third-party estimates: Modash engagement figures are external calculator values, are labeled third-party estimates, and are never mixed into the public-signal model.",
-    "Unavailable values: N/A means Instagram or the named third party did not expose the value. It is not a zero and is not invented.",
+    "Stored measurements: when Instagram hides every post on a lookup, engagement uses this site's own most recent stored snapshot with visible posts, dated per profile, and is never mixed into the public-signal model.",
+    "Unavailable values: N/A means Instagram did not expose the value. It is not a zero and is not invented.",
     "Public sample: at most 12 recent, non-pinned posts are visible. Captions and topic labels are descriptive only and are not audience-demographic claims.",
     "Profile photos: small circular icons use the public Instagram avatar URL when it is reachable; otherwise initials are shown. No synthetic profile image is generated.",
     "Audience, saves, reach and true follower history are not published by Instagram for public lookups and remain omitted unless explicitly present above.",

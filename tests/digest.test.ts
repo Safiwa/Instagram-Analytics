@@ -18,7 +18,7 @@ const metrics = {
   hiddenLikePosts: 0,
   engagementBasis: "likes+comments",
   engagementSource: "public-posts",
-  thirdPartyEngagement: null,
+  storedEngagement: null,
   fakeFollowers: null,
   fakeFollowersPct: null,
   fakeFollowersRange: null,
