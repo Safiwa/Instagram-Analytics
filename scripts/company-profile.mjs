@@ -220,7 +220,7 @@ const BILINGUAL_PAGES = [
             { n: "03", title: "One story, every channel", body: "The creator you shortlist, the partnership you design and the moment you stage should all say the same thing." },
           ],
         },
-        { kind: "note", text: "UAE-based. Working across the Middle East. Every recommendation is grounded in what is publicly visible and honest about what Instagram does not publish. If a number is not available, it stays a dash." },
+        { kind: "note", text: "UAE-based. Working across the Middle East. Every recommendation is grounded in what is publicly visible and honest about what Instagram does not publish." },
       ],
     },
     ar: {
@@ -237,7 +237,7 @@ const BILINGUAL_PAGES = [
             { n: "03", title: "قصة واحدة، في كل قناة", body: "المبدع الذي تختاره، والشراكة التي تصممها، واللحظة التي تُعدّها يجب أن تحكي القصة ذاتها." },
           ],
         },
-        { kind: "note", text: "مقرنا في الإمارات، ونعمل في أنحاء الشرق الأوسط. تستند كل توصية إلى ما هو متاح للعامة، ونكون صريحين بشأن ما لا تنشره إنستغرام. وإذا تعذّر توفير رقم، نتركه شرطةً." },
+        { kind: "note", text: "مقرنا في الإمارات، ونعمل في أنحاء الشرق الأوسط. تستند كل توصية إلى ما هو متاح للعامة، ونكون صريحين بشأن ما لا تنشره إنستغرام." },
       ],
     },
     callout: {
@@ -361,7 +361,7 @@ const BILINGUAL_PAGES = [
     },
     ar: {
       eyebrow: "04 / تفعيل الفعاليات",
-      title: "من منصّات التواصل إلى أرض الفعالية، دون أن نفقد الخيط.",
+      title: "من منصات التواصل الى ارض الفعالية، دون فقدان المسار",
       heading: "عملية واحدة متصلة.",
       body: "لا تنجح التفعيلات إلا حين تحكي القصة ذاتها عبر المبدع والمحتوى والمكان. وتحرص عمليتنا على ربطها من القائمة المختصرة الأولى وحتى التقرير الختامي.",
       sections: [
