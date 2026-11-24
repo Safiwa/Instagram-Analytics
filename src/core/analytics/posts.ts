@@ -40,3 +40,22 @@ export function quartileDispersion(values: number[]): number {
   const upper = median(sorted.slice(sorted.length % 2 === 0 ? half : half + 1));
   return (upper - lower) / middle;
 }
+
+// Drops the single biggest post when it is a clear viral outlier: at least 5
+// posts and more than 3x the median of the others. Comparisons between groups
+// of posts (older vs recent) then reflect typical posts, not where one viral
+// reel happened to land.
+export function withoutViralOutlier(posts: Post[], value: (post: Post) => number): Post[] {
+  if (posts.length < 5) {
+    return posts;
+  }
+  let topIndex = 0;
+  posts.forEach((post, index) => {
+    if (value(post) > value(posts[topIndex])) {
+      topIndex = index;
+    }
+  });
+  const rest = posts.filter((_, index) => index !== topIndex);
+  const restMedian = median(rest.map(value));
+  return restMedian > 0 && value(posts[topIndex]) > 3 * restMedian ? rest : posts;
+}

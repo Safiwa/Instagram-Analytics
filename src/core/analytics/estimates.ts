@@ -1,5 +1,5 @@
 import type { CreatorProfile, Post } from "../data/types";
-import { postsWithVisibleLikes, quartileDispersion } from "./posts";
+import { postsWithVisibleLikes, quartileDispersion, withoutViralOutlier } from "./posts";
 
 export type EstimateImpact = "positive" | "neutral" | "negative";
 export type EstimateConfidence = "low" | "medium" | "high";
@@ -98,7 +98,10 @@ function benchmarkEngagementRate(followers: number): number {
 }
 
 export function engagementTrend(posts: Post[]): number | null {
-  const dated = postsWithVisibleLikes(posts)
+  const dated = withoutViralOutlier(
+    postsWithVisibleLikes(posts),
+    (post) => post.likes + post.comments,
+  )
     .map((post) => ({
       at: new Date(post.postedAt).getTime(),
       total: post.likes + post.comments,
