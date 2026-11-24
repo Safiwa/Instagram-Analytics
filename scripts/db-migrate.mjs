@@ -2,7 +2,7 @@
 //
 //   DATABASE_URL=postgres://... npm run db:migrate
 //
-// Vercel deployments run it automatically (see "vercel-build" in package.json).
+// Builds run it automatically (see "build" in package.json).
 //
 // Each file runs inside one transaction together with its schema_migrations
 // row, so a failed migration leaves nothing half-applied. Already-applied
@@ -12,8 +12,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "@neondatabase/serverless";
 
-// On Vercel, `vercel-build` runs this with --if-configured before `next build`,
-// so every deployment applies new migrations to its own database first.
+// `npm run build` runs this with --if-configured before `next build`, so every
+// Vercel deployment applies new migrations to its own database first. Without
+// DATABASE_URL (plain local builds, CI) it skips quietly.
 const ifConfigured = process.argv.includes("--if-configured");
 const connectionString = process.env.DATABASE_URL?.trim();
 if (!connectionString) {

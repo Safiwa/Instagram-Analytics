@@ -581,9 +581,11 @@ fixtures are never stored.
    ```
 
    It is idempotent: already-applied files are skipped. Since migration `0002`,
-   Vercel deployments also run it automatically: the `vercel-build` script runs
-   `scripts/db-migrate.mjs --if-configured` before `next build`, so each deployment
-   (and each preview database branch) gets new migrations before the code that needs them.
+   every build also runs it: `npm run build` runs `scripts/db-migrate.mjs
+   --if-configured` before `next build`, so each Vercel deployment (and each preview
+   database branch) gets new migrations before the code that needs them. Without
+   `DATABASE_URL` the step is skipped. Note: a local `npm run build` with
+   `DATABASE_URL` set applies migrations to that database too.
 3. Make sure `CRON_SECRET` is set in Vercel (it is shared with the weekly digest),
    then redeploy. Test the collector:
 
