@@ -16,11 +16,13 @@ export type EstimateSignal = {
   impact: EstimateImpact;
 };
 
-export type FakeFollowerRisk = "low" | "medium" | "high";
+export type FakeFollowerRisk = "low" | "low-medium" | "medium" | "medium-high" | "high";
 
 export const FAKE_FOLLOWER_RISK_LABEL: Record<FakeFollowerRisk, string> = {
   low: "Low risk",
+  "low-medium": "Low-Medium risk",
   medium: "Medium risk",
+  "medium-high": "Medium-High risk",
   high: "High risk",
 };
 
@@ -47,8 +49,24 @@ const TYPICAL_POST_SHARE = 0.6;
 
 const RANGE_HALF_WIDTH: Record<EstimateConfidence, number> = { high: 5, medium: 8, low: 12 };
 
+const LOW_MEDIUM_BOUNDARY = 12;
+const MEDIUM_HIGH_BOUNDARY = 25;
+// Within this many points of a boundary the band names both sides, so a
+// one-point change in the estimate cannot flip Medium to High on its own.
+const BOUNDARY_MARGIN = 2;
+
 export function fakeFollowerRisk(fakePct: number): FakeFollowerRisk {
-  return fakePct < 12 ? "low" : fakePct < 25 ? "medium" : "high";
+  if (Math.abs(fakePct - LOW_MEDIUM_BOUNDARY) < BOUNDARY_MARGIN) {
+    return "low-medium";
+  }
+  if (Math.abs(fakePct - MEDIUM_HIGH_BOUNDARY) < BOUNDARY_MARGIN) {
+    return "medium-high";
+  }
+  return fakePct < LOW_MEDIUM_BOUNDARY
+    ? "low"
+    : fakePct < MEDIUM_HIGH_BOUNDARY
+      ? "medium"
+      : "high";
 }
 
 function round2(value: number): number {
@@ -302,7 +320,10 @@ export function estimatePublicSignals(profile: CreatorProfile): PublicEstimates 
     growthPct += clamp((reachRatio - 0.5) * 8, -6, 12);
   }
   if (trend !== null) {
-    growthPct += clamp(trend * 0.15, -6, 8);
+    // Half weight: the trend compares two small groups of recent posts, so one
+    // post entering or leaving the visible window must not swing the yearly
+    // estimate by more than a few points.
+    growthPct += clamp(trend * 0.075, -3, 4);
   }
   if (followerRatio > 0.5) {
     growthPct -= 6;

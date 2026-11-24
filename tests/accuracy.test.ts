@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { engagementTrend, estimatePublicSignals } from "../src/core/analytics/estimates";
+import {
+  engagementTrend,
+  estimatePublicSignals,
+  fakeFollowerRisk,
+} from "../src/core/analytics/estimates";
 import { analyzeGrowth } from "../src/core/analytics/growth";
 import { computeMetrics, describeFakeFollowers } from "../src/core/analytics/metrics";
 import { likesVisible, quartileDispersion, withoutViralOutlier } from "../src/core/analytics/posts";
@@ -93,7 +97,7 @@ describe("fake-follower model robustness", () => {
     expect(metrics.fakeFollowersRange).not.toBeNull();
     expect(metrics.fakeFollowersRange!.lowPct).toBeLessThan(metrics.fakeFollowersPct!);
     expect(metrics.fakeFollowersRange!.highPct).toBeGreaterThan(metrics.fakeFollowersPct!);
-    expect(describeFakeFollowers(metrics)).toMatch(/^\d+-\d+% \((Low|Medium|High) risk\)$/);
+    expect(describeFakeFollowers(metrics)).toMatch(/^\d+-\d+% \((Low|Low-Medium|Medium|Medium-High|High) risk\)$/);
   });
 
   it("treats an unknown badge as neutral and lowers confidence", () => {
@@ -142,5 +146,28 @@ describe("interaction trend", () => {
     expect(withoutViralOutlier(even, (item) => item.likes)).toHaveLength(5);
     const spiky = [...even.slice(0, 4), post(4, 5_000, 5)];
     expect(withoutViralOutlier(spiky, (item) => item.likes)).toHaveLength(4);
+  });
+});
+
+describe("estimate stability", () => {
+  it("names both bands near a boundary so one point cannot flip the label", () => {
+    expect(fakeFollowerRisk(8)).toBe("low");
+    expect(fakeFollowerRisk(11)).toBe("low-medium");
+    expect(fakeFollowerRisk(13)).toBe("low-medium");
+    expect(fakeFollowerRisk(18)).toBe("medium");
+    expect(fakeFollowerRisk(24)).toBe("medium-high");
+    expect(fakeFollowerRisk(26)).toBe("medium-high");
+    expect(fakeFollowerRisk(30)).toBe("high");
+  });
+
+  it("limits how far the interaction trend moves the 12-month estimate", () => {
+    const base = creator();
+    // One strong recent post entering the window flips the trend.
+    const shifted = creator({
+      recentPosts: [...base.recentPosts.slice(1), post(30, 32_000, 772, 283_700)],
+    });
+    const before = estimatePublicSignals(base).followerGrowthPct!;
+    const after = estimatePublicSignals(shifted).followerGrowthPct!;
+    expect(Math.abs(after - before)).toBeLessThanOrEqual(8);
   });
 });
