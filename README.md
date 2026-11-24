@@ -257,6 +257,7 @@ request plus a few embed requests.
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
 | `/api/digest/send` | Cron-only weekly digest sender |
 | `/api/digest/unsubscribe` | Signed one-click unsubscribe link |
+| `/api/collect` | Cron-only daily collector that stores one snapshot per tracked or recently searched profile |
 
 ## Header navigation
 
@@ -501,6 +502,65 @@ All are computed on the server in `src/app/profile/[username]/page.tsx`. The tra
 guarded by `isLiveConfigured()` so local development without Meta keys does not make pointless API
 calls, and profile pages read the shared Upstash snapshot instead of calling Meta directly.
 
+## In-house history database (Postgres)
+
+The site keeps its own history so growth and engagement come from stored
+measurements instead of third-party tools. It is optional: without
+`DATABASE_URL` everything works exactly as before and nothing is stored.
+
+**What is stored** (`db/migrations/0001_profile_snapshots.sql`):
+
+| Table | One row per | Holds |
+|---|---|---|
+| `profiles` | Instagram handle | name, category, country, verified, tracked flag, lookup count, last lookup/snapshot |
+| `profile_snapshots` | profile per UTC day | followers, following, posts, engagement rate, average likes/comments/views, visible posts, source |
+| `posts` | post (keyed by shortcode) | type, date, permalink, caption, hashtags, location |
+| `post_snapshots` | post per UTC day | likes (null when hidden), comments, views |
+
+Only values measured from Instagram are written. Third-party engagement shown on
+screen when Instagram hides all posts is never stored, and demo fixtures are never
+stored.
+
+**When rows are written**
+
+- Every profile page and comparison lookup stores today's snapshot after the
+  response is sent (`after()` from `next/server`), so pages are not slowed down.
+- `/api/collect` runs daily at 02:15 UTC (`vercel.json`). It marks the homepage
+  leaderboard and UAE/GCC handles as tracked, then refreshes tracked profiles and
+  anything searched in the last 30 days, oldest snapshot first, within a 40-second
+  budget. Handles that do not fit are first in line the next day.
+
+**What it changes on screen**
+
+- Profile header: `Tracking since <date> · N daily snapshots` once rows exist.
+- 30-day growth card: once a snapshot 30-45 days old exists, the change is
+  measured against it, the `Est.` badge disappears and the hint reads
+  "Measured from stored snapshots". Until then the disclosed estimate stays.
+- The 12-month growth figure stays a disclosed estimate until enough history exists.
+
+**Setup (one time)**
+
+1. Vercel dashboard → project → **Storage** → **Create Database** → **Neon**
+   (Postgres, free plan) → connect it to the project. This adds `DATABASE_URL`
+   to every environment. (Or create a project at neon.tech and paste its pooled
+   connection string as `DATABASE_URL`.)
+2. Run the migration once from your machine:
+
+   ```powershell
+   $env:DATABASE_URL = "postgres://..."   # copy from Vercel > Storage > .env.local tab
+   npm run db:migrate
+   ```
+
+   It is idempotent: already-applied files are skipped.
+3. Make sure `CRON_SECRET` is set in Vercel (it is shared with the weekly digest),
+   then redeploy. Test the collector:
+
+   ```powershell
+   curl.exe -H "Authorization: Bearer $env:CRON_SECRET" https://www.instagram-analytics.com/api/collect
+   ```
+
+   Expected: `{"ok":true,"due":N,"stored":N,"failed":0,"deferred":0}`.
+
 ## Weekly digest (free 30-day trial)
 
 The home page has a signup form for a Monday email containing the current engagement
@@ -674,6 +734,7 @@ npm run start      # production server
 npm test           # Vitest suite
 npm run typecheck  # tsc --noEmit
 npm run lint       # ESLint
+npm run db:migrate # apply db/migrations/*.sql to DATABASE_URL (once per new migration)
 ```
 
 ## Project layout

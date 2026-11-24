@@ -3,6 +3,10 @@
     {
       "path": "/api/digest/send",
       "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/collect",
+      "schedule": "15 2 * * *"
     }
   ]
 }
