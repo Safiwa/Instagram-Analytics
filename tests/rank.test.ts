@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  COUNTRY_BOARD_WEIGHTS,
+  countryBoardRankScore,
   isComparableRange,
   RANK_WEIGHTS,
   rankFactorSimilarity,
@@ -138,6 +140,39 @@ describe("shared weighted ranking", () => {
     expect(rankFactorSimilarity(targetFactors, closeFactors)).toBeGreaterThan(
       rankFactorSimilarity(targetFactors, distantFactors),
     );
+  });
+});
+
+describe("country-board weighted ranking", () => {
+  it("puts 70% on followers and keeps the remaining signals in their current proportions", () => {
+    const weights = Object.values(COUNTRY_BOARD_WEIGHTS);
+
+    expect(COUNTRY_BOARD_WEIGHTS.followers).toBe(0.7);
+    expect(weights.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1, 6);
+    expect(COUNTRY_BOARD_WEIGHTS.engagement).toBeCloseTo(0.133333, 6);
+    expect(COUNTRY_BOARD_WEIGHTS.avgLikes).toBeCloseTo(0.066667, 6);
+    expect(COUNTRY_BOARD_WEIGHTS.avgComments).toBeCloseTo(0.033333, 6);
+    expect(COUNTRY_BOARD_WEIGHTS.followerChange).toBeCloseTo(0.066667, 6);
+  });
+
+  it("lets stronger remaining signals outweigh a modest follower gap", () => {
+    const larger = {
+      followers: 1_000_000,
+      engagementRate: 0.1,
+      avgLikes: 1_000,
+      avgComments: 0,
+      followerChangePct: 0,
+    };
+    const stronger = {
+      followers: 900_000,
+      engagementRate: 13,
+      avgLikes: 100_000,
+      avgComments: 20_000,
+      followerChangePct: 0,
+    };
+
+    expect(stronger.followers).toBeLessThan(larger.followers);
+    expect(countryBoardRankScore(stronger)).toBeGreaterThan(countryBoardRankScore(larger));
   });
 });
 

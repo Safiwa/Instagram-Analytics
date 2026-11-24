@@ -120,6 +120,25 @@ describe("regional board country labels", () => {
   });
 });
 
+describe("Middle East board caption", () => {
+  const globalPulse = source("src/features/leaderboard/GlobalPulse.tsx").replace(/\r\n/g, "\n");
+
+  it("omits the subtitle element on the Middle East card", () => {
+    expect(globalPulse).toContain("{subtitle ? (");
+    expect(globalPulse).toContain('if (definition.id === "middle-east") return undefined;');
+    expect(globalPulse).not.toContain("subtitle={`${definition.description}. ${REGION_RANK_SUBTITLE}.`}");
+  });
+
+  it("keeps the other region captions and discloses the 70/30 UAE order", () => {
+    expect(globalPulse).toContain("Ranked with 70% followers, then the remaining weighted signals");
+    expect(globalPulse).toContain(
+      "USA and Europe country boards are ordered strictly by follower count; Middle East",
+    );
+    expect(globalPulse).toContain("and UAE boards give followers 70% of the score");
+    expect(globalPulse).toContain("return `${definition.description}. ${REGION_RANK_SUBTITLE}.`;");
+  });
+});
+
 describe("same-country peer benchmark", () => {
   const dashboard = source("src/features/profile/ProfileDashboard.tsx");
   const peer = source("src/core/analytics/peer.ts");

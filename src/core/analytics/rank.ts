@@ -13,6 +13,29 @@ export const RANK_WEIGHTS = {
   followerChange: 0.1,
 } as const;
 
+// The dedicated Middle East and UAE top-ten boards put 70% of the score on
+// follower count, then apply the existing relative weights of the remaining
+// four signals to the other 30%. Followers stay dominant, while engagement,
+// likes, comments and growth still separate similarly sized accounts.
+export const COUNTRY_BOARD_FOLLOWER_WEIGHT = 0.7;
+const NON_FOLLOWER_WEIGHT_TOTAL =
+  RANK_WEIGHTS.engagement +
+  RANK_WEIGHTS.avgLikes +
+  RANK_WEIGHTS.avgComments +
+  RANK_WEIGHTS.followerChange;
+export const COUNTRY_BOARD_WEIGHTS = {
+  followers: COUNTRY_BOARD_FOLLOWER_WEIGHT,
+  engagement:
+    (1 - COUNTRY_BOARD_FOLLOWER_WEIGHT) * (RANK_WEIGHTS.engagement / NON_FOLLOWER_WEIGHT_TOTAL),
+  avgLikes:
+    (1 - COUNTRY_BOARD_FOLLOWER_WEIGHT) * (RANK_WEIGHTS.avgLikes / NON_FOLLOWER_WEIGHT_TOTAL),
+  avgComments:
+    (1 - COUNTRY_BOARD_FOLLOWER_WEIGHT) * (RANK_WEIGHTS.avgComments / NON_FOLLOWER_WEIGHT_TOTAL),
+  followerChange:
+    (1 - COUNTRY_BOARD_FOLLOWER_WEIGHT) *
+    (RANK_WEIGHTS.followerChange / NON_FOLLOWER_WEIGHT_TOTAL),
+} as const;
+
 // The regional profile panel adds a disclosed authenticity term so a profile
 // with fewer estimated fake followers can outrank a nearly identical account
 // with a weaker audience. A missing authenticity value is not a zero: it is
@@ -102,19 +125,37 @@ function logScore(value: number, ceiling: number): number {
   return clamp((Math.log10(value) / Math.log10(ceiling)) * 100, 0, 100);
 }
 
+function scoreComponents(entry: RankFactorInput) {
+  return {
+    followers: logScore(entry.followers, 200_000_000),
+    engagement: clamp((entry.engagementRate / 5) * 100, 0, 100),
+    avgLikes: logScore(entry.avgLikes, 2_000_000),
+    avgComments: logScore(entry.avgComments, 200_000),
+    followerChange: clamp(((entry.followerChangePct + 5) / 20) * 100, 0, 100),
+  };
+}
+
 export function rankScore(entry: RankFactorInput): number {
-  const followers = logScore(entry.followers, 200_000_000);
-  const engagement = clamp((entry.engagementRate / 5) * 100, 0, 100);
-  const avgLikes = logScore(entry.avgLikes, 2_000_000);
-  const avgComments = logScore(entry.avgComments, 200_000);
-  const followerChange = clamp(((entry.followerChangePct + 5) / 20) * 100, 0, 100);
+  const scores = scoreComponents(entry);
 
   return round2(
-    followers * RANK_WEIGHTS.followers +
-      engagement * RANK_WEIGHTS.engagement +
-      avgLikes * RANK_WEIGHTS.avgLikes +
-      avgComments * RANK_WEIGHTS.avgComments +
-      followerChange * RANK_WEIGHTS.followerChange,
+    scores.followers * RANK_WEIGHTS.followers +
+      scores.engagement * RANK_WEIGHTS.engagement +
+      scores.avgLikes * RANK_WEIGHTS.avgLikes +
+      scores.avgComments * RANK_WEIGHTS.avgComments +
+      scores.followerChange * RANK_WEIGHTS.followerChange,
+  );
+}
+
+export function countryBoardRankScore(entry: RankFactorInput): number {
+  const scores = scoreComponents(entry);
+
+  return round2(
+    scores.followers * COUNTRY_BOARD_WEIGHTS.followers +
+      scores.engagement * COUNTRY_BOARD_WEIGHTS.engagement +
+      scores.avgLikes * COUNTRY_BOARD_WEIGHTS.avgLikes +
+      scores.avgComments * COUNTRY_BOARD_WEIGHTS.avgComments +
+      scores.followerChange * COUNTRY_BOARD_WEIGHTS.followerChange,
   );
 }
 

@@ -128,6 +128,43 @@ describe("weighted leaderboard ranking", () => {
     );
   });
 
+  it("uses the 70/30 board score for Middle East and UAE, but not USA or Europe", () => {
+    const largerUae = profile(
+      "baneenstars",
+      1_000_000,
+      [post("a", 2, 1_000)],
+      "Based in Dubai",
+    );
+    const strongerUae = profile(
+      "wessamq",
+      900_000,
+      [post("b", 2, 100_000, 20_000)],
+      "Based in Dubai",
+    );
+    const largerUsa = profile("taylorswift", 1_000_000, [post("c", 2, 1_000)]);
+    const strongerUsa = profile("selenagomez", 900_000, [post("d", 2, 100_000, 20_000)]);
+    const largerEurope = profile("davidguetta", 1_000_000, [post("e", 2, 1_000)]);
+    const strongerEurope = profile("sofiamcoelho", 900_000, [post("f", 2, 100_000, 20_000)]);
+    const board = rankProfiles(
+      [largerUae, strongerUae, largerUsa, strongerUsa, largerEurope, strongerEurope],
+      NOW,
+    );
+
+    expect(board.regional["middle-east"].map((entry) => entry.username)).toEqual([
+      "wessamq",
+      "baneenstars",
+    ]);
+    expect(board.regional.uae.map((entry) => entry.username)).toEqual(["wessamq", "baneenstars"]);
+    expect(board.regional.usa.map((entry) => entry.username)).toEqual([
+      "taylorswift",
+      "selenagomez",
+    ]);
+    expect(board.regional.europe.map((entry) => entry.username)).toEqual([
+      "davidguetta",
+      "sofiamcoelho",
+    ]);
+  });
+
   it("lets every one of the five signals raise the rank score", () => {
     const base = {
       followers: 1_000_000,

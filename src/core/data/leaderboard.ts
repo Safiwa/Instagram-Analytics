@@ -1,7 +1,7 @@
 import { inferCountrySignal, type CountryBasis } from "../analytics/country";
 import { computeMetrics } from "../analytics/metrics";
 import { likesVisible } from "../analytics/posts";
-import { rankFactors, rankScore, round2 } from "../analytics/rank";
+import { countryBoardRankScore, rankFactors, rankScore, round2 } from "../analytics/rank";
 import { log } from "../logging/logger";
 import { fetchLiveProfile, isLiveConfigured } from "./live";
 import {
@@ -18,7 +18,7 @@ import {
 } from "./tracked-store";
 import type { CreatorProfile, Post } from "./types";
 
-export { RANK_WEIGHTS, rankScore } from "../analytics/rank";
+export { COUNTRY_BOARD_WEIGHTS, RANK_WEIGHTS, rankScore } from "../analytics/rank";
 
 export const TRENDING_WINDOW_DAYS = 15;
 export const LEADERBOARD_SIZE = 10;
@@ -212,9 +212,9 @@ function byRank(left: LeaderboardEntry, right: LeaderboardEntry): number {
   return right.rankScore - left.rankScore || right.followers - left.followers;
 }
 
-// Country boards are "top ten" lists, so follower count is the primary key. The
-// weighted score only breaks ties; a small account with a viral post cannot
-// take a top-ten slot from a materially larger account in the same region.
+// USA and Europe country boards are "top ten" lists, so follower count is the
+// primary key. The weighted score only breaks ties; a small account with a
+// viral post cannot take a top-ten slot from a materially larger account.
 function byFollowersFirst(left: LeaderboardEntry, right: LeaderboardEntry): number {
   return (
     right.followers - left.followers ||
@@ -223,9 +223,21 @@ function byFollowersFirst(left: LeaderboardEntry, right: LeaderboardEntry): numb
   );
 }
 
+// Middle East and UAE boards weight followers at 70% and the remaining four
+// signals at 30%. This keeps follower scale dominant while engagement, likes,
+// comments and growth still separate similarly sized accounts.
+function byCountryBoardRank(left: LeaderboardEntry, right: LeaderboardEntry): number {
+  return (
+    countryBoardRankScore(right) - countryBoardRankScore(left) ||
+    right.followers - left.followers ||
+    left.username.localeCompare(right.username)
+  );
+}
+
 // The Middle East board is a country overview, so no more than three entries may
-// share a country. Entries are already follower-sorted when this runs, so the
-// largest accounts keep their places and later same-country accounts are skipped.
+// share a country. Entries are already sorted by their board score when this
+// runs, so the strongest accounts keep their places and later same-country
+// accounts are skipped.
 function capCountryRepeats(entries: LeaderboardEntry[], maximum = 3): LeaderboardEntry[] {
   const counts = new Map<string, number>();
   return entries.filter((entry) => {
@@ -327,10 +339,11 @@ function isCountryBoardEligible(entry: LeaderboardEntry, board: Region): boolean
 function regionalBoards(entries: LeaderboardEntry[]): Record<Region, LeaderboardEntry[]> {
   const boards = {} as Record<Region, LeaderboardEntry[]>;
   for (const board of REGION_BOARDS) {
+    const weightedFollowers = board.id === "middle-east" || board.id === "uae";
     const eligible = entries
       .filter((entry) => isInRegionBoard(entry.username, board.id))
       .filter((entry) => isCountryBoardEligible(entry, board.id))
-      .sort(byFollowersFirst);
+      .sort(weightedFollowers ? byCountryBoardRank : byFollowersFirst);
     // The dedicated UAE board stays UAE-only; the wider Middle East board must
     // keep looking at other countries instead of filling with one country.
     const boardEntries = board.id === "middle-east" ? capCountryRepeats(eligible) : eligible;
@@ -347,7 +360,8 @@ export function rankProfiles(profiles: CreatorProfile[], now = new Date()): Lead
   // High engagement still measures engagement across up to 12 recent public
   // posts, but followers are considered first (55%), then engagement rate (20%),
   // average likes (10%), average comments (5%) and 30-day follower change (10%).
-  // It therefore uses the same rank order as the trending and country boards.
+  // Trending uses this same order; Middle East and UAE country boards use the
+  // 70/30 follower-weighted order instead.
   const engaged = [...entries].sort(byRank).slice(0, LEADERBOARD_SIZE);
 
   // Trending still requires posts in the 15-day window, but the order is now the
