@@ -15,7 +15,8 @@ import {
 } from "pdf-lib";
 import { ESTIMATE_CONFIDENCE_LABEL } from "../../core/analytics/estimates";
 import { engagementTrend, postsPerWeek } from "../../core/analytics/estimates";
-import { computeMetrics, type ProfileMetrics } from "../../core/analytics/metrics";
+import { computeMetrics, describeFakeFollowers, type ProfileMetrics } from "../../core/analytics/metrics";
+import { likesVisible } from "../../core/analytics/posts";
 import type { CreatorProfile, Post } from "../../core/data/types";
 import { formatCompact, formatDate, formatPercent, instagramProfileUrl } from "../../core/format";
 
@@ -711,7 +712,7 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
       );
     }
     line(
-      `12-month change ${formatPercent(metrics.followerGrowthPct, "N/A")}${metrics.growthEstimated ? " (est.)" : metrics.followerGrowthPct === null ? "" : " (measured)"} | Fake followers ${formatCompact(metrics.fakeFollowers, "N/A")}${metrics.authenticityEstimated ? " (est.)" : ""} | Authenticity ${formatPercent(metrics.authenticityPct, "N/A")}${metrics.authenticityEstimated ? " (est.)" : ""}`,
+      `12-month change ${formatPercent(metrics.followerGrowthPct, "N/A")}${metrics.growthEstimated ? " (est.)" : metrics.followerGrowthPct === null ? "" : " (measured)"} | Fake followers ${describeFakeFollowers(metrics, "N/A")}${metrics.authenticityEstimated ? " (est.)" : ""} | Authenticity ${formatPercent(metrics.authenticityPct, "N/A")}${metrics.authenticityEstimated ? " (est.)" : ""}`,
       8.5,
       regular,
       INK_SOFT,
@@ -791,7 +792,7 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
         const cells = [
           formatDate(post.postedAt, false),
           post.type,
-          postMetric(post.likes, [post]),
+          likesVisible(post) ? postMetric(post.likes, [post]) : "Hidden",
           postMetric(post.comments, [post]),
           post.saves === undefined ? "N/A" : formatCompact(post.saves, "N/A"),
           post.caption || post.hashtags.join(" ") || "No caption",

@@ -4,6 +4,9 @@ export type Post = {
   caption: string;
   postedAt: string;
   likes: number;
+  // True when Instagram hides this post's like count (common on paid
+  // partnerships). `likes` is then 0 and must not be read as zero likes.
+  likesHidden?: boolean;
   comments: number;
   saves?: number;
   reach?: number;
@@ -51,6 +54,9 @@ export type CreatorProfile = {
   following: number;
   postsCount: number;
   isVerified: boolean;
+  // True when the data source could not tell whether the badge exists
+  // (Business Discovery never returns it). isVerified is then false.
+  verificationUnknown?: boolean;
   isPrivate?: boolean;
   source: "demo" | "public" | "live";
   profilePictureUrl?: string;

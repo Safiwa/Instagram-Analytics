@@ -1,5 +1,6 @@
 import { inferCountrySignal, type CountryBasis } from "../analytics/country";
 import { computeMetrics } from "../analytics/metrics";
+import { likesVisible } from "../analytics/posts";
 import { rankFactors, rankScore, round2 } from "../analytics/rank";
 import { log } from "../logging/logger";
 import { fetchLiveProfile, isLiveConfigured } from "./live";
@@ -253,13 +254,18 @@ function windowRate(posts: Post[], followers: number, cutoff: number) {
   }
 
   const savesComplete = recent.every((post) => typeof post.saves === "number");
-  const total = recent.reduce(
-    (sum, post) => sum + post.likes + post.comments + (savesComplete ? (post.saves ?? 0) : 0),
-    0,
-  );
+  // Hidden like counts arrive as 0, so likes average over posts that show them.
+  const visible = recent.filter(likesVisible);
+  const avgLikes =
+    visible.length > 0 ? visible.reduce((sum, post) => sum + post.likes, 0) / visible.length : 0;
+  const perPostOther =
+    recent.reduce(
+      (sum, post) => sum + post.comments + (savesComplete ? (post.saves ?? 0) : 0),
+      0,
+    ) / recent.length;
 
   return {
-    rate: round2((total / recent.length / followers) * 100),
+    rate: round2(((avgLikes + perPostOther) / followers) * 100),
     count: recent.length,
   };
 }

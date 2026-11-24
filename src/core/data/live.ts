@@ -103,6 +103,8 @@ function mapPost(media: IgMedia & { timestamp: string }): Post {
     caption,
     postedAt: media.timestamp,
     likes: Math.max(0, media.like_count ?? 0),
+    // Business Discovery omits like_count when the owner hides likes.
+    ...(typeof media.like_count === "number" ? {} : { likesHidden: true }),
     comments: Math.max(0, media.comments_count ?? 0),
     viewCount: typeof media.view_count === "number" ? media.view_count : undefined,
     permalink: media.permalink,
@@ -125,6 +127,9 @@ function mapProfile(data: IgBusinessDiscovery, fallbackUsername: string): Creato
     // business_discovery cannot return the badge; use the real public-data
     // snapshot as a fallback. Fresh web identity lookups override this in adapter.ts.
     isVerified: isVerifiedHandle(username),
+    // Outside the snapshot the badge is unknown until adapter.ts merges a
+    // fresh public identity lookup.
+    ...(isVerifiedHandle(username) ? {} : { verificationUnknown: true }),
     source: "live",
     profilePictureUrl: data.profile_picture_url,
     website: data.website,

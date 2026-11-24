@@ -1066,6 +1066,7 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
       caption: candidate.caption,
       postedAt: candidate.postedAt,
       likes: likes ?? 0,
+      ...(likes === undefined ? { likesHidden: true } : {}),
       comments: comments ?? 0,
       viewCount: candidate.views ?? metrics?.views,
       permalink: `${ORIGIN}/p/${candidate.shortcode}/`,

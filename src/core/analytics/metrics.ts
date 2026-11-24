@@ -1,5 +1,6 @@
 import type { CreatorProfile } from "../data/types";
-import { estimatePublicSignals } from "./estimates";
+import { estimatePublicSignals, FAKE_FOLLOWER_RISK_LABEL } from "./estimates";
+import { median, postsWithVisibleLikes } from "./posts";
 
 export function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -24,7 +25,11 @@ export function computeMetrics(profile: CreatorProfile) {
     posts.length === 0
       ? (profile.thirdPartyEngagement ?? null)
       : null;
-  const postAvgLikes = round2(average(posts.map((post) => post.likes)));
+  // Posts with hidden like counts report 0 likes. Averaging those zeros would
+  // understate likes and engagement, so likes use only posts that show them.
+  const visibleLikePosts = postsWithVisibleLikes(posts);
+  const hiddenLikePosts = posts.length - visibleLikePosts.length;
+  const postAvgLikes = round2(average(visibleLikePosts.map((post) => post.likes)));
   const postAvgComments = round2(average(posts.map((post) => post.comments)));
   const avgLikes = thirdPartyEngagement ? thirdPartyEngagement.averageLikes : postAvgLikes;
   const avgComments = thirdPartyEngagement ? thirdPartyEngagement.averageComments : postAvgComments;
@@ -46,6 +51,17 @@ export function computeMetrics(profile: CreatorProfile) {
     : profile.followers === 0
       ? 0
       : round2(((avgLikes + avgComments + (avgSaves ?? 0)) / profile.followers) * 100);
+
+  // The average is pulled up by a single viral post. The typical (median) post
+  // shows what a normal upload earns; both are reported side by side.
+  const typicalEngagementRate =
+    thirdPartyEngagement || visibleLikePosts.length === 0 || profile.followers === 0
+      ? null
+      : round2(
+          (median(visibleLikePosts.map((post) => post.likes + post.comments)) /
+            profile.followers) *
+            100,
+        );
 
   // Demo fixtures keep their exact values. Public/live profiles have no measured
   // fake-follower or history fields, so they may use disclosed public-signal estimates.
@@ -79,17 +95,27 @@ export function computeMetrics(profile: CreatorProfile) {
       : (estimates?.fakeFollowersPct ?? null);
 
   const usingEstimates = growthEstimated || authenticityEstimated;
+  const fakeFollowersRange =
+    measuredAuthenticityPct === null &&
+    estimates?.fakeFollowersLowPct != null &&
+    estimates.fakeFollowersHighPct != null
+      ? { lowPct: estimates.fakeFollowersLowPct, highPct: estimates.fakeFollowersHighPct }
+      : null;
 
   return {
     avgLikes,
     avgComments,
     avgSaves,
     engagementRate,
+    typicalEngagementRate,
+    hiddenLikePosts,
     engagementBasis,
     engagementSource,
     thirdPartyEngagement,
     fakeFollowers,
     fakeFollowersPct,
+    fakeFollowersRange,
+    fakeFollowerRisk: measuredAuthenticityPct === null ? (estimates?.fakeFollowerRisk ?? null) : null,
     followerGrowthPct,
     authenticityPct,
     growthEstimated,
@@ -101,3 +127,18 @@ export function computeMetrics(profile: CreatorProfile) {
 }
 
 export type ProfileMetrics = ReturnType<typeof computeMetrics>;
+
+// Modeled fake followers are shown as a share range plus a risk band, never as
+// an exact count: the model cannot see the follower list. Measured (demo)
+// values keep their exact count.
+export function describeFakeFollowers(metrics: ProfileMetrics, fallback = "—"): string {
+  if (metrics.fakeFollowersRange && metrics.fakeFollowerRisk) {
+    const { lowPct, highPct } = metrics.fakeFollowersRange;
+    return `${Math.round(lowPct)}-${Math.round(highPct)}% (${FAKE_FOLLOWER_RISK_LABEL[metrics.fakeFollowerRisk]})`;
+  }
+  return typeof metrics.fakeFollowers === "number"
+    ? new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(
+        metrics.fakeFollowers,
+      )
+    : fallback;
+}

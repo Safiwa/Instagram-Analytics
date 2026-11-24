@@ -23,6 +23,14 @@ function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
+function roundSignificant(value: number, digits: number): number {
+  if (value === 0 || !Number.isFinite(value)) {
+    return 0;
+  }
+  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.abs(value))) - digits + 1);
+  return Math.round(value / magnitude) * magnitude;
+}
+
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
@@ -72,11 +80,10 @@ export function analyzeGrowth(profile: CreatorProfile, now = new Date()): Growth
     const annual = estimatePublicSignals(profile).followerGrowthPct;
     if (annual !== null) {
       growthEstimated = true;
-      monthGrowthPct = annual / 12;
-      if (trend !== null) {
-        monthGrowthPct += clamp(trend * 0.25, -3, 4);
-      }
-      monthGrowthPct = round2(clamp(monthGrowthPct, -8, 12));
+      // One twelfth of the modeled 12-month change keeps both estimates
+      // consistent. The interaction trend drives the momentum label instead
+      // of adding a separate monthly swing the yearly figure never shows.
+      monthGrowthPct = round2(clamp(annual / 12, -8, 12));
     }
   }
 
@@ -84,7 +91,9 @@ export function analyzeGrowth(profile: CreatorProfile, now = new Date()): Growth
     trend === null ? "unknown" : trend > 8 ? "accelerating" : trend < -8 ? "cooling" : "steady";
 
   if (monthGrowthFollowers === null && monthGrowthPct !== null) {
-    monthGrowthFollowers = Math.round((profile.followers * monthGrowthPct) / 100);
+    // A modeled change is shown to two significant figures so it does not
+    // read like an exact follower count.
+    monthGrowthFollowers = roundSignificant((profile.followers * monthGrowthPct) / 100, 2);
   }
 
   return {
