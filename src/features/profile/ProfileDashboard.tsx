@@ -250,6 +250,13 @@ export function ProfileDashboard({
             <p className="mt-0.5 text-sm text-slate-500">
               @{profile.username} · {profile.category}
             </p>
+            {profile.tracking ? (
+              <p data-testid="tracking-since" className="mt-1 text-xs text-slate-500">
+                Tracking since {formatDate(`${profile.tracking.since}T00:00:00Z`)} ·{" "}
+                {profile.tracking.points.length.toLocaleString("en-US")} daily{" "}
+                {profile.tracking.points.length === 1 ? "snapshot" : "snapshots"}
+              </p>
+            ) : null}
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">{profile.bio}</p>
             {profile.website ? (
               <a
@@ -380,7 +387,9 @@ export function ProfileDashboard({
               ? "Modeled from public signals"
               : growth.monthGrowthPct === null
                 ? "History not available"
-                : "Last two monthly points"
+                : growth.measuredFromSnapshots
+                  ? "Measured from stored snapshots"
+                  : "Last two monthly points"
           }
         />
         <MetricCard

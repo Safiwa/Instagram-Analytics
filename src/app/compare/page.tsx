@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { after } from "next/server";
 import { EmptyState } from "../../components/EmptyState";
 import { buildCompareRanking } from "../../core/analytics/compare";
 import { computeMetrics } from "../../core/analytics/metrics";
@@ -6,6 +7,7 @@ import { findSimilarPeers } from "../../core/analytics/peer";
 import { formatCompact, formatPercent } from "../../core/format";
 import { parseHandles, resolveProfile } from "../../core/data/adapter";
 import { getTrackedProfiles } from "../../core/data/leaderboard";
+import { recordProfileSnapshot } from "../../core/db/snapshots";
 import { ComparisonTable, type ComparisonRow } from "../../features/comparison/ComparisonTable";
 
 export const maxDuration = 60;
@@ -30,6 +32,10 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
       missing.push(parsed.handles[index]);
     }
   });
+
+  // Every compared profile is a lookup: store today's snapshot after responding.
+  const compared = rows.map((row) => row.profile);
+  after(() => Promise.all(compared.map((profile) => recordProfileSnapshot(profile, { lookup: true }))));
 
   const tracked = rows.length > 0 ? await getTrackedProfiles() : [];
   const existing = new Set(rows.map((row) => row.profile.username.toLowerCase()));

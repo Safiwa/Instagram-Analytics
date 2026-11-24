@@ -24,6 +24,20 @@ export type MonthlyPoint = {
   followers: number;
 };
 
+// One stored daily snapshot from the in-house database (UTC day, YYYY-MM-DD).
+// engagementRate is null on days when no posts were visible.
+export type DailyPoint = {
+  date: string;
+  followers: number;
+  engagementRate: number | null;
+};
+
+export type TrackingHistory = {
+  // UTC day of the first stored snapshot for this profile.
+  since: string;
+  points: DailyPoint[];
+};
+
 export type AudienceSlice = {
   label: string;
   percentage: number;
@@ -68,6 +82,9 @@ export type CreatorProfile = {
   accountCountry?: string | null;
   fakeFollowers?: number;
   followerHistory: MonthlyPoint[];
+  // Daily snapshots stored by this site since it first saw the profile.
+  // Absent when the database is not configured or has no rows yet.
+  tracking?: TrackingHistory;
   recentPosts: Post[];
   // A random sample of the account's followers, when a data source supplies
   // one. Instagram's API cannot list another account's followers, so this is

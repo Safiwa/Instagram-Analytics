@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { EmptyState } from "../../../components/EmptyState";
 import { excludedExclusiveHandles } from "../../../core/analytics/exclusive";
 import { analyzeGrowth } from "../../../core/analytics/growth";
@@ -12,6 +13,7 @@ import { resolveProfile } from "../../../core/data/adapter";
 import { getTrackedProfiles } from "../../../core/data/leaderboard";
 import { getRegionalProfiles } from "../../../core/data/regional";
 import type { CreatorProfile } from "../../../core/data/types";
+import { loadTrackingHistory, recordProfileSnapshot } from "../../../core/db/snapshots";
 import { ProfileDashboard } from "../../../features/profile/ProfileDashboard";
 
 export const maxDuration = 60;
@@ -55,11 +57,20 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     );
   }
 
-  const metrics = computeMetrics(resolution.profile);
-  const growth = analyzeGrowth(resolution.profile);
-  const tracked = await getTrackedProfiles();
+  const resolved = resolution.profile;
+  // Today's snapshot is written after the response is sent, so storing history
+  // never slows the page down. Demo fixtures are never stored.
+  after(() => recordProfileSnapshot(resolved, { lookup: true }));
+
+  const [tracking, tracked] = await Promise.all([
+    resolved.source === "demo" ? Promise.resolve(null) : loadTrackingHistory(resolved.username),
+    getTrackedProfiles(),
+  ]);
   const regionalPool = await getRegionalProfiles();
-  const initial = buildBenchmarks(resolution.profile, metrics, tracked, regionalPool);
+  const profile: CreatorProfile = tracking ? { ...resolved, tracking } : resolved;
+  const metrics = computeMetrics(profile);
+  const growth = analyzeGrowth(profile);
+  const initial = buildBenchmarks(profile, metrics, tracked, regionalPool);
   const excluded = excludedExclusiveHandles(initial);
   // Remove duplicate peers from the pools before ranking, so a five-profile
   // panel keeps all five rows instead of losing the duplicate's row afterwards.
@@ -67,18 +78,18 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
     excluded.size === 0
       ? initial
       : buildBenchmarks(
-          resolution.profile,
+          profile,
           metrics,
-          tracked.filter((profile) => !excluded.has(profile.username.toLowerCase())),
-          regionalPool.filter((profile) => !excluded.has(profile.username.toLowerCase())),
+          tracked.filter((candidate) => !excluded.has(candidate.username.toLowerCase())),
+          regionalPool.filter((candidate) => !excluded.has(candidate.username.toLowerCase())),
         );
   const regionalComparison = regionalPeer
-    ? buildKeyComparisons(resolution.profile, metrics, regionalPeer)
+    ? buildKeyComparisons(profile, metrics, regionalPeer)
     : [];
 
   return (
     <ProfileDashboard
-      profile={resolution.profile}
+      profile={profile}
       metrics={metrics}
       growth={growth}
       peer={peer}

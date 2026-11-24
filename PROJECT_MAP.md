@@ -27,6 +27,8 @@ All versions read from official registries on 2026-11-18: `registry.npmjs.org`, 
 | Lint | `eslint` + `eslint-config-next` | `10.15.0` + `16.4.6` | npm latest | no |
 | Types | `@types/node`, `@types/react`, `@types/react-dom` | `26.6.6`, `19.3.0`, `19.3.0` | npm latest | no |
 | Format | `prettier` | `3.10.1` | npm latest | no |
+| Database driver | `@neondatabase/serverless` | `1.2.1` | npm `1.2.1`, 2026-11-13 | no |
+| DB tests (dev) | `@electric-sql/pglite` | `0.6.0` | npm `0.6.0`, 2026-11-23; in-process Postgres so migration + SQL run against a real engine in Vitest | no |
 | Tunnel (external) | `cloudflared` | latest stable | Cloudflare install via `winget`; no npm dependency | no |
 
 **Explicitly evaluated and rejected (No Feature Creep):**
@@ -47,7 +49,7 @@ All versions read from official registries on 2026-11-18: `registry.npmjs.org`, 
 
 ## [SYSTEM_FLOW]
 
-Actor: an analyst checking public Instagram profiles. No login, no database.
+Actor: an analyst checking public Instagram profiles. No login. Optional Postgres history store (G15): without `DATABASE_URL` nothing is stored.
 
 ```
 / (handle lookup + analysis dashboard)
@@ -113,8 +115,9 @@ Fixture anchor `nora.style`: `followers=10000`, `fakeFollowers=350`, followers `
 | **G12** | Resilient public fetch | When crawler HTML has no posts, try `web_profile_info` and use inline engagement; show an explicit no-posts notice with `—` instead of zeros when neither source exposes posts. | `tests/public.test.ts` fallback + gated-account cases, route smoke |
 | **G13** | Free cloud-host proxy bridge | When `INSTAGRAM_PROXY_URL` is set, all profile/embed/web-profile requests go to the authenticated `/api/instagram-proxy` endpoint through a Cloudflare Tunnel; `PROXY_SECRET` is required in both environments; the endpoint allowlists only public Instagram profile/`web_profile_info`/embed URLs; 401/402/403/5xx and network failures fall back to direct fetch; transient 404/429/empty-shell responses retry once; no secret in logs; no credits or paid keys. | `tests/proxy.test.ts`, `tests/public.test.ts` proxy routing/fallback/retry cases, `npm run build` |
 | **G14** | Weekly digest + 30-day trial | Home page email/handle section with consent and honeypot; 30-day trial shown but not enforced; cron-only Monday sender reuses one profile resolution per handle; email includes engagement rate, week-over-week follower decrease, and follower growth with `Est.` label; signed one-click unsubscribe; Resend and Upstash settings keep secrets server-side; top header no longer shows the “Public web” badge. | `tests/digest.test.ts`, route list from `npm run build`, `npx eslint .` |
+| **G15** | In-house history store | Optional Neon Postgres (`DATABASE_URL`); migration `0001_profile_snapshots.sql` (profiles, profile_snapshots, posts, post_snapshots; one snapshot per profile/post per UTC day); profile + compare lookups store snapshots via `after()`; daily `/api/collect` cron (`CRON_SECRET`, 40 s budget, oldest first, tracked + 30-day searched handles); only Instagram-measured values stored (no third-party engagement, no demo); history read fails soft (5 s timeout → page unchanged); `Tracking since` header line; measured 30-day growth from a 30-45 day old snapshot replaces the estimate and its `Est.` badge. | `tests/db.test.ts` (PGlite, real migration), full suite, typecheck, eslint, build, local route smoke |
 
-Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12 → G13 → G14**. No step is marked done until its verification passes.
+Goal order is strict: **G1 → G2 → G3 → G4 → G5 → G6 → G7 → G8 → G9 → G10 → G11 → G12 → G13 → G14 → G15**. No step is marked done until its verification passes.
 
 ---
 
@@ -133,7 +136,8 @@ src/
 │  ├─ api/instagram-proxy/route.ts       # authenticated, allowlisted fetch from the local home IP
 │  ├─ api/digest/subscribe/route.ts      # POST → validate → store 30-day trial signup
 │  ├─ api/digest/send/route.ts           # CRON_SECRET-only Monday sender
-│  └─ api/digest/unsubscribe/route.ts    # signed token → delete subscription
+│  ├─ api/digest/unsubscribe/route.ts    # signed token → delete subscription
+│  └─ api/collect/route.ts               # CRON_SECRET-only daily snapshot collector
 ├─ features/
 │  ├─ discovery/HandleLookup.tsx         # "use client" — validated username → /profile/[username]
 │  ├─ profile/ProfileDashboard.tsx       # ONE file: header + KPIs + estimate panel + charts + posts
@@ -156,6 +160,10 @@ src/
 │  ├─ digest/email.ts                    # digest subject/text/html builder with weekly deltas
 │  ├─ digest/resend.ts                   # Resend REST sender, no secret logging
 │  ├─ digest/tokens.ts                   # signed unsubscribe tokens
+│  ├─ db/client.ts                       # optional Neon HTTP client (DATABASE_URL), 5 s query timeout
+│  ├─ db/snapshots.ts                    # snapshot upserts, tracking-history read, due-handle queue
+│  ├─ db/collector.ts                    # daily collector loop with time budget
+│  ├─ analytics/history.ts               # measured 30-day change from stored snapshots
 │  ├─ format.ts                          # nullable-aware compact numbers, percentages, dates
 │  └─ logging/logger.ts                  # bounded async queue, levels info/warn/error
 ├─ components/
@@ -172,7 +180,8 @@ src/
    ├─ proxy.test.ts
    ├─ compare.test.ts
    ├─ exclusive.test.ts
-   └─ digest.test.ts
+   ├─ digest.test.ts
+   └─ db.test.ts
 ```
 
 **Rules**
@@ -217,6 +226,7 @@ src/
 | `DIGEST_FROM_EMAIL` | required for digest delivery | Verified Resend sender address |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | required on Vercel | Upstash REST credentials for durable signup storage |
 | `CRON_SECRET` | required for digest delivery | Vercel Cron bearer token and unsubscribe-link signing secret |
+| `DATABASE_URL` | optional | Neon Postgres connection string for the in-house history store and `/api/collect`; run `npm run db:migrate` once |
 
 Local direct lookup needs no environment variables. The public Vercel deployment needs
 `INSTAGRAM_PROXY_URL` and `PROXY_SECRET`; the local server needs `PROXY_SECRET` to
@@ -239,6 +249,9 @@ smoke-test steps.
   `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, and `CRON_SECRET` to Vercel to
   activate the weekly digest sender and durable signups. The form works locally without
   them, but Vercel returns a configuration error until delivery is present.
+- `[P15]` **Deployment operator step:** connect a Neon database in Vercel → Storage (adds
+  `DATABASE_URL`), run `npm run db:migrate` once, confirm `CRON_SECRET`, redeploy, and
+  call `/api/collect` with the bearer secret.
 - `[P10]` **Optional:** a real-credential official-API smoke test. Public lookup and all
   mocked API paths are verified. The official path remains structurally tested but does
   not gate v1.2, because the product no longer requires Meta credentials.
@@ -249,6 +262,7 @@ smoke-test steps.
 
 | Gate | Command / probe | Result |
 |---|---|---|
+| In-house history store (G15) | Local gates on branch `feat/database-snapshots` (2026-11-25) | **246 tests** (26 files, new `db.test.ts` with 12 PGlite cases: storage, one-per-day upsert, API/public post merge by shortcode, hidden likes → null, third-party engagement never stored, demo/no-DB no-op, DB failure → false, ordered history + first day, measured 30-day change, estimate kept before 30 days and beyond 45, due-handle queue, collector budget/deferral/retry), typecheck, eslint, build pass; `next start` smoke without `DATABASE_URL`: `/`, `/profile/nora.style`, `/compare` 200 unchanged, `/api/collect` 503 until enabled. Production activation pending operator step `[P15]`. |
 | Unit + integration tests | `npm test` | **9 files, 59 tests passed** |
 | Static types | `npm run typecheck` | **exit 0** |
 | Lint | `npx eslint .` | **exit 0, zero warnings** |

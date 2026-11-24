@@ -1,5 +1,6 @@
 import type { CreatorProfile } from "../data/types";
 import { engagementTrend, estimatePublicSignals, postsPerWeek } from "./estimates";
+import { measuredMonthChange } from "./history";
 
 export type GrowthMomentum = "accelerating" | "steady" | "cooling" | "unknown";
 
@@ -14,6 +15,8 @@ export type GrowthAnalysis = {
   postsInWindowCapped: boolean;
   momentum: GrowthMomentum;
   growthEstimated: boolean;
+  // True when the 30-day change comes from this site's own stored snapshots.
+  measuredFromSnapshots: boolean;
   basis: string;
 };
 
@@ -55,11 +58,27 @@ export function analyzeGrowth(profile: CreatorProfile, now = new Date()): Growth
     postsInWindowCapped,
     momentum: "unknown",
     growthEstimated: false,
+    measuredFromSnapshots: false,
     basis: "Not enough public post data for a 30-day analysis.",
   };
 
+  // A follower change measured against this site's own 30-45 day old snapshot
+  // needs no posts, so it is used even when the post-based analysis is not.
+  const measured = profile.isPrivate ? null : measuredMonthChange(profile, now);
+  const measuredBasis = measured
+    ? `30-day follower change is measured against this site's stored snapshot from ${measured.baselineDate} (${measured.days} days ago).`
+    : "";
+
   if (profile.isPrivate || profile.followers <= 0 || posts.length === 0) {
-    return unavailable;
+    return measured
+      ? {
+          ...unavailable,
+          monthGrowthPct: measured.pct,
+          monthGrowthFollowers: measured.followers,
+          measuredFromSnapshots: true,
+          basis: measuredBasis,
+        }
+      : unavailable;
   }
 
   const trend = engagementTrend(posts);
@@ -69,7 +88,10 @@ export function analyzeGrowth(profile: CreatorProfile, now = new Date()): Growth
   let monthGrowthPct: number | null = null;
   let monthGrowthFollowers: number | null = null;
   let growthEstimated = false;
-  if (history.length >= 2) {
+  if (measured) {
+    monthGrowthPct = measured.pct;
+    monthGrowthFollowers = measured.followers;
+  } else if (history.length >= 2) {
     const previous = history[history.length - 2].followers;
     const current = history[history.length - 1].followers;
     if (previous > 0) {
@@ -105,8 +127,11 @@ export function analyzeGrowth(profile: CreatorProfile, now = new Date()): Growth
     postsInWindowCapped,
     momentum,
     growthEstimated,
+    measuredFromSnapshots: measured !== null,
     basis:
-      (growthEstimated
+      (measured
+        ? `${measuredBasis} Interaction trend and posting cadence are measured from recent public posts.`
+        : growthEstimated
         ? "30-day follower change is modeled from the same public signals as 12-month growth. Interaction trend and posting cadence are measured from recent public posts."
         : "30-day follower change uses the most recent two monthly data points. Interaction trend and posting cadence are measured from recent public posts.") +
       (postsInWindowCapped
