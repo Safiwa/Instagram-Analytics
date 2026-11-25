@@ -1,3 +1,4 @@
+import { isMiddleEastAccount } from "../analytics/country";
 import { loadIndexedProfiles } from "../db/indexStore";
 import { getTrackedProfiles } from "./leaderboard";
 import { isInRegionBoard, regionBoardHandles } from "./regions";
@@ -27,5 +28,34 @@ export async function getRegionalProfiles(): Promise<CreatorProfile[]> {
       }
     }
   }
-  return [...byUsername.values()].filter((profile) => isMiddleEastProfile(profile.username));
+  const curated = [...byUsername.values()].filter((profile) => isMiddleEastProfile(profile.username));
+
+  // Beyond the curated board, every Middle East account this site has indexed
+  // (from lookups and the daily collector) can be a peer, so smaller accounts
+  // and non-creator categories such as marketing agencies find real matches.
+  // Peers still need published country evidence in the ranking itself.
+  const seen = new Set(curated.map((profile) => profile.username.toLowerCase()));
+  const indexed = (await loadIndexedMiddleEast()).filter(
+    (profile) => !seen.has(profile.username.toLowerCase()),
+  );
+  return [...curated, ...indexed];
+}
+
+const INDEXED_POOL_LIMIT = 400;
+const INDEXED_POOL_TTL_MS = 10 * 60 * 1000;
+let indexedPool: { expiresAt: number; profiles: CreatorProfile[] } | null = null;
+
+async function loadIndexedMiddleEast(): Promise<CreatorProfile[]> {
+  if (indexedPool && indexedPool.expiresAt > Date.now()) {
+    return indexedPool.profiles;
+  }
+  const profiles = (await loadIndexedProfiles({ limit: INDEXED_POOL_LIMIT })).filter(
+    (profile) => !profile.isPrivate && isMiddleEastAccount(profile),
+  );
+  indexedPool = { expiresAt: Date.now() + INDEXED_POOL_TTL_MS, profiles };
+  return profiles;
+}
+
+export function resetRegionalPoolCacheForTests(): void {
+  indexedPool = null;
 }

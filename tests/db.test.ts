@@ -64,6 +64,7 @@ async function count(table: string): Promise<number> {
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(await readFile("db/migrations/0001_profile_snapshots.sql", "utf8"));
+  await db.exec(await readFile("db/migrations/0005_profile_bio_and_id.sql", "utf8"));
 });
 
 afterAll(async () => {
@@ -86,7 +87,7 @@ describe("snapshot storage", () => {
     expect(await count("post_snapshots")).toBe(2);
 
     const stored = await db.query<{ hashtags: string[]; lookup_count: number }>(
-      "select hashtags, lookup_count from posts join profiles on profiles.id = posts.profile_id where instagram_id = 'AAA111'",
+      "select hashtags, lookup_count from posts join profiles on profiles.id = posts.profile_id where posts.instagram_id = 'AAA111'",
     );
     expect(stored.rows[0].hashtags).toEqual(["dubai", "food"]);
     expect(stored.rows[0].lookup_count).toBe(1);

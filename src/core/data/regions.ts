@@ -107,6 +107,10 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   visitmorocco: "middle-east",
 
   // United Arab Emirates
+  // Dubai marketing agencies, tracked so agency profiles have real peers.
+  dreamize_: "uae",
+  mkvdigital: "uae",
+  "tikit.ae": "uae",
   hudabeauty: "uae",
   "the.matis": "uae",
   "trending.vibz.uae": "uae",

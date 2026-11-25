@@ -84,6 +84,111 @@ export function isWithinFollowerLatency(
   );
 }
 
+// Peer benchmarks match follower size step by step: ±30% first, then up to 3x,
+// then up to 10x larger or smaller, and finally the nearest sizes available.
+// The chosen step is returned so the page can say which range was used.
+export type FollowerBandStep = "close" | "3x" | "10x" | "nearest";
+
+export type FollowerBand = {
+  step: FollowerBandStep;
+  min: number;
+  max: number;
+  label: string;
+};
+
+export const NEAREST_BAND_SIZE = 5;
+
+function compactCount(value: number): string {
+  if (value >= 1_000_000) {
+    return `${round2(value / 1_000_000)}M`;
+  }
+  if (value >= 1_000) {
+    return `${round2(value / 1_000)}K`;
+  }
+  return String(Math.round(value));
+}
+
+function bandRange(min: number, max: number): string {
+  return `${compactCount(min)}–${compactCount(max)} followers`;
+}
+
+function fixedBands(targetFollowers: number): FollowerBand[] {
+  const t = targetFollowers;
+  return [
+    {
+      step: "close",
+      min: Math.ceil(t * (1 - FOLLOWER_LATENCY)),
+      max: Math.floor(t * (1 + FOLLOWER_LATENCY)),
+      label: `Similar size: within ±30% (${bandRange(Math.ceil(t * 0.7), Math.floor(t * 1.3))})`,
+    },
+    {
+      step: "3x",
+      min: Math.ceil(t / 3),
+      max: Math.floor(t * 3),
+      label: `Widened to 3x: no peer within ±30%, compared within ${bandRange(Math.ceil(t / 3), Math.floor(t * 3))}`,
+    },
+    {
+      step: "10x",
+      min: Math.ceil(t / 10),
+      max: Math.floor(t * 10),
+      label: `Widened to 10x: no peer within 3x, compared within ${bandRange(Math.ceil(t / 10), Math.floor(t * 10))}`,
+    },
+  ];
+}
+
+function sizeDistance(target: number, candidate: number): number {
+  return Math.abs(Math.log(Math.max(candidate, 1) / Math.max(target, 1)));
+}
+
+// Picks the narrowest band that leaves at least one candidate, after the
+// caller's own eligibility test. Candidates outside every fixed band fall back
+// to the nearest NEAREST_BAND_SIZE sizes, labelled as such.
+export function selectFollowerBand<T>(
+  targetFollowers: number,
+  candidates: readonly T[],
+  followersOf: (candidate: T) => number,
+  eligibleInBand: (candidate: T, band: FollowerBand) => boolean = () => true,
+  // The nearest-size fallback beyond 10x is opt-in. Global peer suggestions
+  // keep the 10x ceiling; the Middle East panel opts in and says so.
+  options: { allowNearest?: boolean } = {},
+): { band: FollowerBand; candidates: T[] } | null {
+  const usable = candidates.filter((candidate) => followersOf(candidate) > 0);
+  if (targetFollowers <= 0 || usable.length === 0) {
+    return null;
+  }
+  for (const band of fixedBands(targetFollowers)) {
+    const inBand = usable.filter((candidate) => {
+      const followers = followersOf(candidate);
+      return followers >= band.min && followers <= band.max && eligibleInBand(candidate, band);
+    });
+    if (inBand.length > 0) {
+      return { band, candidates: inBand };
+    }
+  }
+  if (!options.allowNearest) {
+    return null;
+  }
+  const nearest = [...usable]
+    .sort(
+      (left, right) =>
+        sizeDistance(targetFollowers, followersOf(left)) -
+        sizeDistance(targetFollowers, followersOf(right)),
+    )
+    .slice(0, NEAREST_BAND_SIZE);
+  const sizes = nearest.map(followersOf);
+  const min = Math.min(...sizes);
+  const max = Math.max(...sizes);
+  return {
+    band: {
+      step: "nearest",
+      min,
+      max,
+      label: `Nearest sizes available: no peer within 10x yet, so the closest tracked accounts are shown (${bandRange(min, max)})`,
+    },
+    candidates: nearest,
+  };
+}
+
 export type ComparableRangeInput = Pick<RankFactorInput, "followers" | "engagementRate">;
 
 export function isComparableRange(
@@ -107,6 +212,13 @@ export function isComparableRange(
   const higherRate = Math.max(targetRate, candidateRate);
   const lowerRate = Math.min(targetRate, candidateRate);
 
+  return higherRate <= lowerRate * COMPARABLE_ENGAGEMENT_MULTIPLIER + COMPARABLE_ENGAGEMENT_PADDING_PCT;
+}
+
+// The engagement half of isComparableRange(), for the widened follower bands.
+export function isComparableEngagement(targetRate: number, candidateRate: number): boolean {
+  const higherRate = Math.max(Math.max(0, targetRate), Math.max(0, candidateRate));
+  const lowerRate = Math.min(Math.max(0, targetRate), Math.max(0, candidateRate));
   return higherRate <= lowerRate * COMPARABLE_ENGAGEMENT_MULTIPLIER + COMPARABLE_ENGAGEMENT_PADDING_PCT;
 }
 

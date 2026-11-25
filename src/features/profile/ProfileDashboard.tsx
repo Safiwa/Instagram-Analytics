@@ -841,6 +841,12 @@ export function ProfileDashboard({
                   </p>
                 </div>
               </div>
+              {peer.band ? (
+                <p className="text-xs text-slate-500">
+                  Follower range used: {peer.band.label}
+                  {peer.joinedLabel ? ` · Peer ${peer.joinedLabel.charAt(0).toLowerCase()}${peer.joinedLabel.slice(1)}` : ""}
+                </p>
+              ) : null}
               <p className="text-xs leading-relaxed text-slate-600">
                 Why this peer: {peer.reasons.join(", ")}. This profile&apos;s engagement is{" "}
                 <span className="font-semibold text-slate-950">{peerInsight}</span>.
@@ -1012,6 +1018,14 @@ export function ProfileDashboard({
                       Shared activity: {regionalPeer.sharedActivity.join(", ")}
                     </p>
                   ) : null}
+                  {regionalPeer.band ? (
+                    <p className="text-xs text-slate-500">
+                      Follower range used: {regionalPeer.band.label}
+                      {regionalPeer.joinedLabel
+                        ? ` · Peer ${regionalPeer.joinedLabel.charAt(0).toLowerCase()}${regionalPeer.joinedLabel.slice(1)}`
+                        : ""}
+                    </p>
+                  ) : null}
                   <p className="text-xs leading-relaxed text-slate-600">
                     Why this peer: {regionalPeer.matchReasons.join(", ")}.
                   </p>
@@ -1070,7 +1084,8 @@ export function ProfileDashboard({
             </>
           ) : (
             <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-              No comparable Middle East profile is available right now. Check back shortly.
+              No Middle East profile in the same category is tracked yet. Peers appear as
+              more accounts in this category are looked up or tracked.
             </p>
           )}
 
@@ -1084,6 +1099,11 @@ export function ProfileDashboard({
                   <p className="text-xs text-slate-500">
                     Regional rank score · estimated authenticity adjusts rank when available
                   </p>
+                  {regionalRanking.band ? (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Follower range used: {regionalRanking.band.label}
+                    </p>
+                  ) : null}
                   {noPublicPosts ? (
                     <p className="mt-1 text-[11px] text-amber-700">
                       {hasStoredEngagement
@@ -1168,7 +1188,8 @@ export function ProfileDashboard({
             </div>
           ) : (
             <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-              No Middle East ranking is available right now. Check back shortly.
+              No Middle East ranking in this category yet. It appears once a same-category
+              peer with a published Middle East location is tracked.
             </p>
           )}
         </section>

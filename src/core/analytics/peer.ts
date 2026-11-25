@@ -15,9 +15,12 @@ import {
   type CountrySignal,
 } from "./country";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
+import { joinDateSimilarity, joinYearLabel } from "./accountAge";
 import {
   compareRank,
-  isComparableRange,
+  isComparableEngagement,
+  selectFollowerBand,
+  type FollowerBand,
   rankFactorSimilarity,
   rankFactors,
   rankScore,
@@ -72,6 +75,11 @@ export type PeerMatch = {
   country: CountrySignal;
   countryRelationship: CountryRelationship;
   reasons: string[];
+  // The follower range the match came from. Absent for ranking tables, which
+  // keep every category peer.
+  band?: FollowerBand;
+  // Estimated join year of the peer ("Joined ~2022 (est.)"), when known.
+  joinedLabel?: string;
 };
 
 type ScoreOptions = {
@@ -129,20 +137,33 @@ function scorePeers(
     return [];
   }
 
-  const scored = candidates
-    .map((candidate) => {
-      const candidateCategory = inferCategory(candidate);
-      const candidateMetrics = computeMetrics(candidate);
-      const candidateFactors = rankFactors(candidate, candidateMetrics);
-      return { candidate, candidateCategory, candidateMetrics, candidateFactors };
-    })
-    // A suggested benchmark must sit in the same audience-size and engagement
-    // band. Category and country fit cannot excuse a 1K vs 10M gap. Ranking
-    // tables keep all category peers so the five-profile group stays visible.
-    .filter(
-      ({ candidateFactors }) =>
-        !requireComparableRange || isComparableRange(targetFactors, candidateFactors),
-    )
+  const prepared = candidates.map((candidate) => {
+    const candidateCategory = inferCategory(candidate);
+    const candidateMetrics = computeMetrics(candidate);
+    const candidateFactors = rankFactors(candidate, candidateMetrics);
+    return { candidate, candidateCategory, candidateMetrics, candidateFactors };
+  });
+
+  // A suggested benchmark must sit in a believable audience-size band. Bands
+  // widen step by step (±30%, 3x, 10x, then nearest sizes) and the band used is
+  // reported. Ranking tables keep all category peers so the group stays visible.
+  let band: FollowerBand | undefined;
+  let inRange = prepared;
+  if (requireComparableRange) {
+    const selection = selectFollowerBand(
+      target.followers,
+      prepared,
+      (item) => item.candidate.followers,
+      (item) => isComparableEngagement(targetFactors.engagementRate, item.candidateFactors.engagementRate),
+    );
+    if (!selection) {
+      return [];
+    }
+    band = selection.band;
+    inRange = selection.candidates;
+  }
+
+  const scored = inRange
     .map(({ candidate, candidateCategory, candidateMetrics, candidateFactors }) => {
       const candidateCountry = inferCountrySignal(candidate);
       const relationship = countryRelationship(targetCountry, candidateCountry);
@@ -150,12 +171,16 @@ function scorePeers(
       const topicScore = sharedTopics.length > 0 ? clamp(60 + sharedTopics.length * 20, 0, 100) : 0;
       const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
       const exactCategory = candidateCategory === targetCategory;
+      const joinScore = joinDateSimilarity(target.instagramId, candidate.instagramId);
+      const joinedLabel = joinYearLabel(candidate.instagramId);
 
       // Weighted signal fit, category fit, country fit and themes all contribute.
-      // The country tier filter below makes same-country candidates win whenever
-      // they exist; the score then orders them by the same criteria as the ranking.
+      // The estimated join date is a small soft weight, used only when both
+      // accounts expose an id. The country tier filter below makes same-country
+      // candidates win whenever they exist.
       const score = round2(
-        factorScore * 0.35 +
+        factorScore * (joinScore === null ? 0.35 : 0.27) +
+          (joinScore ?? 0) * (joinScore === null ? 0 : 0.08) +
           topicScore * 0.15 +
           countryScore(relationship) * 0.25 +
           (exactCategory ? 100 : 75) * 0.25,
@@ -166,8 +191,17 @@ function scorePeers(
         exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`,
       );
       reasons.push(countryReason(relationship, targetCountry, candidateCountry));
-      if (requireComparableRange) {
-        reasons.push("similar audience size and engagement range");
+      if (band) {
+        reasons.push(
+          band.step === "close"
+            ? "similar audience size (within ±30%) and engagement range"
+            : band.step === "nearest"
+              ? "nearest audience size available"
+              : `audience size within ${band.step} and similar engagement`,
+        );
+      }
+      if (joinScore !== null && joinScore >= 75 && joinedLabel) {
+        reasons.push(`joined around the same time (${joinedLabel.replace("Joined ", "")})`);
       }
       reasons.push(
         `five-factor fit ${Math.round(factorScore)}% (followers, engagement, likes, comments, follower change)`,
@@ -185,6 +219,8 @@ function scorePeers(
         country: candidateCountry,
         countryRelationship: relationship,
         reasons,
+        ...(band ? { band } : {}),
+        ...(joinedLabel ? { joinedLabel } : {}),
       };
     });
 

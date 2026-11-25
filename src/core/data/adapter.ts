@@ -76,6 +76,9 @@ export async function resolveProfile(handle: string): Promise<ProfileResolution>
               verificationUnknown: false,
               profilePictureUrl: identity.profilePictureUrl ?? live.profilePictureUrl,
               accountCountry: identity.accountCountry ?? live.accountCountry ?? null,
+              ...(identity.instagramId ?? live.instagramId
+                ? { instagramId: identity.instagramId ?? live.instagramId }
+                : {}),
             }
           : live,
       };

@@ -58,11 +58,25 @@ export function snapshotValues(profile: CreatorProfile) {
   };
 }
 
+// Placeholder biographies written by the data adapters are not stored.
+function storableBio(bio: string | undefined): string | null {
+  const text = bio?.trim();
+  if (!text || text === "No biography provided.") {
+    return null;
+  }
+  return text.slice(0, 500);
+}
+
+function storableInstagramId(id: string | undefined): string | null {
+  return id && /^[0-9]{1,25}$/.test(id) ? id : null;
+}
+
 const UPSERT_PROFILE = `
 insert into profiles (
   username, display_name, category, account_country, is_verified, is_private,
-  profile_picture_url, tracked, lookup_count, last_lookup_at, last_snapshot_at
-) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+  profile_picture_url, tracked, lookup_count, last_lookup_at, last_snapshot_at,
+  bio, instagram_id
+) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 on conflict (username) do update set
   display_name = excluded.display_name,
   category = excluded.category,
@@ -74,6 +88,8 @@ on conflict (username) do update set
   lookup_count = profiles.lookup_count + excluded.lookup_count,
   last_lookup_at = coalesce(excluded.last_lookup_at, profiles.last_lookup_at),
   last_snapshot_at = excluded.last_snapshot_at,
+  bio = coalesce(excluded.bio, profiles.bio),
+  instagram_id = coalesce(excluded.instagram_id, profiles.instagram_id),
   updated_at = now()
 returning id`;
 
@@ -155,6 +171,8 @@ export async function recordProfileSnapshot(
       options.lookup ? 1 : 0,
       options.lookup ? now.toISOString() : null,
       now.toISOString(),
+      storableBio(profile.bio),
+      storableInstagramId(profile.instagramId),
     ]);
     const profileId = row?.id;
     if (typeof profileId !== "string") {
