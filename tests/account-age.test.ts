@@ -83,3 +83,23 @@ describe("marketing agency category", () => {
     expect(inferExplicitCategory({ ...base, displayName: "CM", bio: "Hello" })).toBeNull();
   });
 });
+
+describe("creator bios that mention brands", () => {
+  it("keeps a food creator with brand collaborations in the creator group", () => {
+    const reem: CreatorProfile = {
+      username: "reemkurdy",
+      displayName: "ريم كردي",
+      category: "Instagram Professional",
+      bio: "Food Creator | Cooking • Reviews • Lifestyle 📍dubai 🇦🇪 | Brand Collaborations 💌",
+      followers: 115_000,
+      following: 500,
+      postsCount: 900,
+      isVerified: true,
+      source: "live",
+      followerHistory: [],
+      recentPosts: [],
+    };
+    expect(inferExplicitCategory(reem)).toBe("Food blogger");
+    expect(inferExplicitCategory({ ...reem, category: "Reel creator" })).toBe("Reel/Video creator");
+  });
+});

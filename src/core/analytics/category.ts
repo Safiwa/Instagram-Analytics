@@ -103,12 +103,18 @@ const RULES: Rule[] = [
     keywords: ["news", "media", "headlines", "magazine", "time out", "geographic", "original stories"],
   },
   {
-    label: "Business & brand",
-    keywords: ["we mean business", "brand", "mall", "dubaimall", "retail", "shop", "company"],
-  },
-  {
     label: "Food blogger",
-    keywords: ["food", "chef", "recipe", "cooking", "restaurant", "cafe", "food & drink"],
+    keywords: [
+      "food creator",
+      "food blogger",
+      "food",
+      "chef",
+      "recipe",
+      "cooking",
+      "restaurant",
+      "cafe",
+      "food & drink",
+    ],
   },
   {
     label: "Travel blogger",
@@ -116,7 +122,7 @@ const RULES: Rule[] = [
   },
   {
     label: "Reel/Video creator",
-    keywords: ["reel creator", "video creator", "tiktok", "youtube"],
+    keywords: ["reel creator", "reels creator", "video creator", "tiktok", "youtube"],
   },
   // "Personal blog" must precede "Blogger", whose "blog" keyword is broader.
   {
@@ -130,6 +136,12 @@ const RULES: Rule[] = [
   {
     label: "Digital creator",
     keywords: ["digital creator", "creator"],
+  },
+  // Business words come after every creator rule: creators often mention
+  // brands ("Brand Collaborations") without being a brand themselves.
+  {
+    label: "Business & brand",
+    keywords: ["we mean business", "brand", "mall", "dubaimall", "retail", "shop", "company"],
   },
   {
     label: "Public figure",
@@ -196,7 +208,12 @@ function looksLikePerson(displayName: string): boolean {
   return words.every((word) => /^[\p{Lu}][\p{Ll}'.-]*$/u.test(word));
 }
 
-function explicitCategory(text: string): string | null {
+// "Brand collaborations", "brand deals" and similar phrases describe a
+// creator's work with brands, so they never make an account a brand.
+const BRAND_WORK_PHRASES = /\bbrand\s*(collab\w*|deals?|partnerships?|work|inquiries|enquiries)\b/gi;
+
+function explicitCategory(rawText: string): string | null {
+  const text = rawText.replace(BRAND_WORK_PHRASES, " ");
   for (const rule of RULES) {
     if (rule.keywords.some((keyword) => matchesKeyword(text, keyword))) {
       return rule.label;
@@ -209,14 +226,17 @@ function explicitCategory(text: string): string | null {
 // category rule. The "Digital creator" / "Public figure" fallbacks are useful for
 // global benchmarks but must not satisfy the regional category-label gate.
 export function inferExplicitCategory(profile: CreatorProfile): string | null {
-  return (
-    explicitCategory(`${profile.displayName} ${profile.bio}`) ??
-    // Instagram's own business category ("Marketing Agency"), when a data
-    // source returned one. The adapters' generic placeholders never match.
-    (GENERIC_CATEGORY_LABELS.has(profile.category.trim().toLowerCase())
-      ? null
-      : explicitCategory(profile.category))
-  );
+  // Instagram's own category ("Reel creator", "Marketing Agency") wins when a
+  // data source returned one, so the label matches the Instagram profile. The
+  // adapters' generic placeholders never count; then the name and bio decide.
+  const instagramCategory = isInstagramCategory(profile.category)
+    ? explicitCategory(profile.category)
+    : null;
+  return instagramCategory ?? explicitCategory(`${profile.displayName} ${profile.bio}`);
+}
+
+export function isInstagramCategory(category: string | undefined): boolean {
+  return Boolean(category) && !GENERIC_CATEGORY_LABELS.has(category!.trim().toLowerCase());
 }
 
 const GENERIC_CATEGORY_LABELS = new Set([

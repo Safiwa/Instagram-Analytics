@@ -79,7 +79,12 @@ insert into profiles (
 ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 on conflict (username) do update set
   display_name = excluded.display_name,
-  category = excluded.category,
+  -- A generic placeholder never overwrites a real Instagram category.
+  category = case
+    when lower(coalesce(excluded.category, '')) in ('', 'instagram professional', 'instagram creator', 'instagram account')
+      then coalesce(profiles.category, excluded.category)
+    else excluded.category
+  end,
   account_country = coalesce(excluded.account_country, profiles.account_country),
   is_verified = coalesce(excluded.is_verified, profiles.is_verified),
   is_private = excluded.is_private,

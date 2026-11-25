@@ -55,6 +55,19 @@ where p.username = $1
 order by s.captured_on desc
 limit 1`;
 
+// The last specific Instagram category stored for a profile ("Reel creator"),
+// so a lookup whose category read was refused still shows the real label.
+export async function loadStoredCategory(username: string): Promise<string | null> {
+  const rows = await query(
+    "stored-category",
+    `select category from profiles
+     where username = $1 and category is not null
+       and lower(category) not in ('instagram professional', 'instagram creator', 'instagram account')`,
+    [normalize(username)],
+  );
+  return toText(rows?.[0]?.category);
+}
+
 export async function loadStoredEngagement(username: string): Promise<StoredEngagement | null> {
   const rows = await query("stored-engagement", SELECT_STORED_ENGAGEMENT, [
     normalize(username),
