@@ -171,10 +171,11 @@ describe("Middle East category peer", () => {
     const visible = ranking?.rows.map((row) => row.profile.username) ?? [];
 
     expect(["low", "high"]).toContain(match?.profile.username);
-    expect(visible).toContain("low");
-    expect(visible).toContain("high");
-    expect(visible).not.toContain("too.low");
-    expect(visible).not.toContain("too.high");
+    // The card keeps the tightest band; the rank table widens to 3x so it can
+    // show five profiles, and says so.
+    expect(visible).toHaveLength(5);
+    expect(ranking?.band?.step).toBe("3x");
+    expect(findRegionalCategoryPeer(target, computeMetrics(target), pool)?.band?.step).toBe("close");
   });
 
   it("widens the follower band step by step and reports the band used", () => {
@@ -185,9 +186,11 @@ describe("Middle East category peer", () => {
     const peer = findRegionalCategoryPeer(target, computeMetrics(target), [twice, far]);
     expect(peer?.profile.username).toBe("twice");
     expect(peer?.band?.step).toBe("3x");
-    expect(buildRegionalRanking(target, computeMetrics(target), [twice, far])?.band?.label).toContain(
-      "Widened to 3x",
-    );
+    // The rank table needs four peers, so with only two it falls back to the
+    // nearest sizes and both appear.
+    const table = buildRegionalRanking(target, computeMetrics(target), [twice, far]);
+    expect(table?.band?.label).toContain("Nearest sizes available: fewer than 4 peers");
+    expect(table?.total).toBe(3);
 
     const close = profile("close", 1_100_000, ["festival poetry"]);
     expect(findRegionalCategoryPeer(target, computeMetrics(target), [twice, close])?.band?.step).toBe(
@@ -497,10 +500,11 @@ describe("Middle East authenticity-aware ranking", () => {
     const ranking = buildRegionalRanking(target, computeMetrics(target), [target, ...peers]);
     const usernames = ranking!.rows.map((row) => row.profile.username);
 
-    // @amrmaskoun is UAE, so only two further UAE rows fit the three-country cap.
-    expect(ranking?.total).toBe(3);
+    // Only three creator peers exist; when no other country can fill the table,
+    // same-country (UAE) peers do, so all three appear.
+    expect(ranking?.total).toBe(4);
     expect(usernames).toContain("amrmaskoun");
-    expect(usernames.filter((username) => username !== "amrmaskoun")).toHaveLength(2);
+    expect(usernames.filter((username) => username !== "amrmaskoun")).toHaveLength(3);
     expect(usernames).not.toContain("technicalguruji");
     expect(usernames).not.toContain("jumeirah");
     expect(ranking!.rows.every((row) => row.profile.followers >= 4_075_425)).toBe(true);
@@ -557,10 +561,11 @@ describe("Middle East authenticity-aware ranking", () => {
       "rima_alosta",
       "lookatsascha",
     ]).toContain(peer!.profile.username);
-    // @alaaabuharb is UAE, so only two further UAE rows fit the three-country cap.
-    expect(ranking?.total).toBe(3);
+    // Five rows: the searched profile plus four UAE creator peers, since no other
+    // Middle East country can fill the table.
+    expect(ranking?.total).toBe(5);
     expect(usernames).toContain("alaaabuharb");
-    expect(usernames.filter((username) => username !== "alaaabuharb")).toHaveLength(2);
+    expect(usernames.filter((username) => username !== "alaaabuharb")).toHaveLength(4);
     expect(
       [
         "sarahmalas",

@@ -12,7 +12,7 @@ import {
 } from "../../../core/analytics/regional";
 import { resolveProfile } from "../../../core/data/adapter";
 import { getTrackedProfiles } from "../../../core/data/leaderboard";
-import { getRegionalProfiles } from "../../../core/data/regional";
+import { getIndexedPool, getRegionalProfiles, mergePools } from "../../../core/data/regional";
 import type { CreatorProfile } from "../../../core/data/types";
 import { indexPosition } from "../../../core/analytics/benchmark";
 import { withStoredHistory } from "../../../core/db/enrich";
@@ -66,11 +66,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   // never slows the page down. Demo fixtures are never stored.
   after(() => recordProfileSnapshot(resolved, { lookup: true }));
 
-  const [profile, tracked, sample] = await Promise.all([
+  const [profile, trackedOnly, sample, indexed] = await Promise.all([
     withStoredHistory(resolved),
     getTrackedProfiles(),
     resolved.source === "demo" ? Promise.resolve([]) : getIndexSample(),
+    resolved.source === "demo" ? Promise.resolve([]) : getIndexedPool(),
   ]);
+  // The same-country peer card and five-row rank table draw on tracked accounts
+  // plus every profile this site has indexed, so smaller accounts and niche
+  // categories (e.g. marketing agencies) find real same-country peers.
+  const tracked = mergePools(trackedOnly, indexed);
   // The Middle East panel is hidden for accounts outside the region, so its
   // peer pool is only loaded for Middle East accounts.
   const regionalPool = isMiddleEastAccount(profile) ? await getRegionalProfiles() : [];
