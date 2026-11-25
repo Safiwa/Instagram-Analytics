@@ -94,6 +94,26 @@ function clamp(value: number, minimum: number, maximum: number): number {
 
 const MAX_COUNTRY_REPEATS = 3;
 
+function cappedCount(candidates: CreatorProfile[], targetCountry: CountrySignal): number {
+  const counts = new Map<string, number>();
+  if (targetCountry.country) {
+    counts.set(targetCountry.country, 1);
+  }
+  let usable = 0;
+  for (const candidate of candidates) {
+    const country = inferCountrySignal(candidate).country;
+    if (!country) {
+      continue;
+    }
+    const count = counts.get(country) ?? 0;
+    if (count < MAX_COUNTRY_REPEATS) {
+      counts.set(country, count + 1);
+      usable += 1;
+    }
+  }
+  return usable;
+}
+
 // The target row is itself part of the five-row benchmark, so its country counts
 // toward the three-row limit. Profiles without a published country do not add a
 // country to the count.
@@ -155,18 +175,8 @@ function fillCountryCap(
       break;
     }
   }
-  // The three-per-country limit is a preference for regional variety. When no
-  // other Middle East country can fill the table, same-country peers do, so the
-  // panel still shows five profiles.
-  for (const peer of fallback) {
-    if (result.length >= limit) {
-      break;
-    }
-    if (!seen.has(peer.profile.username)) {
-      result.push(peer);
-      seen.add(peer.profile.username);
-    }
-  }
+  // The three-per-country limit is firm: the Middle East table is a regional
+  // view, so it shows fewer rows rather than filling up with one country.
   return result;
 }
 
@@ -236,7 +246,12 @@ function rankedCandidates(
     eligible,
     (candidate) => candidate.followers,
     () => true,
-    { allowNearest: true, minCount },
+    {
+      allowNearest: true,
+      minCount,
+      // Widen until enough peers survive the three-per-country limit.
+      countUsable: (items) => cappedCount(items, targetCountry),
+    },
   );
   if (!selection) {
     return [];

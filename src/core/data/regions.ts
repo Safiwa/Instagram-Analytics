@@ -85,6 +85,11 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   gucci: "europe",
 
   // Middle East (including UAE accounts, which also have a dedicated board)
+  // Other Middle East countries, so the regional table is not mostly UAE.
+  ahmedhelmy: "middle-east",
+  yasmine_sabri: "middle-east",
+  haifawehbe: "middle-east",
+  dalalid: "middle-east",
   // Syria: creators and public figures, tracked so Syrian profiles have
   // same-country peers.
   jennyesber: "middle-east",
