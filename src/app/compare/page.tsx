@@ -10,6 +10,7 @@ import { getTrackedProfiles } from "../../core/data/leaderboard";
 import { withStoredHistory } from "../../core/db/enrich";
 import { recordProfileSnapshot } from "../../core/db/snapshots";
 import { ComparisonTable, type ComparisonRow } from "../../features/comparison/ComparisonTable";
+import { ensureRecordedLocations } from "../../core/db/accountLocations";
 
 export const maxDuration = 60;
 
@@ -20,6 +21,7 @@ type ComparePageProps = {
 export default async function ComparePage({ searchParams }: ComparePageProps) {
   const { handles } = await searchParams;
   const parsed = parseHandles(handles);
+  await ensureRecordedLocations();
   const resolutions = await Promise.all(
     parsed.handles.map(async (handle) => {
       const resolution = await resolveProfile(handle);

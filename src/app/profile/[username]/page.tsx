@@ -19,6 +19,7 @@ import { withStoredHistory } from "../../../core/db/enrich";
 import { getIndexSample } from "../../../core/db/indexStore";
 import { recordProfileSnapshot } from "../../../core/db/snapshots";
 import { ProfileDashboard } from "../../../features/profile/ProfileDashboard";
+import { ensureRecordedLocations } from "../../../core/db/accountLocations";
 
 export const maxDuration = 60;
 
@@ -49,7 +50,7 @@ function buildBenchmarks(
 
 export default async function ProfilePage({ params }: ProfilePageProps) {
   const { username } = await params;
-  const resolution = await resolveProfile(username);
+  const [resolution] = await Promise.all([resolveProfile(username), ensureRecordedLocations()]);
 
   if (resolution.status !== "found") {
     return (

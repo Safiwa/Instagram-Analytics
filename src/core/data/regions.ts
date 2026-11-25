@@ -157,7 +157,7 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
 
   // Other Middle East creators (Lebanon and creators without a published country)
   elsakahwaji: "middle-east",
-  "najet.dh": "middle-east",
+  "najet.dh": "uae",
   "raw.lebanon": "middle-east",
 };
 
