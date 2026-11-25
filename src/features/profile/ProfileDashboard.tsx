@@ -147,7 +147,7 @@ export function ProfileDashboard({
   // The Middle East benchmark is shown only for Middle East accounts.
   const showRegionalBenchmark = isMiddleEastAccount(profile);
   const benchmarkScope = benchmarkCountry
-    ? `The closest peer and the ranking table use accounts with the same inferred country (${benchmarkCountry}) first. The table always shows five profiles: when fewer same-country peers are tracked, the remaining rows are filled from the same region, then other countries, then other categories, and each such row is marked.`
+    ? `The closest peer and the ranking table use accounts with the same inferred country (${benchmarkCountry}) first. The table aims for five profiles: when fewer same-country peers are tracked, remaining rows are filled only with same-category accounts from neighbouring countries in the same region, each marked; other countries and categories are never used.`
     : "Instagram has not published an “Account based in” value for this profile, so the closest available country or region tier is used instead.";
   // rankFactors falls back to zero when Instagram exposes no posts. That zero is
   // a placeholder, not a measurement. Engagement from a dated stored snapshot is
@@ -775,9 +775,15 @@ export function ProfileDashboard({
         </section>
       ) : null}
 
+      {/* Both benchmarks share one area: same-country peers on the left half and
+          Middle East peers on the right, up to ten profiles side by side. */}
+      <div
+        data-testid="benchmarks"
+        className={showRegionalBenchmark ? "grid gap-6 xl:grid-cols-2 xl:items-start" : "grid gap-6"}
+      >
       <section
         data-testid="peer-benchmark"
-        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
       >
         <div className="flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
@@ -803,7 +809,7 @@ export function ProfileDashboard({
         </div>
 
         {peer ? (
-          <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center xl:grid-cols-1 2xl:grid-cols-[1fr_auto]">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Link
@@ -972,7 +978,7 @@ export function ProfileDashboard({
       {showRegionalBenchmark ? (
         <section
           data-testid="regional-benchmark"
-          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
         >
           <div className="flex items-start gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
@@ -990,7 +996,7 @@ export function ProfileDashboard({
 
           {regionalPeer ? (
             <>
-              <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+              <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center xl:grid-cols-1 2xl:grid-cols-[1fr_auto]">
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
@@ -1200,6 +1206,7 @@ export function ProfileDashboard({
           )}
         </section>
       ) : null}
+      </div>
     </div>
   );
 }

@@ -151,7 +151,8 @@ describe("same-country peer benchmark", () => {
     expect(dashboard).toContain(
       "The closest peer and the ranking table use accounts with the same inferred country",
     );
-    expect(dashboard).toContain("The table always shows five profiles");
+    expect(dashboard).toContain("other countries and categories are never used");
+    expect(dashboard).toContain('data-testid="benchmarks"');
   });
 
   it("discloses the fallback when no country signal is published", () => {
