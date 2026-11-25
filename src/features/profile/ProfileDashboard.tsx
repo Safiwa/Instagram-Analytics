@@ -844,7 +844,7 @@ export function ProfileDashboard({
               {peer.band ? (
                 <p className="text-xs text-slate-500">
                   Follower range used: {peer.band.label}
-                  {peer.joinedLabel ? ` · Peer ${peer.joinedLabel.charAt(0).toLowerCase()}${peer.joinedLabel.slice(1)}` : ""}
+                  {peer.joinedLabel ? ` · Peer's ${peer.joinedLabel.toLowerCase()}` : ""}
                 </p>
               ) : null}
               <p className="text-xs leading-relaxed text-slate-600">
@@ -1022,7 +1022,7 @@ export function ProfileDashboard({
                     <p className="text-xs text-slate-500">
                       Follower range used: {regionalPeer.band.label}
                       {regionalPeer.joinedLabel
-                        ? ` · Peer ${regionalPeer.joinedLabel.charAt(0).toLowerCase()}${regionalPeer.joinedLabel.slice(1)}`
+                        ? ` · Peer's ${regionalPeer.joinedLabel.toLowerCase()}`
                         : ""}
                     </p>
                   ) : null}

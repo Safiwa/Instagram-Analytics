@@ -257,14 +257,19 @@ describe("progressive follower bands and join dates", () => {
     expect(match?.reasons.join(" ")).toContain("within 3x");
   });
 
-  it("prefers a peer that joined around the same time when other signals tie", () => {
-    const target = { ...profile("dubai.style", 60_000, "Fashion and beauty", 2_000), instagramId: "49930798557" };
-    const sameEra = { ...profile("uae.a", 62_000, "Fashion and beauty", 2_000), instagramId: "50100000000" };
-    const oldEra = { ...profile("uae.b", 62_000, "Fashion and beauty", 2_000), instagramId: "300000000" };
+  it("prefers a peer that started posting around the same time when other signals tie", () => {
+    const at = (base: CreatorProfile, postedAt: string): CreatorProfile => ({
+      ...base,
+      postsCount: 2,
+      recentPosts: base.recentPosts.map((item) => ({ ...item, postedAt })),
+    });
+    const target = at(profile("dubai.style", 60_000, "Fashion and beauty", 2_000), "2026-11-20T00:00:00.000Z");
+    const sameEra = at(profile("uae.a", 62_000, "Fashion and beauty", 2_000), "2026-10-01T00:00:00.000Z");
+    const oldEra = at(profile("uae.b", 62_000, "Fashion and beauty", 2_000), "2020-01-01T00:00:00.000Z");
 
     const [first] = findSimilarPeers(target, computeMetrics(target), [oldEra, sameEra]);
     expect(first?.profile.username).toBe("uae.a");
-    expect(first?.reasons.join(" ")).toContain("joined around the same time");
+    expect(first?.reasons.join(" ")).toContain("started posting around the same time");
   });
 });
 

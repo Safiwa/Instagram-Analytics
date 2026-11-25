@@ -16,7 +16,7 @@ import {
   type CountrySignal,
 } from "./country";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
-import { joinDateSimilarity, joinYearLabel } from "./accountAge";
+import { joinDateSimilarity, joinedLabel as firstPostLabel } from "./accountAge";
 import {
   clampRankScoreToMatch,
   compareRank,
@@ -170,7 +170,7 @@ function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): 
 // (from the name, bio or Instagram's business category) in the same category
 // group, so creators meet creators and marketing agencies meet agencies, and an
 // exact label match is preferred. Fallback labels do not qualify. Public post
-// activity and an estimated join date only strengthen the match.
+// activity and the first-public-post date only strengthen the match.
 function rankedCandidates(
   target: CreatorProfile,
   metrics: ProfileMetrics,
@@ -238,8 +238,8 @@ function rankedCandidates(
     const shared = sharedPostActivity(target, candidate);
     const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
     const activityScore = shared.length > 0 ? clamp(80 + shared.length * 5, 0, 100) : 75;
-    const joinScore = joinDateSimilarity(target.instagramId, candidate.instagramId);
-    const joinedLabel = joinYearLabel(candidate.instagramId);
+    const joinScore = joinDateSimilarity(target, candidate);
+    const joinedLabel = firstPostLabel(candidate);
     const raw =
       factorScore * (joinScore === null ? 0.55 : 0.47) +
       (joinScore ?? 0) * (joinScore === null ? 0 : 0.08) +
@@ -252,7 +252,7 @@ function rankedCandidates(
       ...(shared.length > 0 ? [`shared activity: ${shared.join(", ")}`] : []),
       `regional fit ${Math.round(factorScore)}%`,
       ...(joinScore !== null && joinScore >= 75 && joinedLabel
-        ? [`joined around the same time (${joinedLabel.replace("Joined ", "")})`]
+        ? [`started posting around the same time (${joinedLabel.toLowerCase()})`]
         : []),
       ...(postsNotExposed ? ["posts not exposed; public signals only"] : []),
     ];

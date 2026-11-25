@@ -15,7 +15,7 @@ import {
   type CountrySignal,
 } from "./country";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
-import { joinDateSimilarity, joinYearLabel } from "./accountAge";
+import { joinDateSimilarity, joinedLabel as firstPostLabel } from "./accountAge";
 import {
   compareRank,
   isComparableEngagement,
@@ -78,7 +78,7 @@ export type PeerMatch = {
   // The follower range the match came from. Absent for ranking tables, which
   // keep every category peer.
   band?: FollowerBand;
-  // Estimated join year of the peer ("Joined ~2022 (est.)"), when known.
+  // The peer's first public post ("First post Nov 2026"), when every post is visible.
   joinedLabel?: string;
 };
 
@@ -171,12 +171,12 @@ function scorePeers(
       const topicScore = sharedTopics.length > 0 ? clamp(60 + sharedTopics.length * 20, 0, 100) : 0;
       const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
       const exactCategory = candidateCategory === targetCategory;
-      const joinScore = joinDateSimilarity(target.instagramId, candidate.instagramId);
-      const joinedLabel = joinYearLabel(candidate.instagramId);
+      const joinScore = joinDateSimilarity(target, candidate);
+      const joinedLabel = firstPostLabel(candidate);
 
       // Weighted signal fit, category fit, country fit and themes all contribute.
-      // The estimated join date is a small soft weight, used only when both
-      // accounts expose an id. The country tier filter below makes same-country
+      // The first-public-post date is a small soft weight, used only when both
+      // accounts show every post they have published. The country tier filter below makes same-country
       // candidates win whenever they exist.
       const score = round2(
         factorScore * (joinScore === null ? 0.35 : 0.27) +
@@ -201,7 +201,7 @@ function scorePeers(
         );
       }
       if (joinScore !== null && joinScore >= 75 && joinedLabel) {
-        reasons.push(`joined around the same time (${joinedLabel.replace("Joined ", "")})`);
+        reasons.push(`started posting around the same time (${joinedLabel.toLowerCase()})`);
       }
       reasons.push(
         `five-factor fit ${Math.round(factorScore)}% (followers, engagement, likes, comments, follower change)`,

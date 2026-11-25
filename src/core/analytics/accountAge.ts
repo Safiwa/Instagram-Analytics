@@ -1,65 +1,46 @@
+import type { CreatorProfile } from "../data/types";
+
 // Instagram publishes no join date outside the logged-in app's "About this
-// account" sheet. Account ids (the numeric "pk") are issued in rising order,
-// so an id places an account roughly in time. These anchors are approximate
-// first-ids-of-the-year and the result is always labelled as an estimate. It
-// is a soft benchmark criterion, never a filter.
-const JOIN_YEAR_ANCHORS: readonly (readonly [number, number])[] = [
-  [0, 2010],
-  [2.0e7, 2011],
-  [2.5e8, 2012],
-  [5.5e8, 2013],
-  [1.4e9, 2014],
-  [2.0e9, 2015],
-  [3.0e9, 2016],
-  [5.0e9, 2017],
-  [7.0e9, 2018],
-  [1.2e10, 2019],
-  [2.5e10, 2020],
-  [4.4e10, 2021],
-  [5.0e10, 2022],
-  [5.7e10, 2023],
-  [6.4e10, 2024],
-  [7.0e10, 2025],
-  [7.6e10, 2026],
-];
+// account" sheet, and numeric account ids are not issued in date order (a
+// November 2026 account carried an id typical of 2021), so ids are not used.
+//
+// What can be measured is the first public post: when every post the account
+// has published is visible to this site, the oldest one is the account's first
+// post. Larger accounts show only their latest posts, so their first post is
+// unknown and this criterion is simply left out for them.
+export type FirstPost = { year: number; month: number; label: string };
 
-function numericId(id: string | undefined): number | null {
-  if (!id || !/^[0-9]{1,25}$/.test(id)) {
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+export function firstPublicPost(profile: CreatorProfile): FirstPost | null {
+  const posts = profile.recentPosts;
+  if (profile.postsCount <= 0 || posts.length < profile.postsCount) {
     return null;
   }
-  const value = Number(id);
-  return Number.isFinite(value) && value > 0 ? value : null;
-}
-
-export function estimateJoinYear(id: string | undefined): number | null {
-  const value = numericId(id);
-  if (value === null) {
+  const times = posts
+    .map((post) => Date.parse(post.postedAt))
+    .filter((time) => Number.isFinite(time));
+  if (times.length === 0) {
     return null;
   }
-  let year = JOIN_YEAR_ANCHORS[0][1];
-  for (const [threshold, anchorYear] of JOIN_YEAR_ANCHORS) {
-    if (value >= threshold) {
-      year = anchorYear;
-    }
-  }
-  return year;
+  const first = new Date(Math.min(...times));
+  const year = first.getUTCFullYear();
+  const month = first.getUTCMonth();
+  return { year, month, label: `First post ${MONTHS[month]} ${year}` };
 }
 
-export function joinYearLabel(id: string | undefined): string | null {
-  const year = estimateJoinYear(id);
-  return year === null ? null : `Joined ~${year} (est.)`;
-}
-
-// 100 for the same estimated year, minus 25 points per year apart. Null when
-// either side has no id, so callers can leave the criterion out entirely.
-export function joinDateSimilarity(
-  left: string | undefined,
-  right: string | undefined,
-): number | null {
-  const a = estimateJoinYear(left);
-  const b = estimateJoinYear(right);
-  if (a === null || b === null) {
+// 100 for the same month, minus 4 points per month apart (0 after ~2 years).
+// Null when either side's first post is unknown, so callers leave it out.
+export function joinDateSimilarity(left: CreatorProfile, right: CreatorProfile): number | null {
+  const a = firstPublicPost(left);
+  const b = firstPublicPost(right);
+  if (!a || !b) {
     return null;
   }
-  return Math.max(0, 100 - Math.abs(a - b) * 25);
+  const months = Math.abs((a.year - b.year) * 12 + (a.month - b.month));
+  return Math.max(0, 100 - months * 4);
+}
+
+export function joinedLabel(profile: CreatorProfile): string | null {
+  return firstPublicPost(profile)?.label ?? null;
 }

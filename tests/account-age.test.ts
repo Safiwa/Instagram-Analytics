@@ -1,21 +1,46 @@
 import { describe, expect, it } from "vitest";
-import { estimateJoinYear, joinDateSimilarity, joinYearLabel } from "../src/core/analytics/accountAge";
+import { firstPublicPost, joinDateSimilarity, joinedLabel } from "../src/core/analytics/accountAge";
 import { inferExplicitCategory } from "../src/core/analytics/category";
 import { selectFollowerBand } from "../src/core/analytics/rank";
 import type { CreatorProfile } from "../src/core/data/types";
 
-describe("estimated join date", () => {
-  it("places rising account ids in rising years and labels them as estimates", () => {
-    expect(estimateJoinYear("25025320")).toBe(2011);
-    expect(estimateJoinYear("49930798557")).toBe(2021);
-    expect(joinYearLabel("49930798557")).toBe("Joined ~2021 (est.)");
-    expect(estimateJoinYear(undefined)).toBeNull();
-    expect(estimateJoinYear("not-a-number")).toBeNull();
+function withPosts(dates: string[], postsCount = dates.length): CreatorProfile {
+  return {
+    username: "x",
+    displayName: "X",
+    category: "Instagram Professional",
+    bio: "",
+    followers: 31,
+    following: 0,
+    postsCount,
+    isVerified: false,
+    source: "live",
+    followerHistory: [],
+    recentPosts: dates.map((postedAt, index) => ({
+      id: `p${index}`,
+      type: "Reel" as const,
+      caption: "",
+      postedAt,
+      likes: 1,
+      comments: 0,
+      hashtags: [],
+    })),
+  };
+}
+
+describe("first public post", () => {
+  it("is measured only when every published post is visible", () => {
+    const young = withPosts(["2026-11-24T00:00:00Z", "2026-11-20T00:00:00Z"]);
+    expect(firstPublicPost(young)).toMatchObject({ year: 2026, month: 10 });
+    expect(joinedLabel(young)).toBe("First post Nov 2026");
+    expect(firstPublicPost(withPosts(["2026-11-24T00:00:00Z"], 500))).toBeNull();
   });
 
-  it("scores similarity by years apart and is null without both ids", () => {
-    expect(joinDateSimilarity("49930798557", "50100000000")).toBe(75);
-    expect(joinDateSimilarity("49930798557", undefined)).toBeNull();
+  it("scores closeness in months and is null when either side is unknown", () => {
+    const a = withPosts(["2026-11-20T00:00:00Z"]);
+    const b = withPosts(["2026-08-01T00:00:00Z"]);
+    expect(joinDateSimilarity(a, b)).toBe(88);
+    expect(joinDateSimilarity(a, withPosts(["2026-11-20T00:00:00Z"], 900))).toBeNull();
   });
 });
 
