@@ -91,7 +91,6 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   nesreentafesh: "middle-east",
   dima_dalati: "middle-east",
   jamel_alhasan: "middle-east",
-  wafamoustafa: "middle-east",
   qatarairways: "middle-east",
   visitqatar: "middle-east",
   aljazeera: "middle-east",
