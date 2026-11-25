@@ -207,8 +207,8 @@ describe("peer ranking for the searched profile", () => {
     expect(peers.every((row) => row.fill === "other-country" || row.fill === "same-region")).toBe(true);
   });
 
-  it("uses the nearest country tier only when the target country is not published", () => {
-    const target = profile("najet.dh", 60_000, "Fashion and beauty", 2_000);
+  it("never marks rows as other-country when the target country is not published", () => {
+    const target = profile("unpublished.creator", 60_000, "Fashion and beauty", 2_000);
     const sameRegion = profile("uae.peer", 61_000, "Fashion and beauty", 2_100);
     const differentCountry = profile("london.peer", 62_000, "Fashion and beauty", 2_200);
     const unknown = profile("unknown.peer", 63_000, "Fashion and beauty", 2_300);
@@ -222,10 +222,9 @@ describe("peer ranking for the searched profile", () => {
     const usernames = ranking!.rows.map((row) => row.profile.username);
 
     expect(usernames).toContain("uae.peer");
-    expect(ranking!.rows.find((row) => row.profile.username === "uae.peer")?.fill).toBeUndefined();
-    for (const name of ["london.peer", "unknown.peer"]) {
-      const row = ranking!.rows.find((item) => item.profile.username === name);
-      expect(row === undefined || row.fill === "nearest").toBe(true);
+    expect(ranking!.total).toBe(4);
+    for (const row of ranking!.rows) {
+      expect(row.fill === undefined || row.fill === "nearest").toBe(true);
     }
   });
 

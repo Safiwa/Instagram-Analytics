@@ -258,6 +258,8 @@ const ACCOUNT_BASED_IN_BY_HANDLE: Record<string, string | null> = {
   nesreentafesh: "Egypt",
   imadssyriankitchen: "United Kingdom",
   wafamoustafa: null,
+  alisha_sajjal: "United Arab Emirates",
+  "najet.dh": "United Arab Emirates",
 };
 
 // Curated account country, used only when Instagram's "Account based in" and
