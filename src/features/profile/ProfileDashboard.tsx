@@ -147,8 +147,8 @@ export function ProfileDashboard({
   // The Middle East benchmark is shown only for Middle East accounts.
   const showRegionalBenchmark = isMiddleEastAccount(profile);
   const benchmarkScope = benchmarkCountry
-    ? `The closest peer and the ranking table use accounts with the same inferred country (${benchmarkCountry}) first. The table aims for five profiles: when fewer same-country peers are tracked, remaining rows are filled only with same-category accounts from neighbouring countries in the same region, each marked; other countries and categories are never used.`
-    : "Instagram has not published an “Account based in” value for this profile, so the closest available country or region tier is used instead.";
+    ? `Compared with real accounts in the same category and country (${benchmarkCountry}); empty rows use only same-category accounts from neighbouring countries, marked.`
+    : "Compared with real accounts in the same category; no “Account based in” value is published, so the closest available country or region tier is used.";
   // rankFactors falls back to zero when Instagram exposes no posts. That zero is
   // a placeholder, not a measurement. Engagement from a dated stored snapshot is
   // a real earlier measurement and stays visible; follower change and Reels remain hidden.
@@ -797,13 +797,9 @@ export function ProfileDashboard({
               Closest category peers and where this profile ranks
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              We match this profile only to real public accounts in the same or a closely related
-              category (for example Digital creator, Blogger, Public figure, or Beauty). {benchmarkScope}{" "}
-              The group is ranked by followers, engagement rate, average likes, average comments and
-              follower change. Country uses Instagram’s published “Account based in” value first;
-              when it is not shared, it is inferred from public post/reel hashtags and locations,
-              then handle and profile text. Peers come from tracked accounts and profiles this site has
-              looked up, not an exhaustive niche search.
+              {benchmarkScope}
+              <br />
+              Ranked by followers, engagement rate, average likes, average comments and follower change.
             </p>
           </div>
         </div>
