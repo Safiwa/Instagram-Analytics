@@ -80,6 +80,18 @@ export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
         </p>
       </Section>
 
+      <Section title="Follower-list audit">
+        <p>
+          A connected creator can upload the followers file from Instagram&apos;s &quot;Download
+          your information&quot; export to have their followers checked for fake accounts. For each
+          listed follower (all of them, or a random sample of 300 for larger lists) we read the
+          public profile and keep only what the check needs: post, follower and following counts,
+          whether a profile photo, name and bio exist, and whether the account is private. We do
+          not keep followers&apos; posts, photos or bio text. This data is deleted when the creator
+          disconnects or uploads a new list.
+        </p>
+      </Section>
+
       <Section title="Email digest">
         <p>
           If you subscribe to the weekly digest we store your email address and the handle you

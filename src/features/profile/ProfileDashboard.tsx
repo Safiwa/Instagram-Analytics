@@ -29,6 +29,7 @@ import {
 import { InstagramLink } from "../../components/InstagramLink";
 import { MetricCard } from "../../components/MetricCard";
 import { inferCountrySignal, isMiddleEastAccount } from "../../core/analytics/country";
+import { MIN_MODEL_FOLLOWERS } from "../../core/analytics/estimates";
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
 import type { IndexPosition } from "../../core/analytics/benchmark";
 import type { GrowthAnalysis } from "../../core/analytics/growth";
@@ -288,11 +289,15 @@ export function ProfileDashboard({
             label="Fake-follower estimate"
             value={describeFakeFollowers(metrics)}
             note={
-              metrics.followerAudit
-                ? `Audit of ${metrics.followerAudit.sampleSize.toLocaleString("en-US")} sampled followers · 95% range`
-                : metrics.authenticityEstimated
-                  ? "Modeled range from public signals, not a count"
-                  : undefined
+              metrics.followerAudit?.census
+                ? `Checked all ${metrics.followerAudit.sampleSize.toLocaleString("en-US")} followers from the owner's follower list`
+                : metrics.followerAudit
+                  ? `Audit of ${metrics.followerAudit.sampleSize.toLocaleString("en-US")} sampled followers · 95% range`
+                  : metrics.authenticityEstimated
+                    ? "Modeled range from public signals, not a count"
+                    : profile.followers > 0 && profile.followers < MIN_MODEL_FOLLOWERS
+                      ? "Too few followers to estimate (under 1,000). The owner can connect and upload a follower list for an exact check."
+                      : undefined
             }
           />
         </div>
@@ -399,10 +404,16 @@ export function ProfileDashboard({
           value={formatPercent(metrics.authenticityPct)}
           badge={metrics.authenticityEstimated ? "Est." : undefined}
           hint={
-            metrics.authenticityEstimated
-              ? "100 - modeled fake follower share"
-              : metrics.authenticityPct === null
-                ? "Not available from public data"
+            metrics.followerAudit?.census
+              ? "100 - share flagged in the full follower check"
+              : metrics.followerAudit
+                ? "100 - flagged share of sampled followers"
+                : metrics.authenticityEstimated
+                  ? "100 - modeled fake follower share"
+                  : metrics.authenticityPct === null
+                    ? profile.followers > 0 && profile.followers < MIN_MODEL_FOLLOWERS
+                      ? "Too few followers to estimate"
+                      : "Not available from public data"
                 : "100 - fake follower share"
           }
         />

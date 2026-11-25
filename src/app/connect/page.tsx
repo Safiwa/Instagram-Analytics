@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { BadgeCheck, Lock, ShieldCheck } from "lucide-react";
 import { getConnectedAccount } from "../../core/db/connected";
+import { followerUploadStatus } from "../../core/db/followerChecks";
 import { formatDate } from "../../core/format";
 import { isConnectAvailable, SESSION_COOKIE, sessionAccountId } from "../../core/instagram/session";
 
@@ -24,7 +25,17 @@ const MESSAGES: Record<string, { tone: "ok" | "warn"; text: string }> = {
     tone: "warn",
     text: "No Instagram account was shared. Only Instagram professional accounts (Creator or Business) can connect: select your account in the login window and try again.",
   },
-  failed: { tone: "warn", text: "Instagram could not complete the connection. Please try again in a few minutes." },
+  failed: { tone: "warn", text: "Something went wrong. Please try again in a few minutes." },
+  followers: {
+    tone: "ok",
+    text: "Follower list received. Checking each follower's public profile; small lists finish in a minute, larger ones over the next daily runs.",
+  },
+  "no-file": { tone: "warn", text: "Choose your followers file first." },
+  "file-too-large": { tone: "warn", text: "That file is over 10 MB. Upload only followers_1.json, not the whole export." },
+  "no-followers": {
+    tone: "warn",
+    text: "No followers were found in that file. Upload followers_1.json (or followers_1.html) from your Instagram data download.",
+  },
 };
 
 function first(value: string | string[] | undefined): string | undefined {
@@ -37,12 +48,15 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
     ? "connected"
     : first(params.disconnected)
       ? "disconnected"
-      : first(params.error);
+      : first(params.followers)
+        ? "followers"
+        : first(params.error);
   const message = messageKey ? MESSAGES[messageKey] : undefined;
 
   const available = isConnectAvailable();
   const accountId = sessionAccountId((await cookies()).get(SESSION_COOKIE)?.value);
   const account = available && accountId ? await getConnectedAccount(accountId) : null;
+  const followers = account ? await followerUploadStatus(account.id) : null;
 
   return (
     <div data-testid="connect-page" className="mx-auto max-w-3xl space-y-6">
@@ -147,6 +161,88 @@ export default async function ConnectPage({ searchParams }: ConnectPageProps) {
           available from the <Link href="/" className="font-medium text-indigo-600">home page</Link>.
         </section>
       )}
+
+      {account ? (
+        <section
+          id="follower-audit"
+          data-testid="follower-audit-upload"
+          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <h2 className="text-base font-semibold text-slate-950">Prove your followers are real</h2>
+          <p className="mt-2 text-sm leading-relaxed text-slate-600">
+            Instagram does not let any app read a follower list, so the fake-follower figure on
+            public profiles is a modeled estimate. Upload your own follower list and the site checks
+            each follower&apos;s public profile against the same rules: a handle ending in more than
+            6 digits, no profile photo, no posts, following no one, and similar signs. Your profile
+            page then shows the real result, for example &quot;0% (0 of 31 flagged)&quot;. Lists
+            over 300 followers are checked as a random sample of 300.
+          </p>
+          <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-slate-600">
+            <li>
+              In Instagram: Settings → Accounts Center → Your information and permissions →
+              Download your information.
+            </li>
+            <li>
+              Choose Some of your information → Followers and following, format JSON, and request
+              the download. Instagram emails you when it is ready.
+            </li>
+            <li>
+              Unzip it and upload <code className="text-xs">followers_1.json</code> from the
+              <code className="text-xs"> followers_and_following</code> folder.
+            </li>
+          </ol>
+          <form
+            method="post"
+            action="/api/instagram/followers"
+            encType="multipart/form-data"
+            className="mt-4 flex flex-wrap items-center gap-3"
+          >
+            <input
+              type="file"
+              name="followers"
+              accept=".json,.html,application/json,text/html"
+              required
+              className="text-sm text-slate-700 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+            >
+              Upload and check followers
+            </button>
+          </form>
+          {followers?.uploadedAt ? (
+            <dl data-testid="follower-audit-status" className="mt-4 grid gap-3 text-sm sm:grid-cols-4">
+              <div>
+                <dt className="text-xs text-slate-500">Uploaded</dt>
+                <dd className="font-medium text-slate-900">{formatDate(followers.uploadedAt)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">In your list</dt>
+                <dd className="font-medium text-slate-900">{followers.inUpload.toLocaleString("en-US")}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Checked</dt>
+                <dd className="font-medium text-slate-900">
+                  {followers.checked.toLocaleString("en-US")} of {followers.sampled.toLocaleString("en-US")}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-500">Still to check</dt>
+                <dd className="font-medium text-slate-900">
+                  {followers.pending.toLocaleString("en-US")}
+                  {followers.unavailable > 0 ? ` · ${followers.unavailable} unreadable` : ""}
+                </dd>
+              </div>
+            </dl>
+          ) : null}
+          <p className="mt-3 text-xs text-slate-500">
+            We keep only what the rules need (counts and whether a photo, name and bio exist), never
+            your followers&apos; posts or bio text, and delete it when you disconnect or upload a new
+            list.
+          </p>
+        </section>
+      ) : null}
 
       <section className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-5">
