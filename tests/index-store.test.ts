@@ -283,3 +283,12 @@ describe("follower change windows", () => {
     ]);
   });
 });
+
+describe("excluded peers", () => {
+  it("never uses unofficial look-alike tourism handles as peers", async () => {
+    const { isExcludedPeer } = await import("../src/core/data/regional");
+    expect(isExcludedPeer("visitbahrain")).toBe(true);
+    expect(isExcludedPeer("VisitLebanon")).toBe(true);
+    expect(isExcludedPeer("visitqatar")).toBe(false);
+  });
+});

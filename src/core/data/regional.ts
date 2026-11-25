@@ -41,6 +41,22 @@ export async function getRegionalProfiles(): Promise<CreatorProfile[]> {
   return [...curated, ...indexed];
 }
 
+// Accounts never used as peers: handles that look like official tourism boards
+// but are small unrelated accounts. They stay viewable on their own page.
+const EXCLUDED_PEER_HANDLES = new Set([
+  "visitegypt",
+  "visitlebanon",
+  "visitbahrain",
+  "visitsyria",
+  "visitiraq",
+  "visittunisia",
+  "visitmorocco",
+]);
+
+export function isExcludedPeer(username: string): boolean {
+  return EXCLUDED_PEER_HANDLES.has(username.toLowerCase());
+}
+
 const INDEXED_POOL_LIMIT = 400;
 const INDEXED_POOL_TTL_MS = 10 * 60 * 1000;
 let indexedPool: { expiresAt: number; profiles: CreatorProfile[] } | null = null;
@@ -53,7 +69,7 @@ export async function getIndexedPool(): Promise<CreatorProfile[]> {
     return indexedPool.profiles;
   }
   const profiles = (await loadIndexedProfiles({ limit: INDEXED_POOL_LIMIT })).filter(
-    (profile) => !profile.isPrivate,
+    (profile) => !profile.isPrivate && !isExcludedPeer(profile.username),
   );
   indexedPool = { expiresAt: Date.now() + INDEXED_POOL_TTL_MS, profiles };
   return profiles;
