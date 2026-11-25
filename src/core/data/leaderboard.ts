@@ -85,16 +85,9 @@ export const LEADERBOARD_HANDLES = [
   "qatar",
   "visitjordan",
   // Curated real public accounts covering the wider Middle East board.
-  "visitsyria",
-  "visitiraq",
   "explorepalestine",
   "visitkuwait",
-  "visitegypt",
-  "visitlebanon",
-  "visitbahrain",
   "visitoman",
-  "visittunisia",
-  "visitmorocco",
   // Real, publicly discoverable Middle East creator accounts in the same
   // follower range as @rim.official__, with explicit public category labels.
   "alisha_sajjal",

@@ -106,16 +106,9 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   flynas: "middle-east",
   qatar: "middle-east",
   visitjordan: "middle-east",
-  visitsyria: "middle-east",
-  visitiraq: "middle-east",
   explorepalestine: "middle-east",
   visitkuwait: "middle-east",
-  visitegypt: "middle-east",
-  visitlebanon: "middle-east",
-  visitbahrain: "middle-east",
   visitoman: "middle-east",
-  visittunisia: "middle-east",
-  visitmorocco: "middle-east",
 
   // United Arab Emirates
   // Dubai marketing agencies, tracked so agency profiles have real peers.

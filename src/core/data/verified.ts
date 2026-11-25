@@ -69,7 +69,6 @@ export const VERIFIED_HANDLES: ReadonlySet<string> = new Set([
   "timeoutdubai",
   "trending.vibz.uae",
   "virat.kohli",
-  "visitegypt",
   "visitjordan",
   "visitkuwait",
   "visitqatar",
