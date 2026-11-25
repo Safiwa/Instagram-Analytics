@@ -234,8 +234,32 @@ describe("public Instagram reader", () => {
       profilePictureUrl: "https://example.com/avatar.jpg",
       accountCountry: null,
     });
+    // Page HTML plus one best-effort category read (404 here), then cached.
     await fetchPublicIdentity("public.test");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("reads Instagram's own category when the page HTML lacks it", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("web_profile_info")) {
+        return Response.json({
+          data: {
+            user: {
+              username: "reel.test",
+              category_name: "Reel creator",
+              id: "123",
+              edge_followed_by: { count: 10 },
+            },
+          },
+        });
+      }
+      return new Response("<html><head><meta property=\"og:title\" content=\"Reel (@reel.test)\"></head></html>");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const identity = await fetchPublicIdentity("reel.test");
+    expect(identity?.category).toBe("Reel creator");
   });
 
   it("reads a published account country and never uses the viewer locale", async () => {

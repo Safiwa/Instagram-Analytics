@@ -42,6 +42,8 @@ export type PublicIdentity = {
   // Only a published "Account based in" value. Null means not shared/unavailable.
   accountCountry?: string | null;
   instagramId?: string;
+  // Instagram's own profile category ("Reel creator"), when it could be read.
+  category?: string;
 };
 
 // Instagram's numeric account id, when the public page exposes it.
@@ -823,6 +825,12 @@ function preferredWebsite(user: PublicUser | null): string | undefined {
   );
 }
 
+function specificCategory(user: PublicUser | null): string | undefined {
+  const category =
+    user?.category_name?.trim() || user?.business_category_name?.replace(/_/g, " ").trim() || "";
+  return category || undefined;
+}
+
 function preferredCategory(user: PublicUser | null): string {
   const category =
     user?.category_name?.trim() ||
@@ -871,13 +879,24 @@ export async function fetchPublicIdentity(username: string): Promise<PublicIdent
     return null;
   }
 
+  // The logged-out page does not carry the profile category (Instagram loads
+  // it in the browser), so try the web profile endpoint once, best effort. A
+  // refusal or rate limit simply leaves the category to the bio rules.
+  let category = specificCategory(user);
+  let webUser: PublicUser | null = null;
+  if (!category) {
+    webUser = (await fetchWebProfile(key))?.user ?? null;
+    category = specificCategory(webUser);
+  }
+
   const identity: PublicIdentity = {
+    ...(category ? { category } : {}),
     isVerified: Boolean(user?.is_verified),
     profilePictureUrl:
       user?.profile_pic_url_hd?.trim() || user?.profile_pic_url?.trim() || undefined,
     accountCountry: accountCountryFromUser(user) ?? parsed.accountCountry,
-    ...((instagramIdOf(user) ?? parsed.profileId)
-      ? { instagramId: instagramIdOf(user) ?? parsed.profileId ?? undefined }
+    ...((instagramIdOf(user) ?? parsed.profileId ?? instagramIdOf(webUser))
+      ? { instagramId: instagramIdOf(user) ?? parsed.profileId ?? instagramIdOf(webUser) }
       : {}),
   };
   identityCache.set(key, { expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS, identity });

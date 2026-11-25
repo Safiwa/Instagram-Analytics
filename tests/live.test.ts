@@ -154,9 +154,10 @@ describe("live Instagram adapter", () => {
     expect(first.profile.isVerified).toBe(true);
     expect(first.profile.profilePictureUrl).toBe("https://example.com/public-avatar.jpg");
 
-    // Both the live profile and the identity lookup are cached per handle.
+    // Live profile, page HTML and one best-effort category read; all are
+    // cached per handle, so a second lookup makes no new requests.
     await resolveProfile("verified.test");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("uses the real public verification snapshot when the bridge is offline", async () => {

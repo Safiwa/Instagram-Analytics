@@ -28,6 +28,7 @@ import {
 } from "recharts";
 import { InstagramLink } from "../../components/InstagramLink";
 import { MetricCard } from "../../components/MetricCard";
+import { inferExplicitCategory, isInstagramCategory } from "../../core/analytics/category";
 import { inferCountrySignal, isMiddleEastAccount } from "../../core/analytics/country";
 import { MIN_MODEL_FOLLOWERS } from "../../core/analytics/estimates";
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
@@ -258,7 +259,10 @@ export function ProfileDashboard({
               </span>
             </div>
             <p className="mt-0.5 text-sm text-slate-500">
-              @{profile.username} · {profile.category}
+              @{profile.username} ·{" "}
+              {isInstagramCategory(profile.category)
+                ? profile.category
+                : (inferExplicitCategory(profile) ?? profile.category)}
             </p>
             {profile.tracking ? (
               <p data-testid="tracking-since" className="mt-1 text-xs text-slate-500">
