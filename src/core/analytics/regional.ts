@@ -56,6 +56,7 @@ export type RegionalPeer = {
   // The follower range this peer was matched in (±30%, 3x, 10x or nearest).
   band?: FollowerBand;
   joinedLabel?: string;
+  fill?: RankFill;
 };
 
 export type RegionalComparison = {
@@ -175,8 +176,19 @@ function fillCountryCap(
       break;
     }
   }
-  // The three-per-country limit is firm: the Middle East table is a regional
-  // view, so it shows fewer rows rather than filling up with one country.
+  // Country variety first: at most three rows per country. When the pool has
+  // too few countries to complete the table, the remaining rows come from the
+  // best same-category Middle East peers left over, marked as such, so the
+  // table still reaches its full size.
+  for (const peer of fallback) {
+    if (result.length >= limit) {
+      break;
+    }
+    if (!seen.has(peer.profile.username)) {
+      result.push({ ...peer, fill: "country-limit" });
+      seen.add(peer.profile.username);
+    }
+  }
   return result;
 }
 

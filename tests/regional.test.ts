@@ -174,9 +174,10 @@ describe("Middle East category peer", () => {
     expect(["low", "high"]).toContain(match?.profile.username);
     // The card keeps the tightest band; the rank table widens to 3x so it can
     // show five profiles, and says so.
-    // All test profiles share one country, so the firm three-per-country limit
-    // keeps the table at three rows (the target counts toward its country).
-    expect(visible).toHaveLength(3);
+    // All test profiles share one country: three rows come first, the rest are
+    // added past the country limit, marked.
+    expect(visible).toHaveLength(5);
+    expect(ranking?.rows.filter((row) => row.fill === "country-limit")).toHaveLength(2);
     expect(ranking?.band?.step).toBe("nearest");
     expect(findRegionalCategoryPeer(target, computeMetrics(target), pool)?.band?.step).toBe("close");
   });
@@ -503,9 +504,10 @@ describe("Middle East authenticity-aware ranking", () => {
     const ranking = buildRegionalRanking(target, computeMetrics(target), [target, ...peers]);
     const usernames = ranking!.rows.map((row) => row.profile.username);
 
-    // Three UAE creator peers exist, but the firm three-per-country limit keeps
-    // two of them next to the UAE target.
-    expect(ranking?.total).toBe(3);
+    // Three UAE creator peers exist; the third is added past the
+    // three-per-country limit, marked, to complete the table.
+    expect(ranking?.total).toBe(4);
+    expect(ranking?.rows.filter((row) => row.fill === "country-limit")).toHaveLength(1);
     expect(usernames).toContain("amrmaskoun");
     expect(usernames).not.toContain("technicalguruji");
     expect(usernames).not.toContain("jumeirah");
@@ -563,10 +565,10 @@ describe("Middle East authenticity-aware ranking", () => {
       "rima_alosta",
       "lookatsascha",
     ]).toContain(peer!.profile.username);
-    // The firm three-per-country limit: the UAE target plus two UAE peers.
-    expect(ranking?.total).toBe(3);
+    // Two UAE peers within the limit, then two more marked as added past it.
+    expect(ranking?.total).toBe(5);
     expect(usernames).toContain("alaaabuharb");
-    expect(usernames.filter((username) => username !== "alaaabuharb")).toHaveLength(2);
+    expect(ranking?.rows.filter((row) => row.fill === "country-limit")).toHaveLength(2);
     expect(
       [
         "sarahmalas",
@@ -777,8 +779,17 @@ describe("Middle East country variety", () => {
     for (const country of countries) {
       perCountry.set(String(country), (perCountry.get(String(country)) ?? 0) + 1);
     }
-    expect(Math.max(...perCountry.values())).toBeLessThanOrEqual(3);
+    // Lebanon gets its three rows before any UAE row goes past the limit, and
+    // every row beyond three per country is marked.
     expect(perCountry.get("Lebanon")).toBe(3);
+    expect(ranking?.total).toBe(10);
+    const unmarked = ranking?.rows.filter((row) => row.fill !== "country-limit") ?? [];
+    const unmarkedPerCountry = new Map<string, number>();
+    for (const row of unmarked) {
+      const key = String(row.country.country);
+      unmarkedPerCountry.set(key, (unmarkedPerCountry.get(key) ?? 0) + 1);
+    }
+    expect(Math.max(...unmarkedPerCountry.values())).toBeLessThanOrEqual(3);
   });
 });
 

@@ -291,10 +291,11 @@ export type PeerRankingRow = {
 // Rank tables aim for five profiles. Peers come from the same country and a
 // similar category; when the pool has fewer, rows are filled only from the same
 // region and category group, and each such row says so.
-export type RankFill = "same-region";
+export type RankFill = "same-region" | "country-limit";
 
 export const RANK_FILL_LABEL: Record<RankFill, string> = {
   "same-region": "same category from a neighbouring country, added to complete the table",
+  "country-limit": "same category, added beyond 3 per country to complete the table",
 };
 
 export type PeerRanking = {

@@ -147,7 +147,12 @@ const RULES: Rule[] = [
     label: "Public figure",
     keywords: [
       "actor",
+      "actress",
       "singer",
+      "tv host",
+      "tv presenter",
+      "presenter",
+      "personality",
       "footballer",
       "football player",
       "athlete",
