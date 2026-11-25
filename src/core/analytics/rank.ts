@@ -152,9 +152,16 @@ export function selectFollowerBand<T>(
   // keep the 10x ceiling; the Middle East panel opts in and says so.
   // minCount: widen until the band holds at least this many candidates (a
   // five-row rank table needs four peers). Defaults to one.
-  options: { allowNearest?: boolean; minCount?: number } = {},
+  // countUsable: how many of a band's candidates the caller can actually use
+  // (e.g. after a per-country cap); defaults to all of them.
+  options: {
+    allowNearest?: boolean;
+    minCount?: number;
+    countUsable?: (candidates: T[]) => number;
+  } = {},
 ): { band: FollowerBand; candidates: T[] } | null {
   const minCount = Math.max(1, options.minCount ?? 1);
+  const countUsable = options.countUsable ?? ((items: T[]) => items.length);
   const usable = candidates.filter((candidate) => followersOf(candidate) > 0);
   if (targetFollowers <= 0 || usable.length === 0) {
     return null;
@@ -164,7 +171,7 @@ export function selectFollowerBand<T>(
       const followers = followersOf(candidate);
       return followers >= band.min && followers <= band.max && eligibleInBand(candidate, band);
     });
-    if (inBand.length >= minCount) {
+    if (countUsable(inBand) >= minCount) {
       return { band, candidates: inBand };
     }
   }
@@ -181,13 +188,16 @@ export function selectFollowerBand<T>(
     }
     return null;
   }
-  const nearest = [...usable]
-    .sort(
-      (left, right) =>
-        sizeDistance(targetFollowers, followersOf(left)) -
-        sizeDistance(targetFollowers, followersOf(right)),
-    )
-    .slice(0, Math.max(NEAREST_BAND_SIZE, minCount));
+  // Take the nearest sizes until enough are usable.
+  const sorted = [...usable].sort(
+    (left, right) =>
+      sizeDistance(targetFollowers, followersOf(left)) - sizeDistance(targetFollowers, followersOf(right)),
+  );
+  let take = Math.min(sorted.length, Math.max(NEAREST_BAND_SIZE, minCount));
+  while (take < sorted.length && countUsable(sorted.slice(0, take)) < minCount) {
+    take += 1;
+  }
+  const nearest = sorted.slice(0, take);
   const sizes = nearest.map(followersOf);
   const min = Math.min(...sizes);
   const max = Math.max(...sizes);

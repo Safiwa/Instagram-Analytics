@@ -174,8 +174,10 @@ describe("Middle East category peer", () => {
     expect(["low", "high"]).toContain(match?.profile.username);
     // The card keeps the tightest band; the rank table widens to 3x so it can
     // show five profiles, and says so.
-    expect(visible).toHaveLength(5);
-    expect(ranking?.band?.step).toBe("3x");
+    // All test profiles share one country, so the firm three-per-country limit
+    // keeps the table at three rows (the target counts toward its country).
+    expect(visible).toHaveLength(3);
+    expect(ranking?.band?.step).toBe("nearest");
     expect(findRegionalCategoryPeer(target, computeMetrics(target), pool)?.band?.step).toBe("close");
   });
 
@@ -501,8 +503,9 @@ describe("Middle East authenticity-aware ranking", () => {
     const ranking = buildRegionalRanking(target, computeMetrics(target), [target, ...peers]);
     const usernames = ranking!.rows.map((row) => row.profile.username);
 
-    // Three creator peers exist; other categories never fill rows.
-    expect(ranking?.total).toBe(4);
+    // Three UAE creator peers exist, but the firm three-per-country limit keeps
+    // two of them next to the UAE target.
+    expect(ranking?.total).toBe(3);
     expect(usernames).toContain("amrmaskoun");
     expect(usernames).not.toContain("technicalguruji");
     expect(usernames).not.toContain("jumeirah");
@@ -560,11 +563,10 @@ describe("Middle East authenticity-aware ranking", () => {
       "rima_alosta",
       "lookatsascha",
     ]).toContain(peer!.profile.username);
-    // Five rows: the searched profile plus four UAE creator peers, since no other
-    // Middle East country can fill the table.
-    expect(ranking?.total).toBe(5);
+    // The firm three-per-country limit: the UAE target plus two UAE peers.
+    expect(ranking?.total).toBe(3);
     expect(usernames).toContain("alaaabuharb");
-    expect(usernames.filter((username) => username !== "alaaabuharb")).toHaveLength(4);
+    expect(usernames.filter((username) => username !== "alaaabuharb")).toHaveLength(2);
     expect(
       [
         "sarahmalas",
@@ -759,3 +761,24 @@ describe("Middle East authenticity-aware ranking", () => {
     expect(ranking!.rows.find((row) => row.isTarget)?.country.country).toBeNull();
   });
 });
+
+describe("Middle East country variety", () => {
+  it("keeps at most three rows per country and draws the rest from other countries", () => {
+    const target = profile("target", 100_000, ["festival poetry"]);
+    const uae = Array.from({ length: 6 }, (_, index) =>
+      profile(`uae${index}`, 90_000 + index * 1_000, ["festival poetry"]),
+    );
+    const lebanon = Array.from({ length: 4 }, (_, index) =>
+      profile(`leb${index}`, 300_000 + index * 1_000, ["festival poetry"], { accountCountry: "Lebanon" }),
+    );
+    const ranking = buildRegionalRanking(target, computeMetrics(target), [...uae, ...lebanon], 9);
+    const countries = ranking?.rows.map((row) => row.country.country) ?? [];
+    const perCountry = new Map<string, number>();
+    for (const country of countries) {
+      perCountry.set(String(country), (perCountry.get(String(country)) ?? 0) + 1);
+    }
+    expect(Math.max(...perCountry.values())).toBeLessThanOrEqual(3);
+    expect(perCountry.get("Lebanon")).toBe(3);
+  });
+});
+
