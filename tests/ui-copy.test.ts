@@ -149,8 +149,9 @@ describe("same-country peer benchmark", () => {
     expect(peer).toContain("requireSameCountry: true");
     expect(peer).toContain("candidateCountry.country === targetCountry.country");
     expect(dashboard).toContain(
-      "Both the closest peer and ranking table are limited to accounts with the same inferred country",
+      "The closest peer and the ranking table use accounts with the same inferred country",
     );
+    expect(dashboard).toContain("The table always shows five profiles");
   });
 
   it("discloses the fallback when no country signal is published", () => {

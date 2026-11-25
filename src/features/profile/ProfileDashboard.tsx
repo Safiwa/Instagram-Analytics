@@ -36,7 +36,7 @@ import type { IndexPosition } from "../../core/analytics/benchmark";
 import type { GrowthAnalysis } from "../../core/analytics/growth";
 import { describeFakeFollowers, round2, type ProfileMetrics } from "../../core/analytics/metrics";
 import { likesVisible } from "../../core/analytics/posts";
-import type { PeerMatch, PeerRanking } from "../../core/analytics/peer";
+import { RANK_FILL_LABEL, type PeerMatch, type PeerRanking } from "../../core/analytics/peer";
 import type {
   KeyComparison,
   RegionalPeer,
@@ -147,7 +147,7 @@ export function ProfileDashboard({
   // The Middle East benchmark is shown only for Middle East accounts.
   const showRegionalBenchmark = isMiddleEastAccount(profile);
   const benchmarkScope = benchmarkCountry
-    ? `Both the closest peer and ranking table are limited to accounts with the same inferred country (${benchmarkCountry}).`
+    ? `The closest peer and the ranking table use accounts with the same inferred country (${benchmarkCountry}) first. The table always shows five profiles: when fewer same-country peers are tracked, the remaining rows are filled from the same region, then other countries, then other categories, and each such row is marked.`
     : "Instagram has not published an “Account based in” value for this profile, so the closest available country or region tier is used instead.";
   // rankFactors falls back to zero when Instagram exposes no posts. That zero is
   // a placeholder, not a measurement. Engagement from a dated stored snapshot is
@@ -796,8 +796,8 @@ export function ProfileDashboard({
               The group is ranked by followers, engagement rate, average likes, average comments and
               follower change. Country uses Instagram’s published “Account based in” value first;
               when it is not shared, it is inferred from public post/reel hashtags and locations,
-              then handle and profile text. This is a curated reference set, not an exhaustive niche
-              search.
+              then handle and profile text. Peers come from tracked accounts and profiles this site has
+              looked up, not an exhaustive niche search.
             </p>
           </div>
         </div>
@@ -942,6 +942,7 @@ export function ProfileDashboard({
                         ? ` · engagement stored ${storedOn}`
                         : ""}
                       {!row.isTarget && row.postsNotExposed ? " · posts not exposed" : ""}
+                      {row.fill ? ` · ${RANK_FILL_LABEL[row.fill]}` : ""}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -1173,6 +1174,7 @@ export function ProfileDashboard({
                           ? ` · engagement stored ${storedOn}`
                           : ""}
                         {!row.isTarget && row.postsNotExposed ? " · posts not exposed" : ""}
+                      {row.fill ? ` · ${RANK_FILL_LABEL[row.fill]}` : ""}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">

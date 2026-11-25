@@ -16,6 +16,7 @@ import {
   type CountrySignal,
 } from "./country";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
+import type { RankFill } from "./peer";
 import { joinDateSimilarity, joinedLabel as firstPostLabel } from "./accountAge";
 import {
   clampRankScoreToMatch,
@@ -76,6 +77,7 @@ export type RegionalRankRow = {
   isTarget: boolean;
   postsNotExposed: boolean;
   engagementSource: ProfileMetrics["engagementSource"];
+  fill?: RankFill;
 };
 
 export type RegionalRanking = {
@@ -188,13 +190,15 @@ function rankedCandidates(
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
   minCount = 1,
+  // Last-resort fill for the five-row table: any category, still Middle East.
+  anyCategory = false,
 ): RegionalPeer[] {
   const targetCountry = inferCountrySignal(target);
   const targetFactors = rankFactors(target, metrics);
   const targetCategory = inferExplicitCategory(target);
   const targetPostsNotExposed = target.recentPosts.length === 0;
 
-  if (!targetCategory) {
+  if (!targetCategory && !anyCategory) {
     return [];
   }
   // A known country must be one of the published Middle East countries and must
@@ -216,8 +220,10 @@ function rankedCandidates(
       // A no-post searched profile may be ranked alongside other no-post
       // accounts, but never against invented activity. Their rows are disclosed.
       !(targetPostsNotExposed || candidate.recentPosts.length > 0) ||
-      candidateCategory === null ||
-      !isSimilarCategory(targetCategory, candidateCategory)
+      (!anyCategory &&
+        (candidateCategory === null ||
+          targetCategory === null ||
+          !isSimilarCategory(targetCategory, candidateCategory)))
     ) {
       return false;
     }
@@ -450,7 +456,7 @@ export function buildRegionalRanking(
 ): RegionalRanking | null {
   const targetFactors = rankFactors(target, metrics);
   const targetRegionalScore = regionalRankScore(targetFactors, metrics.authenticityPct);
-  const peers = selectRegionalPeers(
+  let peers: (RegionalPeer & { fill?: RankFill })[] = selectRegionalPeers(
     // Widen the follower band until four peers exist, so the table shows five
     // profiles whenever the pool has them.
     rankedCandidates(target, metrics, pool, limit),
@@ -459,6 +465,16 @@ export function buildRegionalRanking(
     limit,
     target.recentPosts.length === 0,
   );
+  // Fewer than four same-category Middle East peers: complete the five rows
+  // with other Middle East accounts of any category, marked as such.
+  if (peers.length < limit) {
+    const seen = new Set(peers.map((peer) => peer.profile.username));
+    const extra = rankedCandidates(target, metrics, pool, limit, true)
+      .filter((peer) => !seen.has(peer.profile.username))
+      .slice(0, limit - peers.length)
+      .map((peer) => ({ ...peer, fill: "other-category" as const }));
+    peers = [...peers, ...extra];
+  }
   if (peers.length === 0) {
     return null;
   }
@@ -493,6 +509,7 @@ export function buildRegionalRanking(
       isTarget: false,
       postsNotExposed: peer.postsNotExposed,
       engagementSource: peer.engagementSource,
+      ...(peer.fill ? { fill: peer.fill } : {}),
     })),
   ];
 

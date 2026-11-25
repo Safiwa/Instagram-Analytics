@@ -151,10 +151,14 @@ describe("benchmark filtering by category", () => {
     expect(match?.profile.username).toBe("peerbeauty");
     expect(match?.category).toBe("Beauty, cosmetic & personal care");
 
+    // The rank table always shows five profiles, but other-category accounts
+    // only fill empty rows and are marked as such.
     const ranking = buildPeerRanking(creator, computeMetrics(creator), [creator, ...media]);
-    expect(ranking?.rows.map((row) => row.profile.username)).not.toContain("emirates");
-    expect(ranking?.rows.map((row) => row.profile.username)).not.toContain("gulfnews");
-    expect(ranking?.rows.every((row) => row.category !== "News & media")).toBe(true);
+    const otherCategory = ranking?.rows.filter((row) =>
+      ["emirates", "gulfnews"].includes(row.profile.username),
+    );
+    expect(otherCategory?.every((row) => row.fill === "other-category")).toBe(true);
+    expect(ranking?.rows.find((row) => row.profile.username === "peerbeauty")?.fill).toBeUndefined();
   });
 
   it("keeps a business account inside its own category group", () => {
@@ -165,7 +169,8 @@ describe("benchmark filtering by category", () => {
     const pool = [mall, creator, creatorPeer];
 
     expect(findClosestPeer(mall, computeMetrics(mall), pool)).toBeNull();
-    expect(buildRegionalRanking(mall, computeMetrics(mall), pool)).toBeNull();
+    const regional = buildRegionalRanking(mall, computeMetrics(mall), pool);
+    expect(regional?.rows.filter((row) => !row.isTarget).every((row) => row.fill === "other-category") ?? true).toBe(true);
   });
 
   it("applies the same category filter to the regional benchmark", () => {
@@ -173,7 +178,9 @@ describe("benchmark filtering by category", () => {
     expect(match?.profile.username).toBe("peerbeauty");
 
     const ranking = buildRegionalRanking(creator, computeMetrics(creator), [creator, ...media]);
-    expect(ranking?.rows.some((row) => row.profile.username === "emirates")).toBe(false);
-    expect(ranking?.rows.some((row) => row.profile.username === "gulfnews")).toBe(false);
+    const otherCategory = ranking?.rows.filter((row) =>
+      ["emirates", "gulfnews"].includes(row.profile.username),
+    );
+    expect(otherCategory?.every((row) => row.fill === "other-category")).toBe(true);
   });
 });

@@ -184,18 +184,27 @@ describe("peer ranking for the searched profile", () => {
     expect(usernames).toEqual(
       expect.arrayContaining(["dubai.target", "uae.peer1", "uae.peer2"]),
     );
-    expect(usernames).not.toContain("london.peer1");
-    expect(usernames).not.toContain("paris.peer1");
-    expect(usernames).not.toContain("tokyo.peer1");
-    expect(ranking!.total).toBe(3);
+    // Same-country peers come first and unmarked; other countries only fill the
+    // remaining rows of the five-profile table, marked as such.
+    expect(ranking!.total).toBe(5);
+    for (const row of ranking!.rows) {
+      if (row.profile.username.startsWith("uae.") || row.isTarget) {
+        expect(row.fill).toBeUndefined();
+      } else {
+        expect(row.fill).toBe("other-country");
+      }
+    }
   });
 
-  it("returns null when no same-country peer exists for a known-country profile", () => {
+  it("fills a known-country table from other countries only when no same-country peer exists, and marks it", () => {
     const target = profile("dubai.target", 60_000, "Fashion and beauty", 2_000);
     const london = profile("london.peer", 65_000, "Fashion and beauty", 2_200);
     const unknown = profile("unknown.peer", 62_000, "Fashion and beauty", 2_100);
 
-    expect(buildPeerRanking(target, computeMetrics(target), [target, london, unknown])).toBeNull();
+    const ranking = buildPeerRanking(target, computeMetrics(target), [target, london, unknown]);
+    const peers = ranking?.rows.filter((row) => !row.isTarget) ?? [];
+    expect(peers.length).toBeGreaterThan(0);
+    expect(peers.every((row) => row.fill === "other-country" || row.fill === "same-region")).toBe(true);
   });
 
   it("uses the nearest country tier only when the target country is not published", () => {
@@ -213,8 +222,11 @@ describe("peer ranking for the searched profile", () => {
     const usernames = ranking!.rows.map((row) => row.profile.username);
 
     expect(usernames).toContain("uae.peer");
-    expect(usernames).not.toContain("london.peer");
-    expect(usernames).not.toContain("unknown.peer");
+    expect(ranking!.rows.find((row) => row.profile.username === "uae.peer")?.fill).toBeUndefined();
+    for (const name of ["london.peer", "unknown.peer"]) {
+      const row = ranking!.rows.find((item) => item.profile.username === name);
+      expect(row === undefined || row.fill === "nearest").toBe(true);
+    }
   });
 
   it("falls back to inferred creator labels only when explicit peers are scarce", () => {
@@ -237,7 +249,10 @@ describe("peer ranking for the searched profile", () => {
 
     expect(usernames).toContain("uae.explicit");
     expect(usernames).toContain("uae.inferred");
-    expect(usernames).not.toContain("uae.brand");
+    // A business only fills the last row, marked as a different category.
+    expect(ranking!.rows.find((row) => row.profile.username === "uae.brand")?.fill).toBe(
+      "other-category",
+    );
   });
 
   it("returns null when no comparable peer is available", () => {
@@ -317,9 +332,13 @@ describe("Syrian same-country peers", () => {
     // Recorded "Account based in" values beat bio signals: Egypt, the UK and an
     // unrecorded country are not Syria, and "Syrian" in a bio is not a location.
     expect(usernames).toEqual(expect.arrayContaining(["yaman.najjar", "dima_dalati", "jennyesber"]));
-    expect(usernames).not.toContain("nesreentafesh");
-    expect(usernames).not.toContain("wafamoustafa");
-    expect(usernames).not.toContain("imadssyriankitchen");
-    expect(ranking?.rows.every((row) => row.country.country === "Syria")).toBe(true);
+    // Five rows always: Syria first, then marked fills (Egypt is the same region).
+    expect(ranking?.total).toBe(5);
+    const byName = new Map(ranking?.rows.map((row) => [row.profile.username, row]));
+    expect(byName.get("dima_dalati")?.fill).toBeUndefined();
+    expect(byName.get("nesreentafesh")?.fill).toBe("same-region");
+    expect(
+      ranking?.rows.filter((row) => row.country.country !== "Syria").every((row) => row.fill !== undefined),
+    ).toBe(true);
   });
 });
