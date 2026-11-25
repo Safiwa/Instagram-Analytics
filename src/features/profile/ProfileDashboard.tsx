@@ -775,11 +775,11 @@ export function ProfileDashboard({
         </section>
       ) : null}
 
-      {/* Both benchmarks share one area: same-country peers on the left half and
-          Middle East peers on the right, up to ten profiles side by side. */}
+      {/* Both benchmarks share one area, stacked. Each rank table lists up to ten
+          profiles in two columns of five on large screens. */}
       <div
         data-testid="benchmarks"
-        className={showRegionalBenchmark ? "grid gap-6 xl:grid-cols-2 xl:items-start" : "grid gap-6"}
+        className="grid gap-6"
       >
       <section
         data-testid="peer-benchmark"
@@ -805,7 +805,7 @@ export function ProfileDashboard({
         </div>
 
         {peer ? (
-          <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center xl:grid-cols-1 2xl:grid-cols-[1fr_auto]">
+          <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Link
@@ -893,11 +893,11 @@ export function ProfileDashboard({
                 </span>
               ) : null}
             </div>
-            <ol className="divide-y divide-slate-100">
+            <ol className={rankListClass(ranking.rows.length)}>
               {ranking.rows.map((row, index) => (
                 <li
                   key={row.profile.username}
-                  className={`flex items-center gap-3 px-4 py-3 ${
+                  className={`flex min-w-0 items-center gap-3 border-b border-slate-100 bg-white px-4 py-3 ${
                     row.isTarget ? "bg-indigo-50/70" : ""
                   }`}
                 >
@@ -992,7 +992,7 @@ export function ProfileDashboard({
 
           {regionalPeer ? (
             <>
-              <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center xl:grid-cols-1 2xl:grid-cols-[1fr_auto]">
+              <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link
@@ -1125,11 +1125,11 @@ export function ProfileDashboard({
                   </span>
                 ) : null}
               </div>
-              <ol className="divide-y divide-slate-100">
+              <ol className={rankListClass(regionalRanking.rows.length)}>
                 {regionalRanking.rows.map((row, index) => (
                   <li
                     key={row.profile.username}
-                    className={`flex items-center gap-3 px-4 py-3 ${
+                    className={`flex min-w-0 items-center gap-3 border-b border-slate-100 bg-white px-4 py-3 ${
                       row.isTarget ? "bg-emerald-50/70" : ""
                     }`}
                   >
@@ -1205,4 +1205,12 @@ export function ProfileDashboard({
       </div>
     </div>
   );
+}
+
+// Rank tables list up to ten profiles: two columns of five on large screens
+// (filled top to bottom, left then right), one column otherwise.
+function rankListClass(rows: number): string {
+  return rows > 5
+    ? "grid lg:grid-flow-col lg:grid-cols-2 lg:grid-rows-5 lg:gap-x-px lg:bg-slate-100"
+    : "grid";
 }

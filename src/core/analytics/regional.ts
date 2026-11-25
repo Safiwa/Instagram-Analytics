@@ -447,7 +447,7 @@ export function buildRegionalRanking(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
-  // Four peers plus the searched profile keeps the panel at five rows.
+  // The profile page passes nine peers for a ten-row table.
   limit = 4,
 ): RegionalRanking | null {
   const targetFactors = rankFactors(target, metrics);

@@ -294,7 +294,7 @@ export type PeerRankingRow = {
 export type RankFill = "same-region";
 
 export const RANK_FILL_LABEL: Record<RankFill, string> = {
-  "same-region": "same category from a neighbouring country, added to complete 5",
+  "same-region": "same category from a neighbouring country, added to complete the table",
 };
 
 export type PeerRanking = {
