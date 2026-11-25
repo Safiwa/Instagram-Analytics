@@ -184,27 +184,26 @@ describe("peer ranking for the searched profile", () => {
     expect(usernames).toEqual(
       expect.arrayContaining(["dubai.target", "uae.peer1", "uae.peer2"]),
     );
-    // Same-country peers come first and unmarked; other countries only fill the
-    // remaining rows of the five-profile table, marked as such.
-    expect(ranking!.total).toBe(5);
-    for (const row of ranking!.rows) {
-      if (row.profile.username.startsWith("uae.") || row.isTarget) {
-        expect(row.fill).toBeUndefined();
-      } else {
-        expect(row.fill).toBe("other-country");
-      }
-    }
+    // Other countries outside the region never fill rows.
+    expect(usernames).not.toContain("london.peer1");
+    expect(usernames).not.toContain("paris.peer1");
+    expect(usernames).not.toContain("tokyo.peer1");
+    expect(ranking!.total).toBe(3);
   });
 
-  it("fills a known-country table from other countries only when no same-country peer exists, and marks it", () => {
+  it("never fills a known-country table from outside its region", () => {
     const target = profile("dubai.target", 60_000, "Fashion and beauty", 2_000);
     const london = profile("london.peer", 65_000, "Fashion and beauty", 2_200);
     const unknown = profile("unknown.peer", 62_000, "Fashion and beauty", 2_100);
 
-    const ranking = buildPeerRanking(target, computeMetrics(target), [target, london, unknown]);
-    const peers = ranking?.rows.filter((row) => !row.isTarget) ?? [];
-    expect(peers.length).toBeGreaterThan(0);
-    expect(peers.every((row) => row.fill === "other-country" || row.fill === "same-region")).toBe(true);
+    expect(buildPeerRanking(target, computeMetrics(target), [target, london, unknown])).toBeNull();
+  });
+
+  it("fills from the same region and category group, marked", () => {
+    const target = profile("dubai.target", 60_000, "Fashion and beauty in Dubai", 2_000);
+    const riyadh = profile("riyadh.peer", 65_000, "Fashion and beauty in Riyadh", 2_200);
+    const ranking = buildPeerRanking(target, computeMetrics(target), [target, riyadh]);
+    expect(ranking?.rows.find((row) => row.profile.username === "riyadh.peer")?.fill).toBe("same-region");
   });
 
   it("never marks rows as other-country when the target country is not published", () => {
@@ -224,7 +223,7 @@ describe("peer ranking for the searched profile", () => {
     expect(usernames).toContain("uae.peer");
     expect(ranking!.total).toBe(4);
     for (const row of ranking!.rows) {
-      expect(row.fill === undefined || row.fill === "nearest").toBe(true);
+      expect(row.fill).toBeUndefined();
     }
   });
 
@@ -248,10 +247,7 @@ describe("peer ranking for the searched profile", () => {
 
     expect(usernames).toContain("uae.explicit");
     expect(usernames).toContain("uae.inferred");
-    // A business only fills the last row, marked as a different category.
-    expect(ranking!.rows.find((row) => row.profile.username === "uae.brand")?.fill).toBe(
-      "other-category",
-    );
+    expect(usernames).not.toContain("uae.brand");
   });
 
   it("returns null when no comparable peer is available", () => {
@@ -331,13 +327,12 @@ describe("Syrian same-country peers", () => {
     // Recorded "Account based in" values beat bio signals: Egypt, the UK and an
     // unrecorded country are not Syria, and "Syrian" in a bio is not a location.
     expect(usernames).toEqual(expect.arrayContaining(["yaman.najjar", "dima_dalati", "jennyesber"]));
-    // Five rows always: Syria first, then marked fills (Egypt is the same region).
-    expect(ranking?.total).toBe(5);
+    // Syria first; Egypt (same region, same category group) fills a row, marked.
+    // The UK kitchen and the unpublished account never do.
     const byName = new Map(ranking?.rows.map((row) => [row.profile.username, row]));
     expect(byName.get("dima_dalati")?.fill).toBeUndefined();
     expect(byName.get("nesreentafesh")?.fill).toBe("same-region");
-    expect(
-      ranking?.rows.filter((row) => row.country.country !== "Syria").every((row) => row.fill !== undefined),
-    ).toBe(true);
+    expect(byName.has("imadssyriankitchen")).toBe(false);
+    expect(byName.has("wafamoustafa")).toBe(false);
   });
 });
