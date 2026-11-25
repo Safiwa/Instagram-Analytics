@@ -27,6 +27,8 @@ type ProfilePageProps = {
   params: Promise<{ username: string }>;
 };
 
+const RANK_PEERS = 9;
+
 type Benchmarks = {
   peer: ReturnType<typeof findClosestPeer>;
   ranking: ReturnType<typeof buildPeerRanking>;
@@ -42,9 +44,10 @@ function buildBenchmarks(
 ): Benchmarks {
   return {
     peer: findClosestPeer(profile, metrics, tracked),
-    ranking: buildPeerRanking(profile, metrics, tracked),
+    // Ten profiles per rank table: the searched account plus nine peers.
+    ranking: buildPeerRanking(profile, metrics, tracked, RANK_PEERS),
     regionalPeer: findRegionalCategoryPeer(profile, metrics, regionalPool),
-    regionalRanking: buildRegionalRanking(profile, metrics, regionalPool),
+    regionalRanking: buildRegionalRanking(profile, metrics, regionalPool, RANK_PEERS),
   };
 }
 

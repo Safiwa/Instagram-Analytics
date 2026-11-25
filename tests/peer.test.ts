@@ -336,3 +336,15 @@ describe("Syrian same-country peers", () => {
     expect(byName.has("wafamoustafa")).toBe(false);
   });
 });
+
+describe("ten-profile rank tables", () => {
+  it("lists the searched profile plus nine same-country peers when asked", () => {
+    const target = profile("dubai.target", 60_000, "Fashion and beauty in Dubai", 2_000);
+    const pool = Array.from({ length: 12 }, (_, index) =>
+      profile(`uae.peer${index}`, 40_000 + index * 5_000, "Fashion and beauty in Dubai", 1_500 + index * 50),
+    );
+    const ranking = buildPeerRanking(target, computeMetrics(target), [target, ...pool], 9);
+    expect(ranking?.total).toBe(10);
+    expect(ranking?.rows.some((row) => row.isTarget)).toBe(true);
+  });
+});
