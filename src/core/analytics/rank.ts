@@ -150,8 +150,11 @@ export function selectFollowerBand<T>(
   eligibleInBand: (candidate: T, band: FollowerBand) => boolean = () => true,
   // The nearest-size fallback beyond 10x is opt-in. Global peer suggestions
   // keep the 10x ceiling; the Middle East panel opts in and says so.
-  options: { allowNearest?: boolean } = {},
+  // minCount: widen until the band holds at least this many candidates (a
+  // five-row rank table needs four peers). Defaults to one.
+  options: { allowNearest?: boolean; minCount?: number } = {},
 ): { band: FollowerBand; candidates: T[] } | null {
+  const minCount = Math.max(1, options.minCount ?? 1);
   const usable = candidates.filter((candidate) => followersOf(candidate) > 0);
   if (targetFollowers <= 0 || usable.length === 0) {
     return null;
@@ -161,11 +164,21 @@ export function selectFollowerBand<T>(
       const followers = followersOf(candidate);
       return followers >= band.min && followers <= band.max && eligibleInBand(candidate, band);
     });
-    if (inBand.length > 0) {
+    if (inBand.length >= minCount) {
       return { band, candidates: inBand };
     }
   }
   if (!options.allowNearest) {
+    // Without the nearest fallback, keep the widest fixed band that has anyone.
+    for (const band of [...fixedBands(targetFollowers)].reverse()) {
+      const inBand = usable.filter((candidate) => {
+        const followers = followersOf(candidate);
+        return followers >= band.min && followers <= band.max && eligibleInBand(candidate, band);
+      });
+      if (inBand.length > 0 && minCount > 1) {
+        return { band, candidates: inBand };
+      }
+    }
     return null;
   }
   const nearest = [...usable]
@@ -174,7 +187,7 @@ export function selectFollowerBand<T>(
         sizeDistance(targetFollowers, followersOf(left)) -
         sizeDistance(targetFollowers, followersOf(right)),
     )
-    .slice(0, NEAREST_BAND_SIZE);
+    .slice(0, Math.max(NEAREST_BAND_SIZE, minCount));
   const sizes = nearest.map(followersOf);
   const min = Math.min(...sizes);
   const max = Math.max(...sizes);
@@ -183,7 +196,10 @@ export function selectFollowerBand<T>(
       step: "nearest",
       min,
       max,
-      label: `Nearest sizes available: no peer within 10x yet, so the closest tracked accounts are shown (${bandRange(min, max)})`,
+      label:
+        minCount > 1
+          ? `Nearest sizes available: fewer than ${minCount} peers within 10x, so the closest tracked accounts are shown (${bandRange(min, max)})`
+          : `Nearest sizes available: no peer within 10x yet, so the closest tracked accounts are shown (${bandRange(min, max)})`,
     },
     candidates: nearest,
   };

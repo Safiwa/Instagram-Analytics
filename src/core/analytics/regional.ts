@@ -153,6 +153,18 @@ function fillCountryCap(
       break;
     }
   }
+  // The three-per-country limit is a preference for regional variety. When no
+  // other Middle East country can fill the table, same-country peers do, so the
+  // panel still shows five profiles.
+  for (const peer of fallback) {
+    if (result.length >= limit) {
+      break;
+    }
+    if (!seen.has(peer.profile.username)) {
+      result.push(peer);
+      seen.add(peer.profile.username);
+    }
+  }
   return result;
 }
 
@@ -175,6 +187,7 @@ function rankedCandidates(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
+  minCount = 1,
 ): RegionalPeer[] {
   const targetCountry = inferCountrySignal(target);
   const targetFactors = rankFactors(target, metrics);
@@ -221,7 +234,7 @@ function rankedCandidates(
     eligible,
     (candidate) => candidate.followers,
     () => true,
-    { allowNearest: true },
+    { allowNearest: true, minCount },
   );
   if (!selection) {
     return [];
@@ -405,7 +418,7 @@ function selectRegionalPeers(
   );
 
   if (!targetPostsNotExposed) {
-    return capCountryRepeats(byScore, targetCountry, limit);
+    return fillCountryCap(byScore, byScore, targetCountry, limit);
   }
 
   const higher = byScore.filter((peer) => regionalScore(peer) > targetScore);
@@ -438,7 +451,9 @@ export function buildRegionalRanking(
   const targetFactors = rankFactors(target, metrics);
   const targetRegionalScore = regionalRankScore(targetFactors, metrics.authenticityPct);
   const peers = selectRegionalPeers(
-    rankedCandidates(target, metrics, pool),
+    // Widen the follower band until four peers exist, so the table shows five
+    // profiles whenever the pool has them.
+    rankedCandidates(target, metrics, pool, limit),
     inferCountrySignal(target),
     targetRegionalScore,
     limit,

@@ -273,3 +273,23 @@ describe("progressive follower bands and join dates", () => {
   });
 });
 
+
+describe("five-row same-country rank", () => {
+  it("ranks a small UAE agency against four UAE agencies, not creators", () => {
+    const agency = (username: string, followers: number, likes: number): CreatorProfile =>
+      profile(username, followers, "Dubai digital marketing agency", likes);
+    const target = profile("campaignmastersagency", 31, "Creative & digital analytics-based agency. Dubai, UAE", 3);
+    const pool = [
+      agency("dubai.a", 13_700, 40),
+      agency("dubai.b", 8_800, 30),
+      agency("dubai.c", 72_900, 10),
+      agency("dubai.d", 500, 8),
+      profile("dubai.creator", 40, "Digital creator in Dubai", 3),
+    ];
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), pool);
+    expect(ranking?.total).toBe(5);
+    expect(ranking?.rows.map((row) => row.profile.username)).not.toContain("dubai.creator");
+    expect(ranking?.rows.every((row) => row.category === "Marketing agency")).toBe(true);
+  });
+});

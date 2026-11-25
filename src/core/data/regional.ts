@@ -45,15 +45,28 @@ const INDEXED_POOL_LIMIT = 400;
 const INDEXED_POOL_TTL_MS = 10 * 60 * 1000;
 let indexedPool: { expiresAt: number; profiles: CreatorProfile[] } | null = null;
 
-async function loadIndexedMiddleEast(): Promise<CreatorProfile[]> {
+// Every public profile this site has indexed recently (lookups and the daily
+// collector), cached for ten minutes. Peer rankings draw on it so same-country
+// and same-category peers exist beyond the curated tracked list.
+export async function getIndexedPool(): Promise<CreatorProfile[]> {
   if (indexedPool && indexedPool.expiresAt > Date.now()) {
     return indexedPool.profiles;
   }
   const profiles = (await loadIndexedProfiles({ limit: INDEXED_POOL_LIMIT })).filter(
-    (profile) => !profile.isPrivate && isMiddleEastAccount(profile),
+    (profile) => !profile.isPrivate,
   );
   indexedPool = { expiresAt: Date.now() + INDEXED_POOL_TTL_MS, profiles };
   return profiles;
+}
+
+async function loadIndexedMiddleEast(): Promise<CreatorProfile[]> {
+  return (await getIndexedPool()).filter((profile) => isMiddleEastAccount(profile));
+}
+
+// Tracked profiles first (fresher data), then indexed profiles not already in.
+export function mergePools(primary: CreatorProfile[], extra: CreatorProfile[]): CreatorProfile[] {
+  const seen = new Set(primary.map((profile) => profile.username.toLowerCase()));
+  return [...primary, ...extra.filter((profile) => !seen.has(profile.username.toLowerCase()))];
 }
 
 export function resetRegionalPoolCacheForTests(): void {
