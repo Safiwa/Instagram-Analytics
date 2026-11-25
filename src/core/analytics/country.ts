@@ -113,7 +113,7 @@ const COUNTRY_RULES: CountryRule[] = [
     region: "middle-east",
     flag: "🇸🇾",
     code: "SY",
-    aliases: ["syria", "syrian", "damascus", "aleppo", "homs", "latakia"],
+    aliases: ["syria", "damascus", "aleppo", "homs", "latakia"],
     handleAliases: ["syria", "damascus"],
   },
   {
@@ -247,6 +247,19 @@ const COUNTRY_RULES: CountryRule[] = [
   },
 ];
 
+// Instagram's "Account based in" value as read from a profile's "About this
+// account" sheet by the site owner. Instagram shows it only to logged-in
+// viewers, so it cannot be fetched; when recorded here it carries the same
+// authority as a published value and beats every inferred signal. A null value
+// means the account is not based in the country its bio suggests and the real
+// one is not recorded: the country stays unpublished.
+const ACCOUNT_BASED_IN_BY_HANDLE: Record<string, string | null> = {
+  dima_dalati: "Syria",
+  nesreentafesh: "Egypt",
+  imadssyriankitchen: "United Kingdom",
+  wafamoustafa: null,
+};
+
 // Curated account country, used only when Instagram's "Account based in" and
 // the public handle, profile and post signals all leave the country unresolved.
 // It is editorial metadata, not Instagram audience data, and is marked with the
@@ -262,8 +275,6 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   visitsyria: "Syria",
   // Syrian creators and public figures whose bios carry no location signal.
   jennyesber: "Syria",
-  nesreentafesh: "Syria",
-  dima_dalati: "Syria",
   visitiraq: "Iraq",
   explorepalestine: "Palestine",
   visitkuwait: "Kuwait",
@@ -524,6 +535,13 @@ export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
   const accountRule = accountCountry ? countryRuleForCountry(accountCountry) : null;
   if (accountRule) {
     return signal(accountRule, region, "account");
+  }
+  if (Object.hasOwn(ACCOUNT_BASED_IN_BY_HANDLE, username)) {
+    const recorded = ACCOUNT_BASED_IN_BY_HANDLE[username];
+    const recordedRule = recorded ? countryRuleForCountry(recorded) : null;
+    return recordedRule
+      ? signal(recordedRule, region, "account")
+      : { country: null, region: null, label: "Country not published", basis: null };
   }
 
   // If it is not shared, the public posts and reels are the next requested

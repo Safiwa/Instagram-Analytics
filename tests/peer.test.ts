@@ -310,8 +310,16 @@ describe("Syrian same-country peers", () => {
       profile("jamel_alhasan", 2_800_000, "صحفي سوري|| Syrian journalist", 80_000),
     ];
 
-    const ranking = buildPeerRanking(target, computeMetrics(target), pool);
-    expect(ranking?.total ?? 0).toBeGreaterThanOrEqual(4);
+    const kitchen = profile("imadssyriankitchen", 64_800, "Modern Syrian dishes from his home kitchen to London", 200);
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), [...pool, kitchen]);
+    const usernames = ranking?.rows.map((row) => row.profile.username) ?? [];
+    // Recorded "Account based in" values beat bio signals: Egypt, the UK and an
+    // unrecorded country are not Syria, and "Syrian" in a bio is not a location.
+    expect(usernames).toEqual(expect.arrayContaining(["yaman.najjar", "dima_dalati", "jennyesber"]));
+    expect(usernames).not.toContain("nesreentafesh");
+    expect(usernames).not.toContain("wafamoustafa");
+    expect(usernames).not.toContain("imadssyriankitchen");
     expect(ranking?.rows.every((row) => row.country.country === "Syria")).toBe(true);
   });
 });
