@@ -24,6 +24,31 @@ type Rule = { label: string; keywords: string[] };
 // so the category is inferred from the public name and biography. More specific
 // rules are checked first so brands are never mistaken for creators.
 const RULES: Rule[] = [
+  // Agencies describe themselves with words other rules would claim ("social
+  // media agency" -> media, "built for brands" -> brand, "content" -> creator),
+  // so the agency rule is checked first. Instagram's own business category
+  // "Marketing Agency" also matches here.
+  {
+    label: "Marketing agency",
+    keywords: [
+      "marketing agency",
+      "digital agency",
+      "digital marketing",
+      "advertising agency",
+      "ad agency",
+      "social media agency",
+      "social media marketing",
+      "creative agency",
+      "media agency",
+      "branding agency",
+      "pr agency",
+      "influencer marketing",
+      "influencer agency",
+      "influencer & celebrity management",
+      "engagement agency",
+      "agency",
+    ],
+  },
   // An explicit self-description is the strongest signal, so check it before the
   // business rules: a creator bio can still mention "brand collaborations".
   {
@@ -151,6 +176,7 @@ const GROUPS: Record<string, string> = {
   "News & media": "media",
   "Travel & tourism": "travel-business",
   "Business & brand": "business",
+  "Marketing agency": "agency",
   "Sport": "sport",
   "Music": "music",
 };
@@ -183,8 +209,22 @@ function explicitCategory(text: string): string | null {
 // category rule. The "Digital creator" / "Public figure" fallbacks are useful for
 // global benchmarks but must not satisfy the regional category-label gate.
 export function inferExplicitCategory(profile: CreatorProfile): string | null {
-  return explicitCategory(`${profile.displayName} ${profile.bio}`);
+  return (
+    explicitCategory(`${profile.displayName} ${profile.bio}`) ??
+    // Instagram's own business category ("Marketing Agency"), when a data
+    // source returned one. The adapters' generic placeholders never match.
+    (GENERIC_CATEGORY_LABELS.has(profile.category.trim().toLowerCase())
+      ? null
+      : explicitCategory(profile.category))
+  );
 }
+
+const GENERIC_CATEGORY_LABELS = new Set([
+  "",
+  "instagram professional",
+  "instagram creator",
+  "instagram account",
+]);
 
 export function inferCategory(profile: CreatorProfile): string {
   const matched = inferExplicitCategory(profile);

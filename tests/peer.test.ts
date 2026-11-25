@@ -92,7 +92,7 @@ describe("country-aware peer suggestions", () => {
     expect(suggestions.every((match) => match.country.country === "United Arab Emirates")).toBe(
       true,
     );
-    expect(suggestions[0].reasons.join(" ")).toContain("similar audience size and engagement range");
+    expect(suggestions[0].reasons.join(" ")).toContain("similar audience size (within ±30%) and engagement range");
     expect(suggestions[0].reasons.join(" ")).toContain("five-factor fit");
   });
 
@@ -245,3 +245,26 @@ describe("peer ranking for the searched profile", () => {
     expect(buildPeerRanking(target, computeMetrics(target), [])).toBeNull();
   });
 });
+
+describe("progressive follower bands and join dates", () => {
+  it("widens to 3x when nobody is within ±30%, and says so", () => {
+    const target = profile("dubai.style", 60_000, "Fashion and beauty", 2_000);
+    const wider = profile("uae.wider", 150_000, "Fashion and beauty", 5_000);
+
+    const [match] = findSimilarPeers(target, computeMetrics(target), [wider]);
+    expect(match?.profile.username).toBe("uae.wider");
+    expect(match?.band?.step).toBe("3x");
+    expect(match?.reasons.join(" ")).toContain("within 3x");
+  });
+
+  it("prefers a peer that joined around the same time when other signals tie", () => {
+    const target = { ...profile("dubai.style", 60_000, "Fashion and beauty", 2_000), instagramId: "49930798557" };
+    const sameEra = { ...profile("uae.a", 62_000, "Fashion and beauty", 2_000), instagramId: "50100000000" };
+    const oldEra = { ...profile("uae.b", 62_000, "Fashion and beauty", 2_000), instagramId: "300000000" };
+
+    const [first] = findSimilarPeers(target, computeMetrics(target), [oldEra, sameEra]);
+    expect(first?.profile.username).toBe("uae.a");
+    expect(first?.reasons.join(" ")).toContain("joined around the same time");
+  });
+});
+

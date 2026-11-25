@@ -177,12 +177,53 @@ describe("Middle East category peer", () => {
     expect(visible).not.toContain("too.high");
   });
 
-  it("returns no peer and no rank table when every candidate is outside the band", () => {
+  it("widens the follower band step by step and reports the band used", () => {
     const target = profile("target", 1_000_000, ["festival poetry"]);
-    const far = profile("far", 2_000_000, ["festival poetry"]);
+    const twice = profile("twice", 2_000_000, ["festival poetry"]);
+    const far = profile("far", 50_000_000, ["festival poetry"]);
 
-    expect(findRegionalCategoryPeer(target, computeMetrics(target), [far])).toBeNull();
-    expect(buildRegionalRanking(target, computeMetrics(target), [far])).toBeNull();
+    const peer = findRegionalCategoryPeer(target, computeMetrics(target), [twice, far]);
+    expect(peer?.profile.username).toBe("twice");
+    expect(peer?.band?.step).toBe("3x");
+    expect(buildRegionalRanking(target, computeMetrics(target), [twice, far])?.band?.label).toContain(
+      "Widened to 3x",
+    );
+
+    const close = profile("close", 1_100_000, ["festival poetry"]);
+    expect(findRegionalCategoryPeer(target, computeMetrics(target), [twice, close])?.band?.step).toBe(
+      "close",
+    );
+  });
+
+  it("falls back to the nearest Middle East sizes, labelled, when nothing is within 10x", () => {
+    const target = profile("target", 31, ["festival poetry"], { likes: 3, comments: 1 });
+    const far = profile("far", 2_000_000, ["festival poetry"]);
+    const ranking = buildRegionalRanking(target, computeMetrics(target), [far]);
+
+    expect(ranking?.band?.step).toBe("nearest");
+    expect(ranking?.band?.label).toContain("Nearest sizes available");
+  });
+
+  it("matches a marketing agency with other agencies, never with creators", () => {
+    const agencyBio = "Creative & digital analytics-based agency. Strategy, Content, Ads. Dubai, UAE";
+    const target = profile("campaignmastersagency", 31, ["campaign launch"], {
+      displayName: "Campaign Masters",
+      bio: agencyBio,
+      likes: 3,
+      comments: 1,
+    });
+    const agency = profile("mkvdigital", 13_700, ["campaign launch"], {
+      displayName: "MKV Digital",
+      bio: "Dubai Based Digital Engagement Agency. Social Media Management",
+    });
+    const creator = profile("creator", 40, ["campaign launch"], { likes: 3, comments: 1 });
+
+    const ranking = buildRegionalRanking(target, computeMetrics(target), [agency, creator]);
+    expect(ranking?.rows.map((row) => row.profile.username).sort()).toEqual([
+      "campaignmastersagency",
+      "mkvdigital",
+    ]);
+    expect(ranking?.rows.every((row) => row.category === "Marketing agency")).toBe(true);
   });
 
   it("returns no peer when the searched account has no creator category label", () => {

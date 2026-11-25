@@ -111,7 +111,7 @@ export async function loadIndexSample(): Promise<IndexSamplePoint[]> {
 const SELECT_PROFILES = `
 select
   p.username, p.display_name, p.category, p.account_country, p.is_verified,
-  p.is_private, p.profile_picture_url,
+  p.is_private, p.profile_picture_url, p.bio, p.instagram_id,
   s.followers, s.following, s.posts_count, s.source, s.captured_on::text as captured_on,
   coalesce((
     select json_agg(item order by item.posted_at desc nulls last)
@@ -177,7 +177,8 @@ function toProfile(row: SqlRow): CreatorProfile | null {
     username,
     displayName: toText(row.display_name) ?? username,
     category: toText(row.category) ?? "Instagram account",
-    bio: "",
+    bio: toText(row.bio) ?? "",
+    ...(toText(row.instagram_id) ? { instagramId: row.instagram_id as string } : {}),
     followers,
     following: toNumber(row.following) ?? 0,
     postsCount: toNumber(row.posts_count) ?? 0,

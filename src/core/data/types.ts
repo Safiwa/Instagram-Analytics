@@ -94,6 +94,9 @@ export type CreatorProfile = {
   // Instagram's "Account based in" value only when the platform actually
   // publishes it. "Not shared" and unavailable values stay null/undefined.
   accountCountry?: string | null;
+  // Instagram's numeric account id (the legacy "pk"). Ids are issued in rising
+  // order, so it gives an estimated join date; Instagram publishes no date.
+  instagramId?: string;
   fakeFollowers?: number;
   followerHistory: MonthlyPoint[];
   // Daily snapshots stored by this site since it first saw the profile.

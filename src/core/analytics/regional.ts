@@ -1,7 +1,6 @@
 import { formatCompact, formatPercent } from "../format";
 import type { CreatorProfile } from "../data/types";
 import {
-  categoryGroup,
   inferCategory,
   inferExplicitCategory,
   inferPostActivity,
@@ -17,10 +16,12 @@ import {
   type CountrySignal,
 } from "./country";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
+import { joinDateSimilarity, joinYearLabel } from "./accountAge";
 import {
   clampRankScoreToMatch,
   compareRank,
-  isWithinFollowerLatency,
+  selectFollowerBand,
+  type FollowerBand,
   rankFactorSimilarity,
   rankFactors,
   regionalRankScore,
@@ -51,6 +52,9 @@ export type RegionalPeer = {
   matchReasons: string[];
   postsNotExposed: boolean;
   engagementSource: ProfileMetrics["engagementSource"];
+  // The follower range this peer was matched in (±30%, 3x, 10x or nearest).
+  band?: FollowerBand;
+  joinedLabel?: string;
 };
 
 export type RegionalComparison = {
@@ -79,6 +83,7 @@ export type RegionalRanking = {
   targetRank: number;
   total: number;
   outperformedPercent: number | null;
+  band?: FollowerBand;
 };
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -159,12 +164,13 @@ function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): 
   );
 }
 
-// The Middle East panel keeps the curated pool and the hard ±30% follower band.
-// Category labels decide similarity: both sides must have an explicit public
-// creator label in the same creator group, and an exact label match is preferred
-// over a merely compatible creator label. Fallback labels do not qualify. Public
-// post activity only strengthens the match, so a hotel or news account can no
-// longer become a creator peer through its captions.
+// The Middle East panel matches follower size step by step: ±30% first, then
+// 3x, 10x, and finally the nearest sizes available, and reports the band used.
+// Category labels decide similarity: both sides need an explicit public label
+// (from the name, bio or Instagram's business category) in the same category
+// group, so creators meet creators and marketing agencies meet agencies, and an
+// exact label match is preferred. Fallback labels do not qualify. Public post
+// activity and an estimated join date only strengthen the match.
 function rankedCandidates(
   target: CreatorProfile,
   metrics: ProfileMetrics,
@@ -175,7 +181,7 @@ function rankedCandidates(
   const targetCategory = inferExplicitCategory(target);
   const targetPostsNotExposed = target.recentPosts.length === 0;
 
-  if (!targetCategory || categoryGroup(targetCategory) !== "creator") {
+  if (!targetCategory) {
     return [];
   }
   // A known country must be one of the published Middle East countries and must
@@ -189,63 +195,85 @@ function rankedCandidates(
     return [];
   }
 
-  const candidates = pool.filter((candidate) => {
+  const eligible = pool.filter((candidate) => {
     const candidateCategory = inferExplicitCategory(candidate);
-    return (
-      candidate.username !== target.username &&
-      candidate.followers > 0 &&
+    if (
+      candidate.username === target.username ||
+      candidate.followers <= 0 ||
       // A no-post searched profile may be ranked alongside other no-post
       // accounts, but never against invented activity. Their rows are disclosed.
-      (targetPostsNotExposed || candidate.recentPosts.length > 0) &&
-      isWithinFollowerLatency(target.followers, candidate.followers) &&
-      candidateCategory !== null &&
-      categoryGroup(candidateCategory) === "creator" &&
-      isSimilarCategory(targetCategory, candidateCategory)
+      !(targetPostsNotExposed || candidate.recentPosts.length > 0) ||
+      candidateCategory === null ||
+      !isSimilarCategory(targetCategory, candidateCategory)
+    ) {
+      return false;
+    }
+    const country = inferCountrySignal(candidate);
+    return (
+      country.country !== null &&
+      isMiddleEastCountry(country.country) &&
+      hasPublishedCountryEvidence(country)
     );
   });
 
-  const ranked = candidates
-    .map((candidate) => {
-      const candidateMetrics = computeMetrics(candidate);
-      const candidateFactors = rankFactors(candidate, candidateMetrics);
-      const candidateCountry = inferCountrySignal(candidate);
-      const relationship = countryRelationship(targetCountry, candidateCountry);
-      const candidateCategory = inferExplicitCategory(candidate) ?? inferCategory(candidate);
-      const sameCategoryLabel = inferExplicitCategory(candidate) === targetCategory;
-      const shared = sharedPostActivity(target, candidate);
-      const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
-      const activityScore = shared.length > 0 ? clamp(80 + shared.length * 5, 0, 100) : 75;
-      const raw = factorScore * 0.55 + countryScore(relationship) * 0.3 + activityScore * 0.15;
+  const selection = selectFollowerBand(
+    target.followers,
+    eligible,
+    (candidate) => candidate.followers,
+    () => true,
+    { allowNearest: true },
+  );
+  if (!selection) {
+    return [];
+  }
+  const { band } = selection;
 
-      const postsNotExposed = candidate.recentPosts.length === 0;
-      const matchReasons = [
-        `${sameCategoryLabel ? "same category label" : "same creator category group"}: ${candidateCategory}`,
-        ...(shared.length > 0 ? [`shared activity: ${shared.join(", ")}`] : []),
-        `regional fit ${Math.round(factorScore)}%`,
-        ...(postsNotExposed ? ["posts not exposed; public signals only"] : []),
-      ];
+  const ranked = selection.candidates.map((candidate) => {
+    const candidateMetrics = computeMetrics(candidate);
+    const candidateFactors = rankFactors(candidate, candidateMetrics);
+    const candidateCountry = inferCountrySignal(candidate);
+    const relationship = countryRelationship(targetCountry, candidateCountry);
+    const candidateCategory = inferExplicitCategory(candidate) ?? inferCategory(candidate);
+    const sameCategoryLabel = inferExplicitCategory(candidate) === targetCategory;
+    const shared = sharedPostActivity(target, candidate);
+    const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
+    const activityScore = shared.length > 0 ? clamp(80 + shared.length * 5, 0, 100) : 75;
+    const joinScore = joinDateSimilarity(target.instagramId, candidate.instagramId);
+    const joinedLabel = joinYearLabel(candidate.instagramId);
+    const raw =
+      factorScore * (joinScore === null ? 0.55 : 0.47) +
+      (joinScore ?? 0) * (joinScore === null ? 0 : 0.08) +
+      countryScore(relationship) * 0.3 +
+      activityScore * 0.15;
 
-      return {
-        profile: candidate,
-        metrics: candidateMetrics,
-        factors: candidateFactors,
-        matchScore: clampRankScoreToMatch(raw),
-        category: candidateCategory,
-        sameCategoryLabel,
-        sharedActivity: shared,
-        country: candidateCountry,
-        countryRelationship: relationship,
-        matchReasons,
-        postsNotExposed,
-        engagementSource: candidateMetrics.engagementSource,
-      };
-    })
-    .filter(
-      (peer) =>
-        peer.country.country !== null &&
-        isMiddleEastCountry(peer.country.country) &&
-        hasPublishedCountryEvidence(peer.country),
-    );
+    const postsNotExposed = candidate.recentPosts.length === 0;
+    const matchReasons = [
+      `${sameCategoryLabel ? "same category label" : "same category group"}: ${candidateCategory}`,
+      ...(shared.length > 0 ? [`shared activity: ${shared.join(", ")}`] : []),
+      `regional fit ${Math.round(factorScore)}%`,
+      ...(joinScore !== null && joinScore >= 75 && joinedLabel
+        ? [`joined around the same time (${joinedLabel.replace("Joined ", "")})`]
+        : []),
+      ...(postsNotExposed ? ["posts not exposed; public signals only"] : []),
+    ];
+
+    return {
+      profile: candidate,
+      metrics: candidateMetrics,
+      factors: candidateFactors,
+      matchScore: clampRankScoreToMatch(raw),
+      category: candidateCategory,
+      sameCategoryLabel,
+      sharedActivity: shared,
+      country: candidateCountry,
+      countryRelationship: relationship,
+      matchReasons,
+      postsNotExposed,
+      engagementSource: candidateMetrics.engagementSource,
+      band,
+      ...(joinedLabel ? { joinedLabel } : {}),
+    };
+  });
 
   ranked.sort(
     (left, right) =>
@@ -465,5 +493,6 @@ export function buildRegionalRanking(
     targetRank: rows.findIndex((row) => row.isTarget) + 1,
     total: rows.length,
     outperformedPercent: Math.round((beaten / peers.length) * 100),
+    ...(peers[0].band ? { band: peers[0].band } : {}),
   };
 }

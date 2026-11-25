@@ -41,7 +41,15 @@ export type PublicIdentity = {
   profilePictureUrl?: string;
   // Only a published "Account based in" value. Null means not shared/unavailable.
   accountCountry?: string | null;
+  instagramId?: string;
 };
+
+// Instagram's numeric account id, when the public page exposes it.
+function instagramIdOf(user: PublicUser | null): string | undefined {
+  const raw = user?.id ?? user?.pk;
+  const text = raw === undefined || raw === null ? "" : String(raw).trim();
+  return /^[0-9]{1,25}$/.test(text) ? text : undefined;
+}
 
 // The Graph API's business_discovery does not expose the verified badge, so the
 // profile page asks the public web profile for that single field. Keep it in a
@@ -170,6 +178,8 @@ type PublicLocation = {
 type PublicEdge = { node?: PublicMediaNode };
 
 type PublicUser = {
+  id?: string | number;
+  pk?: string | number;
   username?: string;
   full_name?: string;
   biography?: string;
@@ -866,6 +876,9 @@ export async function fetchPublicIdentity(username: string): Promise<PublicIdent
     profilePictureUrl:
       user?.profile_pic_url_hd?.trim() || user?.profile_pic_url?.trim() || undefined,
     accountCountry: accountCountryFromUser(user) ?? parsed.accountCountry,
+    ...((instagramIdOf(user) ?? parsed.profileId)
+      ? { instagramId: instagramIdOf(user) ?? parsed.profileId ?? undefined }
+      : {}),
   };
   identityCache.set(key, { expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS, identity });
   if (identityCache.size > CACHE_MAX) {
@@ -953,6 +966,9 @@ type ParsedProfileHtml = {
   ogStats: ReturnType<typeof parseOgStats>;
   ogTitle: string | null;
   accountCountry: string | null;
+  // The page's own profile id ("profilePage_<id>"), present even when the
+  // embedded user JSON is not.
+  profileId: string | null;
 };
 
 function parseProfileHtml(html: string, username: string): ParsedProfileHtml {
@@ -982,6 +998,7 @@ function parseProfileHtml(html: string, username: string): ParsedProfileHtml {
     ogStats: parseOgStats(html),
     ogTitle: metaContent(html, "og:title"),
     accountCountry: accountCountry ?? accountCountryFromUser(user),
+    profileId: /"profile_id"\s*:\s*"([0-9]{1,25})"/.exec(html)?.[1] ?? null,
   };
 }
 
@@ -1053,7 +1070,7 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
   }
 
   let html = await response.text();
-  let { user, edges, ogStats, ogTitle, accountCountry } = parseProfileHtml(html, key);
+  let { user, edges, ogStats, ogTitle, accountCountry, profileId } = parseProfileHtml(html, key);
 
   // A scraper can return a metadata-free app shell for a real account. Retry once
   // through a fresh proxy before treating the handle as genuinely missing.
@@ -1071,7 +1088,7 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     }
     if (retry.ok) {
       html = await retry.text();
-      ({ user, edges, ogStats, ogTitle, accountCountry } = parseProfileHtml(html, key));
+      ({ user, edges, ogStats, ogTitle, accountCountry, profileId } = parseProfileHtml(html, key));
     }
   }
 
@@ -1155,6 +1172,9 @@ export async function fetchPublicProfile(username: string): Promise<CreatorProfi
     profilePictureUrl: user?.profile_pic_url,
     website: preferredWebsite(user),
     accountCountry: accountCountry ?? accountCountryFromUser(user),
+    ...((instagramIdOf(user) ?? profileId)
+      ? { instagramId: instagramIdOf(user) ?? profileId ?? undefined }
+      : {}),
     followerHistory: [],
     recentPosts,
     audience: undefined,

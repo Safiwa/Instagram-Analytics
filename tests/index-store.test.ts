@@ -71,6 +71,7 @@ function profile(username: string, followers: number, overrides: Partial<Creator
 beforeAll(async () => {
   db = new PGlite();
   await db.exec(await readFile("db/migrations/0001_profile_snapshots.sql", "utf8"));
+  await db.exec(await readFile("db/migrations/0005_profile_bio_and_id.sql", "utf8"));
 });
 
 afterAll(async () => {

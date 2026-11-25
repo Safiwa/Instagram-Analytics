@@ -234,7 +234,11 @@ export async function fetchLiveProfile(username: string): Promise<CreatorProfile
   // fails the live profile.
   try {
     const identity = await fetchPublicIdentity(key);
-    profile = { ...profile, accountCountry: identity?.accountCountry ?? null };
+    profile = {
+      ...profile,
+      accountCountry: identity?.accountCountry ?? null,
+      ...(identity?.instagramId ? { instagramId: identity.instagramId } : {}),
+    };
   } catch (error) {
     log.warn("public account-country enrichment failed", {
       username: key,
