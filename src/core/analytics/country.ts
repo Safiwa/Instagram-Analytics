@@ -113,7 +113,7 @@ const COUNTRY_RULES: CountryRule[] = [
     region: "middle-east",
     flag: "🇸🇾",
     code: "SY",
-    aliases: ["syria", "damascus"],
+    aliases: ["syria", "syrian", "damascus", "aleppo", "homs", "latakia"],
     handleAliases: ["syria", "damascus"],
   },
   {
@@ -260,6 +260,10 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   flynas: "Saudi Arabia",
   visitjordan: "Jordan",
   visitsyria: "Syria",
+  // Syrian creators and public figures whose bios carry no location signal.
+  jennyesber: "Syria",
+  nesreentafesh: "Syria",
+  dima_dalati: "Syria",
   visitiraq: "Iraq",
   explorepalestine: "Palestine",
   visitkuwait: "Kuwait",

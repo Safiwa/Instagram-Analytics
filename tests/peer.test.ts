@@ -293,3 +293,25 @@ describe("five-row same-country rank", () => {
     expect(ranking?.rows.every((row) => row.category === "Marketing agency")).toBe(true);
   });
 });
+
+describe("Syrian same-country peers", () => {
+  it("ranks @yaman.najjar against tracked Syrian public figures and creators", () => {
+    const target = profile(
+      "yaman.najjar",
+      691_500,
+      "Actor | Streamer 📹 📍🇸🇾🇳🇱 (YN Is My Family ) For business WhatsApp",
+      130_000,
+    );
+    const pool = [
+      profile("jennyesber", 4_800_000, "PUBLIC FIGURE ACTRESS JENNY ESBER", 7_000),
+      profile("nesreentafesh", 14_900_000, "As above so below", 30_000),
+      profile("dima_dalati", 280_600, "Unique Fashion | beauty | lifestyle", 4_000),
+      profile("wafamoustafa", 90_200, "Syrian activist and filmmaker", 2_000),
+      profile("jamel_alhasan", 2_800_000, "صحفي سوري|| Syrian journalist", 80_000),
+    ];
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), pool);
+    expect(ranking?.total ?? 0).toBeGreaterThanOrEqual(4);
+    expect(ranking?.rows.every((row) => row.country.country === "Syria")).toBe(true);
+  });
+});
