@@ -91,8 +91,11 @@ export function computeMetrics(profile: CreatorProfile) {
     ? round2(100 - followerAudit.fakeSharePct)
     : (estimates?.authenticityPct ?? null);
   const authenticityPct = measuredAuthenticityPct ?? authenticityEstimate;
+  // A census audit counts every follower, so it is a measurement, not an estimate.
   const authenticityEstimated =
-    measuredAuthenticityPct === null && typeof authenticityEstimate === "number";
+    measuredAuthenticityPct === null &&
+    typeof authenticityEstimate === "number" &&
+    !followerAudit?.census;
 
   const fakeFollowers =
     typeof profile.fakeFollowers === "number" && profile.followers > 0
@@ -162,6 +165,10 @@ export type ProfileMetrics = ReturnType<typeof computeMetrics>;
 // an exact count: the model cannot see the follower list. Measured (demo)
 // values keep their exact count.
 export function describeFakeFollowers(metrics: ProfileMetrics, fallback = "—"): string {
+  if (metrics.followerAudit?.census) {
+    const audit = metrics.followerAudit;
+    return `${Math.round(audit.fakeSharePct)}% (${audit.fakeCount.toLocaleString("en-US")} of ${audit.sampleSize.toLocaleString("en-US")} flagged)`;
+  }
   if (metrics.fakeFollowersRange && metrics.fakeFollowerRisk) {
     const { lowPct, highPct } = metrics.fakeFollowersRange;
     return `${Math.round(lowPct)}-${Math.round(highPct)}% (${FAKE_FOLLOWER_RISK_LABEL[metrics.fakeFollowerRisk]})`;

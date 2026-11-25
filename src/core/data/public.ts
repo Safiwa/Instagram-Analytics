@@ -184,6 +184,7 @@ type PublicUser = {
   timeline_media?: { count?: number; edges?: PublicEdge[] };
   profile_pic_url?: string;
   profile_pic_url_hd?: string;
+  has_anonymous_profile_picture?: boolean;
   external_url?: string;
   bio_links?: { url?: string }[];
   category_name?: string;
@@ -874,6 +875,71 @@ export async function fetchPublicIdentity(username: string): Promise<PublicIdent
     }
   }
   return identity;
+}
+
+// Instagram's generic grey avatar, served when an account has no photo.
+const DEFAULT_AVATAR_MARKER = "44884218_345707102882519_2446069589734326272_n";
+
+export type FollowerSignals = {
+  username: string;
+  posts?: number;
+  followers?: number;
+  following?: number;
+  hasProfilePic?: boolean;
+  hasName?: boolean;
+  hasBio?: boolean;
+  isPrivate?: boolean;
+};
+
+// One lightweight public profile read for the follower audit: counts, whether
+// a real photo, name and bio exist, and privacy. Returns "not_found" for a
+// deleted/renamed account and null for a temporary failure (retried later).
+export async function fetchFollowerSignals(
+  username: string,
+): Promise<FollowerSignals | "not_found" | null> {
+  const key = username.trim().replace(/^@/, "").toLowerCase();
+  if (!isValidHandle(key)) {
+    return "not_found";
+  }
+  let response: Response;
+  try {
+    response = await fetchInstagram(`${ORIGIN}/${encodeURIComponent(key)}/`, HEADERS, REQUEST_TIMEOUT_MS);
+  } catch {
+    return null;
+  }
+  if (response.status === 404) {
+    return "not_found";
+  }
+  if (!response.ok) {
+    return null;
+  }
+  const parsed = parseProfileHtml(await response.text(), key);
+  const user = parsed.user;
+  if (!user && !parsed.ogTitle) {
+    return null;
+  }
+  const picture = user?.profile_pic_url_hd || user?.profile_pic_url || "";
+  const posts =
+    user?.media_count ??
+    connectionCount(user?.edge_owner_to_timeline_media) ??
+    connectionCount(user?.timeline_media) ??
+    parsed.ogStats.posts ??
+    undefined;
+  return {
+    username: key,
+    posts: posts ?? undefined,
+    followers: followersOf(user) ?? parsed.ogStats.followers ?? undefined,
+    following: user?.following_count ?? connectionCount(user?.edge_follow) ?? parsed.ogStats.following ?? undefined,
+    hasProfilePic:
+      user?.has_anonymous_profile_picture !== undefined
+        ? !user.has_anonymous_profile_picture
+        : picture
+          ? !picture.includes(DEFAULT_AVATAR_MARKER)
+          : undefined,
+    hasName: user ? Boolean(user.full_name?.trim()) : undefined,
+    hasBio: user ? Boolean(user.biography?.trim()) : undefined,
+    isPrivate: user?.is_private,
+  };
 }
 
 export function clearPublicCache(): void {

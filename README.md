@@ -256,6 +256,7 @@ request plus a few embed requests.
 | `/connect` | "For creators": connect an Instagram professional account to share verified insights; shows connection status and a disconnect button |
 | `/privacy` | Privacy policy, including the data-deletion section Meta links to |
 | `/api/instagram/connect`, `/api/instagram/callback` | Unified Login (Facebook Login for Business) start and callback |
+| `/api/instagram/followers` | POST (signed-in creator): upload the Instagram followers export for a follower-list audit |
 | `/api/instagram/disconnect` | POST: delete the signed-in creator's connection and insights |
 | `/api/instagram/deauthorize`, `/api/instagram/data-deletion` | Meta callbacks (signed_request) that delete a creator's connection |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region weighted rank table and remaining comparable suggestions |
@@ -654,6 +655,32 @@ the invite in Instagram → Settings → Website permissions → Apps and websit
 Invites). To let any creator connect, request **Advanced Access** for each permission
 in App Review (privacy policy: `https://www.instagram-analytics.com/privacy`) and switch
 the app to Live mode; Meta may require business verification for the portfolio.
+
+## Fake followers: modeled range, small accounts, follower-list audit
+
+- **Modeled range (default).** For public accounts the fake-follower share and
+  authenticity are modeled from public signals (`estimatePublicSignals`) and shown
+  as a range labelled "Est.". Instagram publishes no fake-follower counts.
+- **Small accounts.** Under 1,000 followers (`MIN_MODEL_FOLLOWERS`) no fake share
+  or authenticity is modeled: the page says "Too few followers to estimate", since a
+  model on a few dozen followers is noise.
+- **Follower-list audit (connected creators).** Meta's API cannot list followers,
+  so on `/connect` a connected creator uploads `followers_1.json` (or `.html`) from
+  Instagram's "Download your information" export (`POST /api/instagram/followers`).
+  Up to 300 followers (all of them for smaller lists, otherwise a random sample)
+  are stored in `follower_checks` (migration `0004`); each follower's public profile
+  is read once (`fetchFollowerSignals`) and scored by `followerAudit.ts` with the
+  site's rules (handle ending in more than 6 digits, no profile photo, no posts,
+  following no one, follow-ratio, empty profile, ...). Checks start right after the
+  upload (25 s budget) and the daily collector finishes the rest; unreadable
+  followers are retried 3 times, then skipped.
+- When the checked followers cover at least 95% of the current follower count the
+  audit is a **census**: the page shows an exact result, e.g. "0% (0 of 31 flagged)",
+  "Checked all 31 followers from the owner's follower list", without the "Est."
+  badge. Larger lists show the sampled share with a 95% range.
+- Only scoring fields are stored (counts and has photo / name / bio / private
+  flags); no follower text or media. Rows are deleted with the connection or
+  replaced by a new upload.
 
 ## Weekly digest (free 30-day trial)
 

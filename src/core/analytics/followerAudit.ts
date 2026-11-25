@@ -67,8 +67,14 @@ const WEIGHTS: Record<FollowerReason, number> = {
 // and a bot-style handle) are needed, and weak signals alone never are.
 export const FAKE_THRESHOLD = 5;
 
-// Below this many sampled followers the share is too uncertain to report.
+// Below this many sampled followers the share is too uncertain to report,
+// unless the audit is a census (see below).
 export const MIN_AUDIT_SAMPLE = 50;
+
+// When the checked followers cover at least this share of the current follower
+// count, the audit is a census of the whole audience: the fake share is a
+// count, not a sample estimate, so it has no sampling range and any size works.
+export const CENSUS_COVERAGE = 0.95;
 
 const YEAR_MIN = 1950;
 const YEAR_MAX = 2015;
@@ -161,6 +167,8 @@ export type FollowerAudit = {
   lowPct: number;
   highPct: number;
   estimatedFakeFollowers: number;
+  // True when every (or nearly every) follower was checked.
+  census: boolean;
   // How often each signal fired among the accounts judged fake.
   reasonCounts: Partial<Record<FollowerReason, number>>;
 };
@@ -186,7 +194,11 @@ export function auditFollowers(
 ): FollowerAudit | null {
   // Duplicates would double-count one account.
   const unique = [...new Map(sample.map((item) => [item.username.toLowerCase(), item])).values()];
-  if (unique.length < MIN_AUDIT_SAMPLE || totalFollowers <= 0) {
+  if (unique.length === 0 || totalFollowers <= 0) {
+    return null;
+  }
+  const census = unique.length >= Math.ceil(totalFollowers * CENSUS_COVERAGE);
+  if (!census && unique.length < MIN_AUDIT_SAMPLE) {
     return null;
   }
 
@@ -200,7 +212,7 @@ export function auditFollowers(
   }
 
   const share = fake.length / unique.length;
-  const interval = wilson(fake.length, unique.length);
+  const interval = census ? { low: share, high: share } : wilson(fake.length, unique.length);
 
   return {
     sampleSize: unique.length,
@@ -209,6 +221,7 @@ export function auditFollowers(
     lowPct: round2(interval.low * 100),
     highPct: round2(interval.high * 100),
     estimatedFakeFollowers: Math.round(totalFollowers * share),
+    census,
     reasonCounts,
   };
 }

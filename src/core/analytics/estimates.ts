@@ -55,6 +55,11 @@ const MEDIUM_HIGH_BOUNDARY = 25;
 // one-point change in the estimate cannot flip Medium to High on its own.
 const BOUNDARY_MARGIN = 2;
 
+// Below this many followers a modeled fake share is noise (on a 30-follower
+// account 7% is two people), so no fake-follower or authenticity figure is
+// modeled. A follower-list audit can still measure small accounts exactly.
+export const MIN_MODEL_FOLLOWERS = 1_000;
+
 export function fakeFollowerRisk(fakePct: number): FakeFollowerRisk {
   if (Math.abs(fakePct - LOW_MEDIUM_BOUNDARY) < BOUNDARY_MARGIN) {
     return "low-medium";
@@ -429,13 +434,14 @@ export function estimatePublicSignals(profile: CreatorProfile): PublicEstimates 
     : baseConfidence;
   const halfWidth = RANGE_HALF_WIDTH[confidence];
 
+  const tooSmall = profile.followers < MIN_MODEL_FOLLOWERS;
   return {
-    fakeFollowers,
-    fakeFollowersPct: round2(fakePct),
-    fakeFollowersLowPct: round2(clamp(fakePct - halfWidth, 1, 70)),
-    fakeFollowersHighPct: round2(clamp(fakePct + halfWidth, 1, 70)),
-    fakeFollowerRisk: fakeFollowerRisk(fakePct),
-    authenticityPct: round2(authenticityPct),
+    fakeFollowers: tooSmall ? null : fakeFollowers,
+    fakeFollowersPct: tooSmall ? null : round2(fakePct),
+    fakeFollowersLowPct: tooSmall ? null : round2(clamp(fakePct - halfWidth, 1, 70)),
+    fakeFollowersHighPct: tooSmall ? null : round2(clamp(fakePct + halfWidth, 1, 70)),
+    fakeFollowerRisk: tooSmall ? null : fakeFollowerRisk(fakePct),
+    authenticityPct: tooSmall ? null : round2(authenticityPct),
     followerGrowthPct: round2(growthPct),
     confidence,
     signals,
