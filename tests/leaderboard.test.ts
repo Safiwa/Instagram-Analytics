@@ -116,13 +116,13 @@ describe("weighted leaderboard ranking", () => {
   });
 
   it("does not let a small high-engagement account take a country top-ten slot", () => {
-    const larger = profile("visitbahrain", 100_000, [post("a", 2, 1_000)]);
-    const viralSmall = profile("visitlebanon", 1_000, [post("b", 2, 50_000)]);
+    const larger = profile("visitjordan", 100_000, [post("a", 2, 1_000)]);
+    const viralSmall = profile("visitkuwait", 1_000, [post("b", 2, 50_000)]);
     const board = rankProfiles([viralSmall, larger], NOW);
 
     expect(board.regional["middle-east"].map((entry) => entry.username)).toEqual([
-      "visitbahrain",
-      "visitlebanon",
+      "visitjordan",
+      "visitkuwait",
     ]);
     expect(board.regional["middle-east"][1].rankScore).toBeGreaterThan(
       board.regional["middle-east"][0].rankScore,
@@ -267,17 +267,10 @@ describe("country leaderboards", () => {
       "visitqatar",
       "visitsaudi",
       "visitjordan",
-      "visitegypt",
       "visitkuwait",
       "emirates",
-      "visitsyria",
-      "visitlebanon",
-      "visitiraq",
       "explorepalestine",
-      "visitbahrain",
       "visitoman",
-      "visittunisia",
-      "visitmorocco",
       "alisha_sajjal",
       "alitofique",
       "hinaashh",
@@ -375,7 +368,7 @@ describe("country leaderboards", () => {
       profile("visitqatar", 50_000_000, [post("q", 2, 1_000)]),
       profile("visitsaudi", 40_000_000, [post("s", 2, 1_000)]),
       profile("visitjordan", 30_000_000, [post("j", 2, 1_000)]),
-      profile("visitlebanon", 20_000_000, [post("l", 2, 1_000)]),
+      profile("visitkuwait", 20_000_000, [post("l", 2, 1_000)]),
     ];
     const board = rankProfiles([...uaeAccounts, ...otherCountries], NOW);
     const middleEast = board.regional["middle-east"];
@@ -392,7 +385,7 @@ describe("country leaderboards", () => {
       "Qatar",
       "Saudi Arabia",
       "Jordan",
-      "Lebanon",
+      "Kuwait",
     ]);
     expect(board.regional.uae.map((entry) => entry.username)).toEqual(
       uaeAccounts.map((account) => account.username),
