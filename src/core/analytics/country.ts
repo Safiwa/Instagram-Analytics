@@ -262,6 +262,19 @@ const ACCOUNT_BASED_IN_BY_HANDLE: Record<string, string | null> = {
   "najet.dh": "United Arab Emirates",
 };
 
+// Values entered on the /admin/locations page (stored in the database) are
+// loaded into this map and win over the built-in list above.
+let recordedLocations: ReadonlyMap<string, string | null> = new Map();
+
+export function setRecordedAccountLocations(entries: ReadonlyMap<string, string | null>): void {
+  recordedLocations = entries;
+}
+
+// Country names an admin may record, in display order.
+export function recordableCountries(): string[] {
+  return [...new Set(COUNTRY_RULES.map((rule) => rule.country))].sort((a, b) => a.localeCompare(b));
+}
+
 // Curated account country, used only when Instagram's "Account based in" and
 // the public handle, profile and post signals all leave the country unresolved.
 // It is editorial metadata, not Instagram audience data, and is marked with the
@@ -538,8 +551,13 @@ export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
   if (accountRule) {
     return signal(accountRule, region, "account");
   }
-  if (Object.hasOwn(ACCOUNT_BASED_IN_BY_HANDLE, username)) {
-    const recorded = ACCOUNT_BASED_IN_BY_HANDLE[username];
+  const recordedSource = recordedLocations.has(username)
+    ? recordedLocations
+    : Object.hasOwn(ACCOUNT_BASED_IN_BY_HANDLE, username)
+      ? new Map([[username, ACCOUNT_BASED_IN_BY_HANDLE[username]]])
+      : null;
+  if (recordedSource) {
+    const recorded = recordedSource.get(username) ?? null;
     const recordedRule = recorded ? countryRuleForCountry(recorded) : null;
     return recordedRule
       ? signal(recordedRule, region, "account")

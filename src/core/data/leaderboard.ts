@@ -17,6 +17,7 @@ import {
   writeTrackedSnapshot,
 } from "./tracked-store";
 import type { CreatorProfile, Post } from "./types";
+import { ensureRecordedLocations } from "../db/accountLocations";
 
 export { COUNTRY_BOARD_WEIGHTS, RANK_WEIGHTS, rankScore } from "../analytics/rank";
 
@@ -434,6 +435,7 @@ function getTrackedResult(): Promise<TrackedResult> {
 }
 
 export async function getTrackedProfiles(): Promise<CreatorProfile[]> {
+  await ensureRecordedLocations();
   return (await getTrackedResult()).profiles;
 }
 
@@ -520,7 +522,7 @@ async function buildLeaderboard(): Promise<{ board: Leaderboard; incomplete: boo
   }
 
   try {
-    const { profiles, incomplete } = await getTrackedResult();
+    const [{ profiles, incomplete }] = await Promise.all([getTrackedResult(), ensureRecordedLocations()]);
     const board = rankProfiles(profiles);
     log.info("global leaderboard refreshed", {
       tracked: board.tracked,

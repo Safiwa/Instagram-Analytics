@@ -11,6 +11,7 @@ import {
   SORT_OPTIONS,
   toFilters,
 } from "../../features/discover/filters";
+import { ensureRecordedLocations } from "../../core/db/accountLocations";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ const FIELD_CLASS =
   "w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none";
 
 export default async function DiscoverPage({ searchParams }: DiscoverPageProps) {
+  await ensureRecordedLocations();
   if (!isDatabaseConfigured()) {
     return (
       <EmptyState
