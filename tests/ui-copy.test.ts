@@ -148,15 +148,13 @@ describe("same-country peer benchmark", () => {
   it("enforces the same inferred country for the closest peer and ranking table", () => {
     expect(peer).toContain("requireSameCountry: true");
     expect(peer).toContain("candidateCountry.country === targetCountry.country");
-    expect(dashboard).toContain(
-      "The closest peer and the ranking table use accounts with the same inferred country",
-    );
-    expect(dashboard).toContain("other countries and categories are never used");
+    expect(dashboard).toContain("Compared with real accounts in the same category and country");
+    expect(dashboard).toContain("only same-category accounts from neighbouring countries");
     expect(dashboard).toContain('data-testid="benchmarks"');
   });
 
   it("discloses the fallback when no country signal is published", () => {
     expect(dashboard).toContain("closest available country or region tier");
-    expect(dashboard).toContain("Instagram has not published an “Account based in” value");
+    expect(dashboard).toContain("no “Account based in” value is published");
   });
 });
