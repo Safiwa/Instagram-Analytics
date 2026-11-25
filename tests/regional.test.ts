@@ -155,7 +155,9 @@ describe("Middle East category peer", () => {
     const match = findRegionalCategoryPeer(target, computeMetrics(target), [fallback]);
 
     expect(match).toBeNull();
-    expect(buildRegionalRanking(target, computeMetrics(target), [fallback])).toBeNull();
+    // The five-row table may still list it, marked as a different category.
+    const table = buildRegionalRanking(target, computeMetrics(target), [fallback]);
+    expect(table?.rows.filter((row) => !row.isTarget).every((row) => row.fill === "other-category") ?? true).toBe(true);
   });
 
   it("includes the ±30% follower band and rejects profiles outside it", () => {
@@ -222,11 +224,9 @@ describe("Middle East category peer", () => {
     const creator = profile("creator", 40, ["campaign launch"], { likes: 3, comments: 1 });
 
     const ranking = buildRegionalRanking(target, computeMetrics(target), [agency, creator]);
-    expect(ranking?.rows.map((row) => row.profile.username).sort()).toEqual([
-      "campaignmastersagency",
-      "mkvdigital",
-    ]);
-    expect(ranking?.rows.every((row) => row.category === "Marketing agency")).toBe(true);
+    // The creator only fills an empty row, marked as a different category.
+    expect(ranking?.rows.find((row) => row.profile.username === "mkvdigital")?.fill).toBeUndefined();
+    expect(ranking?.rows.find((row) => row.profile.username === "creator")?.fill).toBe("other-category");
   });
 
   it("returns no peer when the searched account has no creator category label", () => {
@@ -240,7 +240,8 @@ describe("Middle East category peer", () => {
     });
 
     expect(findRegionalCategoryPeer(target, computeMetrics(target), [creator])).toBeNull();
-    expect(buildRegionalRanking(target, computeMetrics(target), [creator])).toBeNull();
+    const table = buildRegionalRanking(target, computeMetrics(target), [creator]);
+    expect(table?.rows.filter((row) => !row.isTarget).every((row) => row.fill === "other-category") ?? true).toBe(true);
   });
 
   it("rejects targets outside the exact Middle East list and curated-only attribution", () => {
@@ -500,13 +501,13 @@ describe("Middle East authenticity-aware ranking", () => {
     const ranking = buildRegionalRanking(target, computeMetrics(target), [target, ...peers]);
     const usernames = ranking!.rows.map((row) => row.profile.username);
 
-    // Only three creator peers exist; when no other country can fill the table,
-    // same-country (UAE) peers do, so all three appear.
-    expect(ranking?.total).toBe(4);
+    // Three creator peers plus one other-category Middle East account, marked,
+    // complete the five rows.
+    expect(ranking?.total).toBe(5);
     expect(usernames).toContain("amrmaskoun");
-    expect(usernames.filter((username) => username !== "amrmaskoun")).toHaveLength(3);
+    expect(ranking?.rows.filter((row) => row.fill === "other-category")).toHaveLength(1);
     expect(usernames).not.toContain("technicalguruji");
-    expect(usernames).not.toContain("jumeirah");
+    expect(ranking?.rows.find((row) => row.profile.username === "jumeirah")?.fill ?? "other-category").toBe("other-category");
     expect(ranking!.rows.every((row) => row.profile.followers >= 4_075_425)).toBe(true);
     expect(ranking!.rows.every((row) => row.profile.followers <= 7_568_647)).toBe(true);
     expect(ranking!.rows.every((row) => row.country.country === "United Arab Emirates")).toBe(
@@ -574,7 +575,7 @@ describe("Middle East authenticity-aware ranking", () => {
         "lookatsascha",
       ].some((username) => usernames.includes(username)),
     ).toBe(true);
-    expect(usernames).not.toContain("jumeirah");
+    expect(ranking?.rows.find((row) => row.profile.username === "jumeirah")?.fill ?? "other-category").toBe("other-category");
     expect(ranking!.rows.every((row) => row.profile.followers >= 1_680_000)).toBe(true);
     expect(ranking!.rows.every((row) => row.profile.followers <= 3_120_000)).toBe(true);
     expect(ranking!.rows.every((row) => row.country.country === "United Arab Emirates")).toBe(

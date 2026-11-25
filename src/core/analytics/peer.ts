@@ -96,6 +96,8 @@ type ScoreOptions = {
   // Rank tables may fall back to inferred creator-group labels only when there
   // are not enough explicitly labeled peers. Benchmark suggestions never do.
   allowInferredCandidates?: boolean;
+  // Last-resort fill for five-row rank tables: any category.
+  anyCategory?: boolean;
 };
 
 function scorePeers(
@@ -127,8 +129,9 @@ function scorePeers(
       candidate.username !== target.username &&
       candidate.followers > 0 &&
       candidate.recentPosts.length > 0 &&
-      (!requireExplicitCandidate || hasExplicitCandidate || inferredCreatorFallback) &&
-      isSimilarCategory(targetCategory, candidateCategory) &&
+      (options.anyCategory === true ||
+        ((!requireExplicitCandidate || hasExplicitCandidate || inferredCreatorFallback) &&
+          isSimilarCategory(targetCategory, candidateCategory))) &&
       (!requireSameCountry || candidateCountry.country === targetCountry.country)
     );
   });
@@ -284,6 +287,20 @@ export type PeerRankingRow = {
   isTarget: boolean;
   postsNotExposed: boolean;
   engagementSource: ProfileMetrics["engagementSource"];
+  // Why a row outside the main rule was added to complete five profiles.
+  fill?: RankFill;
+};
+
+// Every rank table shows five profiles. Peers come from the same country and a
+// similar category first; when the pool has fewer, rows are filled from the
+// same region, then other countries, then any category, and each such row says so.
+export type RankFill = "same-region" | "other-country" | "other-category" | "nearest";
+
+export const RANK_FILL_LABEL: Record<RankFill, string> = {
+  "same-region": "added from the same region to complete 5",
+  "other-country": "added from another country to complete 5",
+  "other-category": "different category, added to complete 5",
+  nearest: "added to complete 5",
 };
 
 export type PeerRanking = {
@@ -309,21 +326,54 @@ export function buildPeerRanking(
     requireSameCountry: true,
     fillCountryTiers: false,
   } as const;
-  let peers = scorePeers(target, metrics, pool, options).slice(0, limit);
+  let peers: (PeerMatch & { fill?: RankFill })[] = scorePeers(target, metrics, pool, options).slice(
+    0,
+    limit,
+  );
+  const targetCountry = inferCountrySignal(target);
+  const targetCategory = inferExplicitCategory(target) ?? inferCategory(target);
+  // Each fill row is labelled by what actually differs from the main rule.
+  const fillFor = (peer: PeerMatch): RankFill => {
+    if (!isSimilarCategory(targetCategory, peer.category)) {
+      return "other-category";
+    }
+    if (targetCountry.country === null) {
+      return "nearest";
+    }
+    return peer.countryRelationship === "same-region" ? "same-region" : "other-country";
+  };
+  const add = (extra: PeerMatch[], fill: boolean) => {
+    if (peers.length >= limit) {
+      return;
+    }
+    const seen = new Set(peers.map((peer) => peer.profile.username));
+    const fresh = extra
+      .filter((peer) => !seen.has(peer.profile.username))
+      .slice(0, limit - peers.length)
+      .map((peer) => (fill ? { ...peer, fill: fillFor(peer) } : peer));
+    peers = [...peers, ...fresh];
+  };
 
   // Explicit public labels remain the rule. Only when that leaves gaps do we
   // admit inferred creator-group labels, and only to fill the remaining rows.
-  if (peers.length < limit) {
-    const fallback = scorePeers(target, metrics, pool, {
-      ...options,
-      allowInferredCandidates: true,
-    });
-    const seen = new Set(peers.map((peer) => peer.profile.username));
-    peers = [...peers, ...fallback.filter((peer) => !seen.has(peer.profile.username))].slice(
-      0,
-      limit,
-    );
-  }
+  add(scorePeers(target, metrics, pool, { ...options, allowInferredCandidates: true }), false);
+
+  // Still short of five: fill from the same region, then any country, then any
+  // category. These rows are marked so the table never passes them off as
+  // same-country, same-category peers.
+  const anyCountry = {
+    ...options,
+    requireSameCountry: false,
+    fillCountryTiers: true,
+    allowInferredCandidates: true,
+  };
+  const wider = scorePeers(target, metrics, pool, anyCountry);
+  add(
+    wider.filter((peer) => peer.countryRelationship === "same-region"),
+    true,
+  );
+  add(wider, true);
+  add(scorePeers(target, metrics, pool, { ...anyCountry, anyCategory: true }), true);
 
   if (peers.length === 0) {
     return null;
@@ -358,6 +408,7 @@ export function buildPeerRanking(
       category: peer.category,
       country: peer.country,
       isTarget: false,
+      ...(peer.fill ? { fill: peer.fill } : {}),
       postsNotExposed: peer.profile.recentPosts.length === 0,
       engagementSource: peer.metrics.engagementSource,
     })),
