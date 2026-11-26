@@ -716,7 +716,9 @@ Yearly billing is 10× the monthly price (2 months free).
   sellers without a trade licence, and pays out to the owner's own bank account.
 - **Off by default.** Until `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_SECRET`, at least one
   `DODO_PRODUCT_*`, `DATABASE_URL`, `CONNECT_SECRET` and Resend are set, the site behaves exactly as before
-  with no limits, and `/pricing` shows "Coming soon". Dodo stays in test mode until `DODO_PAYMENTS_MODE=live`.
+  with no limits, and `/pricing` shows "Coming soon". Dodo stays in test mode until `DODO_PAYMENTS_MODE=live`,
+  and the **production** deployment keeps paid plans off until then (previews still run in test mode), so
+  the PR can be merged before the Dodo account is verified.
 
 Setup:
 1. Dodo Payments: sign up as an **Individual**, complete verification and add your bank account (must be in

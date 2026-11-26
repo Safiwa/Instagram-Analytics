@@ -52,7 +52,14 @@ export function billingConfig(): BillingConfig | null {
 // one product, the database (accounts + usage), CONNECT_SECRET (signed session
 // cookies) and Resend (sign-in emails). Until then the site keeps working
 // exactly as before with no limits.
+//
+// The production site additionally needs DODO_PAYMENTS_MODE=live: a test-mode
+// checkout cannot take real money, so real visitors must never meet limits
+// they cannot pay to lift. Preview deployments run in test mode as normal.
 export function isBillingEnabled(): boolean {
+  if (process.env.VERCEL_ENV === "production" && env("DODO_PAYMENTS_MODE") !== "live") {
+    return false;
+  }
   const config = billingConfig();
   const hasProduct =
     config !== null && Object.values(config.products).some((intervals) => Object.keys(intervals).length > 0);

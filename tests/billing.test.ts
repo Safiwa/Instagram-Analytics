@@ -48,6 +48,8 @@ const ENV_KEYS = [
   "DODO_PRODUCT_PRO_YEARLY",
   "DODO_PRODUCT_AGENCY_MONTHLY",
   "CONNECT_SECRET",
+  "VERCEL_ENV",
+  "DATABASE_URL",
   "RESEND_API_KEY",
   "DIGEST_FROM_EMAIL",
 ];
@@ -173,6 +175,20 @@ describe("dodo payments", () => {
     expect(billingConfig()).not.toBeNull();
     // No DATABASE_URL / CONNECT_SECRET / Resend in the test environment.
     expect(isBillingEnabled()).toBe(false);
+  });
+
+  it("keeps the production site free until Dodo is switched to live mode", () => {
+    configureBilling();
+    process.env.DATABASE_URL = "postgres://user:pass@localhost/test";
+    process.env.CONNECT_SECRET = "x".repeat(40);
+    process.env.RESEND_API_KEY = "re_test";
+    process.env.DIGEST_FROM_EMAIL = "Test <test@example.com>";
+    process.env.VERCEL_ENV = "preview";
+    expect(isBillingEnabled()).toBe(true);
+    process.env.VERCEL_ENV = "production";
+    expect(isBillingEnabled()).toBe(false);
+    process.env.DODO_PAYMENTS_MODE = "live";
+    expect(isBillingEnabled()).toBe(true);
   });
 
   it("uses test mode unless DODO_PAYMENTS_MODE is live", () => {
