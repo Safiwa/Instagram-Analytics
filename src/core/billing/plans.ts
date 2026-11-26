@@ -1,5 +1,5 @@
 // Single source of truth for the paid plans: prices shown on /pricing and the
-// limits every gate in the app reads. Prices are in US dollars; Lemon Squeezy
+// limits every gate in the app reads. Prices are in US dollars; Dodo Payments
 // shows local currency at checkout.
 
 export type PlanId = "free" | "starter" | "pro" | "agency";
@@ -138,8 +138,9 @@ export function cheapestPlanWith(test: (limits: PlanLimits) => boolean): PaidPla
   return PAID_PLAN_IDS.find((id) => test(PLANS[id].limits)) ?? "agency";
 }
 
-// Lemon Squeezy subscription statuses that still grant access. A cancelled
-// subscription keeps access until ends_at (the end of the paid period).
+// Subscription statuses that still grant access ("on_trial" is an active Dodo
+// subscription inside its free trial; "past_due" is Dodo's retry grace period).
+// A cancelled subscription keeps access until ends_at if that is still ahead.
 const ACTIVE_STATUSES = new Set(["on_trial", "active", "past_due"]);
 
 export type SubscriptionState = {

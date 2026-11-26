@@ -1,10 +1,10 @@
--- Paid plans: site accounts (email sign-in), Lemon Squeezy subscriptions,
+-- Paid plans: site accounts (email sign-in), Dodo Payments subscriptions,
 -- metered profile lookups and each account's daily-tracked handles.
 --
 -- Access rule: the browser only holds a signed session cookie naming one
 -- site_users.id; every read below is scoped to that id in
 -- src/core/billing/accounts.ts. Card details never reach this database:
--- Lemon Squeezy (merchant of record) holds them and only sends subscription
+-- Dodo Payments (merchant of record) holds them and only sends subscription
 -- state through the signed webhook.
 
 create table if not exists site_users (
@@ -18,15 +18,16 @@ create table if not exists site_users (
 create table if not exists subscriptions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references site_users (id) on delete cascade,
-  ls_subscription_id text not null unique,
-  ls_customer_id text,
-  ls_variant_id text,
+  provider_subscription_id text not null unique,
+  provider_customer_id text,
+  provider_product_id text,
   plan text not null check (plan in ('starter', 'pro', 'agency')),
   status text not null,
   trial_ends_at timestamptz,
   renews_at timestamptz,
   ends_at timestamptz,
-  customer_portal_url text,
+  -- Webhook time of the last applied event; older deliveries are skipped.
+  last_event_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

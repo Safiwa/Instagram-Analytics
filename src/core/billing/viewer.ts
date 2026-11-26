@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import { isConnectSecretConfigured, signValue, verifySignedValue } from "../instagram/crypto";
 import { log } from "../logging/logger";
 import { countLookups, getUser, hasLookedUp, listSubscriptions, type SiteUser, type StoredSubscription } from "./accounts";
-import { isBillingEnabled } from "./lemonsqueezy";
+import { isBillingEnabled } from "./dodo";
 import { effectivePlan, PLANS, usagePeriod, type Plan } from "./plans";
 
 // Who is looking at the page, which plan applies and which usage bucket they
@@ -87,7 +87,7 @@ const UNMETERED: Omit<Viewer, "billingEnabled"> = {
 
 export async function getViewer(): Promise<Viewer> {
   if (!isBillingEnabled()) {
-    // Before Lemon Squeezy is configured the site behaves as it always has.
+    // Before Dodo Payments is configured the site behaves as it always has.
     return { billingEnabled: false, ...UNMETERED };
   }
 

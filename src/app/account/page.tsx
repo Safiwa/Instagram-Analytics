@@ -27,6 +27,7 @@ const ERRORS: Record<string, string> = {
   send: "The sign-in email could not be sent. Please try again in a moment.",
   link: "That sign-in link has expired or is invalid. Request a new one below.",
   "not-enabled": "Accounts are not switched on yet.",
+  portal: "The billing portal could not be opened. Please try again in a moment.",
 };
 
 const TRACK_MESSAGES: Record<string, string> = {
@@ -47,9 +48,11 @@ const STATUS_LABELS: Record<string, string> = {
   on_trial: "Free trial",
   active: "Active",
   past_due: "Payment due",
+  on_hold: "On hold (payment failed)",
+  pending: "Pending",
   cancelled: "Cancelled",
   paused: "Paused",
-  unpaid: "Unpaid",
+  failed: "Payment failed",
   expired: "Expired",
 };
 
@@ -122,7 +125,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
     listTrackedHandles(user.id).catch(() => [] as string[]),
   ]);
   const subscription = subscriptions[0] ?? null;
-  const portal = subscriptions.some((item) => item.customerPortalUrl);
+  const portal = subscriptions.some((item) => item.customerId);
 
   return (
     <div className="space-y-6">
@@ -144,6 +147,11 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           Free.
         </p>
       ) : null}
+      {params.error === "portal" ? (
+        <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {ERRORS.portal}
+        </p>
+      ) : null}
       {params.track && TRACK_MESSAGES[params.track] ? (
         <p role="status" className="rounded-xl bg-slate-100 px-4 py-3 text-sm text-slate-700">
           {TRACK_MESSAGES[params.track]}
@@ -159,7 +167,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
               {STATUS_LABELS[subscription.status] ?? subscription.status}
               {subscription.status === "on_trial" && subscription.trialEndsAt
                 ? ` · ends ${formatDate(subscription.trialEndsAt)}`
-                : subscription.status === "cancelled" && subscription.endsAt
+                : subscription.endsAt
                   ? ` · access until ${formatDate(subscription.endsAt)}`
                   : subscription.renewsAt
                     ? ` · renews ${formatDate(subscription.renewsAt)}`

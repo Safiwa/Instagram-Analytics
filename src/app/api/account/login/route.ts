@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { claimLoginEmailSlot, normalizeEmail } from "../../../../core/billing/accounts";
-import { isBillingEnabled } from "../../../../core/billing/lemonsqueezy";
+import { isBillingEnabled } from "../../../../core/billing/dodo";
 import { safeNext } from "../../../../core/billing/redirect";
 import { loginToken } from "../../../../core/billing/viewer";
 import { sendEmail } from "../../../../core/digest/resend";

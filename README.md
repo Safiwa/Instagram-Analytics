@@ -269,8 +269,8 @@ request plus a few embed requests.
 | `/account` | Email sign-in, current plan, lookups used, daily-tracked accounts, manage billing |
 | `/api/account/login`, `/api/account/verify`, `/api/account/logout` | Passwordless sign-in link flow |
 | `/api/account/track` | POST: add/remove a daily-tracked handle within the plan allowance |
-| `/api/billing/checkout`, `/api/billing/portal` | Lemon Squeezy hosted checkout and customer portal |
-| `/api/billing/webhook` | Signed Lemon Squeezy subscription webhooks |
+| `/api/billing/checkout`, `/api/billing/portal` | Dodo Payments hosted checkout and customer portal |
+| `/api/billing/webhook` | Signed Dodo Payments subscription webhooks |
 
 ## Header navigation
 
@@ -688,7 +688,7 @@ the app to Live mode; Meta may require business verification for the portfolio.
   flags); no follower text or media. Rows are deleted with the connection or
   replaced by a new upload.
 
-## Paid plans (Lemon Squeezy)
+## Paid plans (Dodo Payments)
 
 Four plans, defined once in `src/core/billing/plans.ts`:
 
@@ -707,22 +707,26 @@ Yearly billing is 10× the monthly price (2 months free).
   never metered, so profile pages stay indexable. Demo profiles never count.
 - **Accounts** use passwordless email links (`/account`), sent through Resend and signed with
   `CONNECT_SECRET`; one email per address per minute.
-- **Checkout** (`/api/billing/checkout`) opens Lemon Squeezy's hosted checkout with the account id as custom
-  data. **Webhooks** (`/api/billing/webhook`, `X-Signature` HMAC) keep the `subscriptions` table in sync;
-  a cancelled plan keeps access until the paid period ends. **Manage billing** links to Lemon Squeezy's
-  customer portal.
-- **Off by default.** Until every `LEMONSQUEEZY_*` key, at least one variant, `DATABASE_URL`,
-  `CONNECT_SECRET` and Resend are set, the site behaves exactly as before with no limits, and `/pricing`
-  shows "Coming soon".
+- **Checkout** (`/api/billing/checkout`) opens Dodo Payments' hosted checkout with the account id as metadata.
+  The 14-day Pro trial is set per checkout and only for an account's first subscription. **Webhooks**
+  (`/api/billing/webhook`, Standard Webhooks signature with a 5-minute replay window) keep the
+  `subscriptions` table in sync; late, older deliveries are skipped. A plan cancelled at period end keeps
+  access until then. **Manage billing** opens Dodo's customer portal.
+- **Why Dodo:** it is the merchant of record (collects and pays VAT/sales tax worldwide), accepts individual
+  sellers without a trade licence, and pays out to the owner's own bank account.
+- **Off by default.** Until `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_SECRET`, at least one
+  `DODO_PRODUCT_*`, `DATABASE_URL`, `CONNECT_SECRET` and Resend are set, the site behaves exactly as before
+  with no limits, and `/pricing` shows "Coming soon". Dodo stays in test mode until `DODO_PAYMENTS_MODE=live`.
 
 Setup:
-1. Lemon Squeezy: create one subscription product per plan with monthly (and optionally yearly) variants.
-   Turn on a 14-day free trial on the Pro variants. Choose bank or PayPal payouts under Settings > Payouts.
-2. Settings > Webhooks: URL `https://www.instagram-analytics.com/api/billing/webhook`, tick the
-   `subscription_*` events, copy the signing secret.
-3. Add the `LEMONSQUEEZY_*` variables from `.env.example` in Vercel and redeploy (migration `0008_billing.sql`
-   runs automatically on build).
-4. Test in Lemon Squeezy test mode with a test card before switching the store live.
+1. Dodo Payments: sign up as an **Individual**, complete verification and add your bank account (must be in
+   your own name).
+2. In test mode, create one subscription product per plan (monthly, optionally yearly), priced in USD.
+3. Developer > Webhooks: endpoint `https://www.instagram-analytics.com/api/billing/webhook`, the
+   `subscription.*` events; copy the signing secret. Developer > API Keys: create a key.
+4. Add the `DODO_*` variables from `.env.example` in Vercel and redeploy (migration `0008_billing.sql` runs on
+   build). Buy each plan with a test card.
+5. Repeat products, webhook and key in live mode, update the variables, set `DODO_PAYMENTS_MODE=live`.
 
 ## Weekly digest (free 30-day trial)
 

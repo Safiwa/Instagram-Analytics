@@ -1,6 +1,6 @@
 import { getSql } from "../db/client";
 import { log } from "../logging/logger";
-import type { SubscriptionEvent } from "./lemonsqueezy";
+import type { SubscriptionEvent } from "./dodo";
 import type { PaidPlanId, SubscriptionState } from "./plans";
 
 // Data layer for site accounts, subscriptions, metered lookups and tracked
@@ -9,10 +9,10 @@ import type { PaidPlanId, SubscriptionState } from "./plans";
 export type SiteUser = { id: string; email: string; lastLoginEmailAt: string | null };
 
 export type StoredSubscription = SubscriptionState & {
-  lsSubscriptionId: string;
+  subscriptionId: string;
+  customerId: string | null;
   trialEndsAt: string | null;
   renewsAt: string | null;
-  customerPortalUrl: string | null;
 };
 
 const EMAIL_PATTERN = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
@@ -81,13 +81,13 @@ export async function claimLoginEmailSlot(email: string, now = new Date()): Prom
 
 function toSubscription(row: Record<string, unknown>): StoredSubscription {
   return {
-    lsSubscriptionId: String(row.ls_subscription_id),
+    subscriptionId: String(row.provider_subscription_id),
+    customerId: typeof row.provider_customer_id === "string" ? row.provider_customer_id : null,
     plan: row.plan as PaidPlanId,
     status: String(row.status),
     trialEndsAt: iso(row.trial_ends_at),
     renewsAt: iso(row.renews_at),
     endsAt: iso(row.ends_at),
-    customerPortalUrl: typeof row.customer_portal_url === "string" ? row.customer_portal_url : null,
   };
 }
 
@@ -97,7 +97,7 @@ export async function listSubscriptions(userId: string): Promise<StoredSubscript
     return [];
   }
   const rows = await sql(
-    `select ls_subscription_id, plan, status, trial_ends_at, renews_at, ends_at, customer_portal_url
+    `select provider_subscription_id, provider_customer_id, plan, status, trial_ends_at, renews_at, ends_at
      from subscriptions where user_id = $1 order by updated_at desc`,
     [userId],
   );
@@ -105,7 +105,9 @@ export async function listSubscriptions(userId: string): Promise<StoredSubscript
 }
 
 // Applies one webhook. The owner is the user id passed through checkout
-// custom data; failing that, the checkout email (creating the account).
+// metadata; failing that, the checkout email (creating the account). An event
+// older than the last one applied to the same subscription is skipped, since
+// webhooks can arrive out of order.
 export async function applySubscriptionEvent(event: SubscriptionEvent, plan: PaidPlanId): Promise<boolean> {
   const sql = requireSql();
   let userId = event.userId;
@@ -125,33 +127,42 @@ export async function applySubscriptionEvent(event: SubscriptionEvent, plan: Pai
 
   await sql(
     `insert into subscriptions (
-       user_id, ls_subscription_id, ls_customer_id, ls_variant_id, plan, status,
-       trial_ends_at, renews_at, ends_at, customer_portal_url
+       user_id, provider_subscription_id, provider_customer_id, provider_product_id, plan, status,
+       trial_ends_at, renews_at, ends_at, last_event_at
      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-     on conflict (ls_subscription_id) do update set
-       ls_customer_id = excluded.ls_customer_id,
-       ls_variant_id = excluded.ls_variant_id,
+     on conflict (provider_subscription_id) do update set
+       provider_customer_id = coalesce(excluded.provider_customer_id, subscriptions.provider_customer_id),
+       provider_product_id = excluded.provider_product_id,
        plan = excluded.plan,
        status = excluded.status,
        trial_ends_at = excluded.trial_ends_at,
        renews_at = excluded.renews_at,
        ends_at = excluded.ends_at,
-       customer_portal_url = coalesce(excluded.customer_portal_url, subscriptions.customer_portal_url),
-       updated_at = now()`,
+       last_event_at = excluded.last_event_at,
+       updated_at = now()
+     where subscriptions.last_event_at is null
+        or excluded.last_event_at is null
+        or excluded.last_event_at >= subscriptions.last_event_at`,
     [
       userId,
       event.subscriptionId,
       event.customerId,
-      event.variantId,
+      event.productId,
       plan,
       event.status,
       event.trialEndsAt,
       event.renewsAt,
       event.endsAt,
-      event.customerPortalUrl,
+      event.occurredAt,
     ],
   );
   return true;
+}
+
+// The free trial is for a first subscription only.
+export async function hasHadSubscription(userId: string): Promise<boolean> {
+  const [row] = await requireSql()("select 1 from subscriptions where user_id = $1 limit 1", [userId]);
+  return Boolean(row);
 }
 
 // ---- metered lookups ----

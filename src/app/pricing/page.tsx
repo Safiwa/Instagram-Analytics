@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Check } from "lucide-react";
-import { billingConfig, isBillingEnabled, variantFor } from "../../core/billing/lemonsqueezy";
+import { billingConfig, isBillingEnabled, productFor } from "../../core/billing/dodo";
 import { PAID_PLAN_IDS, PLANS, TRIAL_DAYS, type BillingInterval, type Plan } from "../../core/billing/plans";
 import { getViewer } from "../../core/billing/viewer";
 
@@ -87,7 +87,7 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
           const { amount, note } = price(plan, interval);
           const isCurrent = current === plan.id;
           const purchasable =
-            enabled && plan.id !== "free" && config !== null && variantFor(config, plan.id, interval) !== null;
+            enabled && plan.id !== "free" && config !== null && productFor(config, plan.id, interval) !== null;
           return (
             <section
               key={plan.id}
@@ -163,10 +163,10 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
             plans) does not count twice.
           </li>
           <li>
-            The {TRIAL_DAYS}-day trial is on Pro. Your card is charged when the trial ends unless you cancel before
-            then.
+            The {TRIAL_DAYS}-day trial is on Pro, for your first subscription. Your card is charged when the trial
+            ends unless you cancel before then.
           </li>
-          <li>Payments are handled securely by Lemon Squeezy, our reseller, which also handles VAT and sales tax.</li>
+          <li>Payments are handled securely by Dodo Payments, our reseller, which also handles VAT and sales tax.</li>
           <li>Prices are in US dollars; checkout shows the amount in your local currency.</li>
         </ul>
       </div>
