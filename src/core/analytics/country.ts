@@ -268,6 +268,7 @@ const ACCOUNT_BASED_IN_BY_HANDLE: Record<string, string | null> = {
   wafamoustafa: null,
   alisha_sajjal: "United Arab Emirates",
   ascia: "Kuwait",
+  leomessi: "United States",
   rima_alosta: "Russia",
   "najet.dh": "United Arab Emirates",
 };
