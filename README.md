@@ -457,12 +457,14 @@ Profile pages now surface verification, growth, and regional comparison:
   average comments, 30-day follower change), exact category and shared themes. Each peer row shows
   its inferred category and country badges, match score, followers, engagement, average likes,
   average comments and estimated follower change, why it matched, and how this profile compares,
-  with a link to a side-by-side comparison. The same matched set powers a five-profile ranking table
-  (`peer-ranking`): the searched profile plus its four closest category peers, ordered by
-  `rankScore`, with the searched profile's rank (for example, "Rank #2 of 5") and the share of peers
+  with a link to a side-by-side comparison. The same matched set powers a ten-profile ranking table
+  (`peer-ranking`): the searched profile plus up to nine closest category peers, ordered by
+  `rankScore`, with the searched profile's rank (for example, "Rank #1 of 6") and the share of peers
   it outperforms. When explicitly labeled peers are scarce, the ranking table alone may use inferred
-  `creator`-group labels to fill its remaining rows; benchmark suggestions never do. This table is
-  not range-gated, so it stays complete for accounts at either audience extreme. Compare-page
+  `creator`-group labels for creator targets, or real profiles from the wider business-category
+  family for non-creator targets; every filled row says why it was added, and benchmark suggestions
+  never use either fallback. This table is not range-gated, so it stays complete for accounts at
+  either audience extreme. Compare-page
   suggestions (`findSimilarPeers()`) keep their separate best-tier behavior and are unchanged. If no
   tracked profile in the required country/category scope is available (for example, without API
   credentials) the panel shows an empty state rather than unrelated profiles.

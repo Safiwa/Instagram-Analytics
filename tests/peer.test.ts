@@ -347,4 +347,42 @@ describe("ten-profile rank tables", () => {
     expect(ranking?.total).toBe(10);
     expect(ranking?.rows.some((row) => row.isTarget)).toBe(true);
   });
+
+  it("completes a thin business category with real business profiles, never creators", () => {
+    const agency = (username: string, followers: number, likes: number) =>
+      profile(username, followers, "Digital marketing agency", likes);
+    const business = (username: string, followers: number, likes: number) =>
+      profile(username, followers, "Retail company and brand", likes);
+    const target = profile("agency.target", 30_000, "Marketing agency with global clients", 200);
+    const pool = [
+      agency("agency.a", 12_000, 100),
+      agency("agency.b", 15_000, 120),
+      agency("agency.c", 20_000, 140),
+      ...Array.from({ length: 6 }, (_, index) =>
+        business(`brand.${index}`, 25_000 + index * 2_000, 160 + index * 10),
+      ),
+      profile("creator.noise", 18_000, "Digital creator daily lifestyle", 300),
+    ];
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), pool, 9);
+    const usernames = ranking?.rows.map((row) => row.profile.username) ?? [];
+    expect(ranking?.total).toBe(10);
+    expect(usernames).not.toContain("creator.noise");
+    expect(usernames.filter((name) => name.startsWith("brand."))).toHaveLength(6);
+
+    const byName = new Map(ranking?.rows.map((row) => [row.profile.username, row]));
+    expect(byName.get("agency.a")?.fill).toBeUndefined();
+    expect(byName.get("brand.0")?.fill).toBe("business-family");
+  });
+
+  it("does not pad a creator table with business profiles", () => {
+    const target = profile("creator.target", 60_000, "Fashion and beauty creator", 2_000);
+    const creatorPeers = Array.from({ length: 2 }, (_, index) =>
+      profile(`creator.peer${index}`, 50_000 + index * 2_000, "Fashion and beauty creator", 1_800 + index * 50),
+    );
+    const brand = profile("brand.noise", 55_000, "Retail company and brand", 1_900);
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), [...creatorPeers, brand], 9);
+    expect(ranking?.rows.map((row) => row.profile.username)).not.toContain("brand.noise");
+  });
 });

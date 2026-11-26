@@ -272,6 +272,22 @@ export function isSimilarCategory(left: string, right: string): boolean {
   return left === right || categoryGroup(left) === categoryGroup(right);
 }
 
+// Agencies, brands, media, travel businesses, sport and music accounts are all
+// non-creator businesses. A thin exact group may be completed with these real
+// profiles, but creators are never used to pad a business comparison table.
+const BUSINESS_GROUPS = new Set([
+  "agency",
+  "business",
+  "travel-business",
+  "media",
+  "sport",
+  "music",
+]);
+
+export function isBusinessCategory(category: string): boolean {
+  return BUSINESS_GROUPS.has(categoryGroup(category));
+}
+
 // The Middle East profile benchmark deliberately ignores display names and
 // bios. These rules read only Reel/post captions and hashtags, so an account's
 // claimed category cannot make it look similar; its actual public posts must.
