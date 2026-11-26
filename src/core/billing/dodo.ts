@@ -99,7 +99,14 @@ async function call(config: BillingConfig, path: string, body?: unknown): Promis
 
 export async function createCheckout(
   config: BillingConfig,
-  input: { productId: string; email: string; userId: string; returnUrl: string; trialDays: number },
+  input: {
+    productId: string;
+    email: string;
+    userId: string;
+    returnUrl: string;
+    trialDays: number;
+    discountCode?: string | null;
+  },
 ): Promise<string> {
   const body = await call(config, "/checkouts", {
     product_cart: [{ product_id: input.productId, quantity: 1 }],
@@ -108,6 +115,8 @@ export async function createCheckout(
     // Overrides the product's own trial: the plan's trial for a first
     // subscription, none for returning customers.
     subscription_data: { trial_period_days: input.trialDays },
+    // A running deal's code is applied for the customer.
+    ...(input.discountCode ? { discount_codes: [input.discountCode] } : {}),
     return_url: input.returnUrl,
   });
   const url = body.checkout_url;

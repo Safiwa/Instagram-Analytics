@@ -16,8 +16,10 @@ import {
   removeTrackedHandle,
   upsertUser,
 } from "../src/core/billing/accounts";
+import { activeDeal, BLACK_FRIDAY_2026, dealAppliesTo, dealPrice } from "../src/core/billing/deals";
 import {
   billingConfig,
+  createCheckout,
   isBillingEnabled,
   parseSubscriptionEvent,
   planForProduct,
@@ -344,5 +346,48 @@ describe("billing storage (real Postgres)", () => {
     );
     expect(accepted.status).toBe(200);
     expect((await listSubscriptions(user.id))[0]).toMatchObject({ plan: "pro", status: "active" });
+  });
+});
+
+describe("black friday deal", () => {
+  it("prices the first year at 40% off the yearly plans", () => {
+    expect(BLACK_FRIDAY_2026.percentOff).toBe(40);
+    expect(BLACK_FRIDAY_2026.code).toBe("BLACKFRIDAY40");
+    expect(["starter", "pro", "agency"].map((plan) => dealPrice(BLACK_FRIDAY_2026, plan as "pro"))).toEqual([
+      54, 174, 474,
+    ]);
+    // Pro deal is exactly half the monthly price.
+    expect(dealPrice(BLACK_FRIDAY_2026, "pro") / 12).toBe(PLANS.pro.monthlyUsd / 2);
+  });
+
+  it("runs from 27 Nov 00:00 to 1 Dec 23:59 Dubai time, yearly only", () => {
+    expect(activeDeal(new Date("2026-11-26T19:59:59Z"))).toBeNull();
+    expect(activeDeal(new Date("2026-11-26T20:00:00Z"))?.id).toBe("black-friday-2026");
+    expect(activeDeal(new Date("2026-12-01T19:59:59Z"))?.id).toBe("black-friday-2026");
+    expect(activeDeal(new Date("2026-12-01T20:00:00Z"))).toBeNull();
+    const deal = activeDeal(new Date("2026-11-28T10:00:00Z"));
+    expect(dealAppliesTo(deal, "yearly")).toBe(true);
+    expect(dealAppliesTo(deal, "monthly")).toBe(false);
+    expect(dealAppliesTo(null, "yearly")).toBe(false);
+  });
+
+  it("sends the deal code to Dodo checkout and no code otherwise", async () => {
+    configureBilling();
+    const bodies: Record<string, unknown>[] = [];
+    const original = globalThis.fetch;
+    globalThis.fetch = (async (_url: unknown, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ checkout_url: "https://test.checkout.dodopayments.com/session/x" }));
+    }) as typeof fetch;
+    try {
+      const base = { productId: "pdt_pro_year", email: "a@b.co", userId: "u", returnUrl: "https://x/account" };
+      await createCheckout(billingConfig()!, { ...base, trialDays: 0, discountCode: "BLACKFRIDAY40" });
+      await createCheckout(billingConfig()!, { ...base, trialDays: 14 });
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(bodies[0]).toMatchObject({ discount_codes: ["BLACKFRIDAY40"], subscription_data: { trial_period_days: 0 } });
+    expect(bodies[1]).not.toHaveProperty("discount_codes");
+    expect(bodies[1]).toMatchObject({ subscription_data: { trial_period_days: 14 } });
   });
 });
