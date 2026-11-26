@@ -94,7 +94,8 @@ export function TrackingHistoryPanel({
         <p data-testid="history-range-note" className="mt-3 text-xs text-slate-500">
           Only {measuredDays.toLocaleString("en-US")} {measuredDays === 1 ? "day" : "days"} measured so far,
           so {rangeLabel} shows all of it. Instagram does not publish older follower history; this
-          view fills in as daily snapshots accumulate.
+          view fills in as daily snapshots accumulate. Post performance below covers 90 days and a
+          year from the account&apos;s real posts.
         </p>
       ) : null}
 

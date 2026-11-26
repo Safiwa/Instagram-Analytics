@@ -20,6 +20,7 @@ import { getIndexSample } from "../../../core/db/indexStore";
 import { recordProfileSnapshot } from "../../../core/db/snapshots";
 import { ProfileDashboard } from "../../../features/profile/ProfileDashboard";
 import { ensureRecordedLocations } from "../../../core/db/accountLocations";
+import { getPostHistory } from "../../../core/db/postHistory";
 
 export const maxDuration = 60;
 
@@ -70,11 +71,16 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
   // never slows the page down. Demo fixtures are never stored.
   after(() => recordProfileSnapshot(resolved, { lookup: true }));
 
-  const [profile, trackedOnly, sample, indexed] = await Promise.all([
+  const [profile, trackedOnly, sample, indexed, postHistory] = await Promise.all([
     withStoredHistory(resolved),
     getTrackedProfiles(),
     resolved.source === "demo" ? Promise.resolve([]) : getIndexSample(),
     resolved.source === "demo" ? Promise.resolve([]) : getIndexedPool(),
+    // Up to a year of post metrics (Business and Creator accounts only), read
+    // at most once a day per account; never fails the page.
+    resolved.source === "live"
+      ? getPostHistory(resolved.username).catch(() => null)
+      : Promise.resolve(null),
   ]);
   // The same-country peer card and five-row rank table draw on tracked accounts
   // plus every profile this site has indexed, so smaller accounts and niche
@@ -117,6 +123,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       regionalComparison={regionalComparison}
       regionalRanking={regionalRanking}
       indexPosition={position}
+      postHistory={postHistory}
     />
   );
 }

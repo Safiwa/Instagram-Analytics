@@ -45,6 +45,8 @@ import type {
 import type { AudienceSlice, CreatorProfile } from "../../core/data/types";
 import { formatCompact, formatDate, formatPercent } from "../../core/format";
 import { IndexPositionCard, TrackingHistoryPanel } from "./TrackingHistory";
+import { PostPerformancePanel } from "./PostPerformance";
+import type { StoredPostHistory } from "../../core/db/postHistory";
 
 const TOOLTIP_STYLE = {
   borderRadius: 12,
@@ -68,6 +70,7 @@ type ProfileDashboardProps = {
   regionalComparison: KeyComparison[];
   regionalRanking: RegionalRanking | null;
   indexPosition?: IndexPosition | null;
+  postHistory?: StoredPostHistory | null;
 };
 
 function Stat({
@@ -127,6 +130,7 @@ export function ProfileDashboard({
   regionalComparison,
   regionalRanking,
   indexPosition = null,
+  postHistory = null,
 }: ProfileDashboardProps) {
   const interactions = profile.recentPosts.map((post) => ({
     label: formatDate(post.postedAt, false),
@@ -668,6 +672,14 @@ export function ProfileDashboard({
           )}
         </div>
       </section>
+
+      {postHistory && postHistory.posts.length > 0 ? (
+        <PostPerformancePanel
+          history={postHistory.posts}
+          followers={profile.followers}
+          fetchedAt={postHistory.fetchedAt}
+        />
+      ) : null}
 
       <section data-testid="recent-posts" className="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 className="text-sm font-semibold text-slate-950">Recent posts</h3>
