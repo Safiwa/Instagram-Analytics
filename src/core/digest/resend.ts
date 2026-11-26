@@ -21,6 +21,17 @@ export async function sendDigestEmail(
   text: string,
   html: string,
 ): Promise<void> {
+  await sendEmail(to, subject, text, html, "weekly digest email");
+}
+
+// Shared Resend sender (weekly digest and account sign-in links).
+export async function sendEmail(
+  to: string,
+  subject: string,
+  text: string,
+  html: string,
+  label: string,
+): Promise<void> {
   const settings = config();
   if (!settings) {
     throw new Error("Resend is not configured.");
@@ -44,9 +55,9 @@ export async function sendDigestEmail(
   });
 
   if (!response.ok) {
-    log.error("weekly digest email rejected", { status: response.status });
+    log.error(`${label} rejected`, { status: response.status });
     throw new Error(`Resend rejected the email with status ${response.status}.`);
   }
 
-  log.info("weekly digest email sent", { status: "sent" });
+  log.info(`${label} sent`, { status: "sent" });
 }

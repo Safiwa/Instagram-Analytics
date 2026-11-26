@@ -265,6 +265,12 @@ request plus a few embed requests.
 | `/api/digest/send` | Cron-only weekly digest sender |
 | `/api/digest/unsubscribe` | Signed one-click unsubscribe link |
 | `/api/collect` | Cron-only daily collector that stores one snapshot per tracked or recently searched profile |
+| `/pricing` | Free, Starter, Pro (14-day trial) and Agency plans, monthly or yearly |
+| `/account` | Email sign-in, current plan, lookups used, daily-tracked accounts, manage billing |
+| `/api/account/login`, `/api/account/verify`, `/api/account/logout` | Passwordless sign-in link flow |
+| `/api/account/track` | POST: add/remove a daily-tracked handle within the plan allowance |
+| `/api/billing/checkout`, `/api/billing/portal` | Dodo Payments hosted checkout and customer portal |
+| `/api/billing/webhook` | Signed Dodo Payments subscription webhooks |
 
 ## Header navigation
 
@@ -681,6 +687,48 @@ the app to Live mode; Meta may require business verification for the portfolio.
 - Only scoring fields are stored (counts and has photo / name / bio / private
   flags); no follower text or media. Rows are deleted with the connection or
   replaced by a new upload.
+
+## Paid plans (Dodo Payments)
+
+Four plans, defined once in `src/core/billing/plans.ts`:
+
+| | Free | Starter $9/mo | Pro $29/mo (14-day trial) | Agency $79/mo |
+|---|---|---|---|---|
+| Profile lookups | 3 / day | 50 / month | 300 / month | 1,500 / month |
+| Compare side by side | 2 | 2 | 3 | 4 |
+| Daily-tracked accounts | – | 1 | 10 | 50 |
+| Stored growth history shown | 7 days | 90 days | 12 months | Full |
+| PDF reports | – | – | ✓ | ✓ |
+
+Yearly billing is 10× the monthly price (2 months free).
+
+- **Lookups** are distinct profiles opened per period; reopening the same profile is free. Signed-in
+  visitors are metered per account, everyone else per keyed hash of their IP. Search-engine crawlers are
+  never metered, so profile pages stay indexable. Demo profiles never count.
+- **Accounts** use passwordless email links (`/account`), sent through Resend and signed with
+  `CONNECT_SECRET`; one email per address per minute.
+- **Checkout** (`/api/billing/checkout`) opens Dodo Payments' hosted checkout with the account id as metadata.
+  The 14-day Pro trial is set per checkout and only for an account's first subscription. **Webhooks**
+  (`/api/billing/webhook`, Standard Webhooks signature with a 5-minute replay window) keep the
+  `subscriptions` table in sync; late, older deliveries are skipped. A plan cancelled at period end keeps
+  access until then. **Manage billing** opens Dodo's customer portal.
+- **Why Dodo:** it is the merchant of record (collects and pays VAT/sales tax worldwide), accepts individual
+  sellers without a trade licence, and pays out to the owner's own bank account.
+- **Off by default.** Until `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_SECRET`, at least one
+  `DODO_PRODUCT_*`, `DATABASE_URL`, `CONNECT_SECRET` and Resend are set, the site behaves exactly as before
+  with no limits, and `/pricing` shows "Coming soon". Dodo stays in test mode until `DODO_PAYMENTS_MODE=live`,
+  and the **production** deployment keeps paid plans off until then (previews still run in test mode), so
+  the PR can be merged before the Dodo account is verified.
+
+Setup:
+1. Dodo Payments: sign up as an **Individual**, complete verification and add your bank account (must be in
+   your own name).
+2. In test mode, create one subscription product per plan (monthly, optionally yearly), priced in USD.
+3. Developer > Webhooks: endpoint `https://www.instagram-analytics.com/api/billing/webhook`, the
+   `subscription.*` events; copy the signing secret. Developer > API Keys: create a key.
+4. Add the `DODO_*` variables from `.env.example` in Vercel and redeploy (migration `0008_billing.sql` runs on
+   build). Buy each plan with a test card.
+5. Repeat products, webhook and key in live mode, update the variables, set `DODO_PAYMENTS_MODE=live`.
 
 ## Weekly digest (free 30-day trial)
 

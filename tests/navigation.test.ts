@@ -17,7 +17,9 @@ describe("primary navigation", () => {
       { href: "/#metric-engine", label: "Analytics" },
       { href: "/compare", label: "Compare" },
       { href: "/connect", label: "For creators" },
+      { href: "/pricing", label: "Pricing" },
       { href: "/contact", label: "Contact Us" },
+      { href: "/account", label: "Account" },
     ]);
   });
 

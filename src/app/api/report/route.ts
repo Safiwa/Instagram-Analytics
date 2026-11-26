@@ -3,12 +3,19 @@ import type { CreatorProfile } from "../../../core/data/types";
 import { withStoredHistory } from "../../../core/db/enrich";
 import { log } from "../../../core/logging/logger";
 import { buildReport } from "../../../features/report/reportDocument";
+import { getViewer } from "../../../core/billing/viewer";
 
 export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+  // PDF reports are a Pro and Agency feature once paid plans are switched on.
+  const viewer = await getViewer();
+  if (!viewer.plan.limits.pdfReport) {
+    return Response.redirect(new URL("/pricing?feature=report", request.url), 303);
+  }
   const parsed = parseHandles(url.searchParams.get("handles"));
+  parsed.handles = parsed.handles.slice(0, viewer.plan.limits.compareMax);
 
   if (parsed.handles.length === 0) {
     log.warn("report request without handles");
