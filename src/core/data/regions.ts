@@ -37,17 +37,25 @@ export const EUROPE_COUNTRIES = [
 ] as const;
 
 export const REGION_BOARDS: { id: Region; label: string; description: string }[] = [
-  { id: "usa", label: "USA · top 10", description: "Tracked accounts based in the United States" },
-  { id: "europe", label: "Europe · top 10", description: "Tracked accounts based in Europe" },
+  {
+    id: "usa",
+    label: "USA creators · top 10",
+    description: "Tracked creators based in the United States; brands and organisations are not included",
+  },
+  {
+    id: "europe",
+    label: "Europe creators · top 10",
+    description: "Tracked creators based in Europe; brands and organisations are not included",
+  },
   {
     id: "middle-east",
     label: "Middle East creators · top 10",
-    description: `Tracked creators in ${MIDDLE_EAST_COUNTRIES.join(", ")}; brands and organisations are listed separately`,
+    description: `Tracked creators in ${MIDDLE_EAST_COUNTRIES.join(", ")}; brands and organisations are not included`,
   },
   {
     id: "uae",
     label: "UAE creators · top 10",
-    description: "Tracked creators based in the UAE; brands and organisations are listed separately",
+    description: "Tracked creators based in the UAE; brands and organisations are not included",
   },
 ];
 
@@ -73,6 +81,17 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
 
   // Europe
   cristiano: "europe",
+  // European creators for the creators-only Europe board.
+  khaby00: "europe",
+  dulceida: "europe",
+  pamela_rf: "europe",
+  leoniehanne: "europe",
+  carodaur: "europe",
+  mariapombo: "europe",
+  dualipa: "europe",
+  tomholland2013: "europe",
+  ksi: "europe",
+  emmawatson: "europe",
   chiaraferragni: "europe",
   davidguetta: "europe",
   sofiamcoelho: "europe",
@@ -175,10 +194,17 @@ export function regionBoardHandles(board: Region): string[] {
   return Object.keys(ACCOUNT_REGIONS).filter((handle) => isInRegionBoard(handle, board));
 }
 
-// Organisations on the Middle East and UAE lists: airlines, tourism boards,
-// news outlets, venues, agencies and brands. The Middle East and UAE top-ten
-// boards are for creators; these accounts get their own brands board.
-const MIDDLE_EAST_ORGANIZATIONS = new Set([
+// Organisations on the tracked lists: airlines, tourism boards, news outlets,
+// venues, agencies, sports clubs, leagues and brands. Every country top-ten
+// board is for creators, so these accounts are left off them.
+const ORGANIZATIONS = new Set([
+  "natgeo",
+  "realmadrid",
+  "fcbarcelona",
+  "psg",
+  "premierleague",
+  "adidas",
+  "gucci",
   "qatarairways",
   "visitqatar",
   "aljazeera",
@@ -208,8 +234,8 @@ const MIDDLE_EAST_ORGANIZATIONS = new Set([
   "rafflesdubai",
 ]);
 
-export function isMiddleEastOrganization(username: string): boolean {
-  return MIDDLE_EAST_ORGANIZATIONS.has(username.toLowerCase());
+export function isOrganization(username: string): boolean {
+  return ORGANIZATIONS.has(username.toLowerCase());
 }
 
 export function isInRegionBoard(username: string, board: Region): boolean {

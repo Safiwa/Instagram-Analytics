@@ -427,3 +427,20 @@ describe("creators-only Middle East board", () => {
     expect(board.middleEastBrands.map((entry) => entry.username)).toEqual(["flynas"]);
   });
 });
+
+describe("creators-only USA and Europe boards", () => {
+  it("leaves clubs, leagues, brands and @natgeo off the country boards", () => {
+    const board = rankProfiles(
+      [
+        profile("natgeo", 280_000_000, [post("a", 2, 100_000)]),
+        profile("therock", 390_000_000, [post("b", 2, 100_000)]),
+        profile("realmadrid", 180_000_000, [post("c", 2, 100_000)]),
+        profile("adidas", 29_000_000, [post("d", 2, 100_000)]),
+        profile("davidguetta", 12_000_000, [post("e", 2, 50_000)]),
+      ],
+      NOW,
+    );
+    expect(board.regional.usa.map((entry) => entry.username)).toEqual(["therock"]);
+    expect(board.regional.europe.map((entry) => entry.username)).toEqual(["davidguetta"]);
+  });
+});
