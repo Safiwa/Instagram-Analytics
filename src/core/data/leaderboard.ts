@@ -7,7 +7,7 @@ import { fetchLiveProfile, isLiveConfigured } from "./live";
 import {
   EUROPE_COUNTRIES,
   isInRegionBoard,
-  isMiddleEastOrganization,
+  isOrganization,
   MIDDLE_EAST_COUNTRIES,
   REGION_BOARDS,
   type Region,
@@ -136,6 +136,17 @@ export const LEADERBOARD_HANDLES = [
   "dalalid",
   "jennyesber",
   "dima_dalati",
+  // European creators for the creators-only Europe board.
+  "khaby00",
+  "dulceida",
+  "pamela_rf",
+  "leoniehanne",
+  "carodaur",
+  "mariapombo",
+  "dualipa",
+  "tomholland2013",
+  "ksi",
+  "emmawatson",
 ] as const;
 
 // Real, public UAE/GCC accounts verified through the live Instagram Business Discovery
@@ -351,11 +362,10 @@ function regionalBoards(entries: LeaderboardEntry[]): Record<Region, Leaderboard
   const boards = {} as Record<Region, LeaderboardEntry[]>;
   for (const board of REGION_BOARDS) {
     const weightedFollowers = board.id === "middle-east" || board.id === "uae";
-    const creatorsOnly = board.id === "middle-east" || board.id === "uae";
     const eligible = entries
       .filter((entry) => isInRegionBoard(entry.username, board.id))
       .filter((entry) => isCountryBoardEligible(entry, board.id))
-      .filter((entry) => !creatorsOnly || !isMiddleEastOrganization(entry.username))
+      .filter((entry) => !isOrganization(entry.username))
       .sort(weightedFollowers ? byCountryBoardRank : byFollowersFirst);
     // The dedicated UAE board stays UAE-only; the wider Middle East board must
     // keep looking at other countries instead of filling with one country.
@@ -367,7 +377,7 @@ function regionalBoards(entries: LeaderboardEntry[]): Record<Region, Leaderboard
 
 function middleEastBrandBoard(entries: LeaderboardEntry[]): LeaderboardEntry[] {
   const eligible = entries
-    .filter((entry) => isMiddleEastOrganization(entry.username))
+    .filter((entry) => isOrganization(entry.username))
     .filter((entry) => isInRegionBoard(entry.username, "middle-east"))
     .filter((entry) => isCountryBoardEligible(entry, "middle-east"))
     .sort(byCountryBoardRank);
@@ -410,7 +420,7 @@ function emptyLeaderboard(): Leaderboard {
 
 // Bump the prefix whenever the tracked-pool rebuild logic changes so a snapshot
 // written by the previous version is not reused with the new expectations.
-const TRACKED_SIGNATURE = `v10:${LEADERBOARD_HANDLES.join(",")}`;
+const TRACKED_SIGNATURE = `v11:${LEADERBOARD_HANDLES.join(",")}`;
 
 // Meta rate-limits large bursts of Business Discovery calls. Instead of
 // rebuilding all 55 profiles at once, each refresh updates a small rotating
