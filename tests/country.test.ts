@@ -251,10 +251,10 @@ describe("country signal inference", () => {
     expect(middleOnly.country).toBeNull();
   });
 
-  it("keeps @leomessi unpublished when only general caption places are available", () => {
+  it("keeps an account unpublished when only general caption places are available", () => {
     const signal = inferCountrySignal(
       profile({
-        username: "leomessi",
+        username: "football.star",
         bio: "Bienvenidos a la cuenta oficial de Instagram de Leo Messi",
         recentPosts: [
           {
@@ -425,6 +425,11 @@ describe("Middle East benchmark eligibility", () => {
   it("hides the Middle East panel for an account recorded as based outside the region", () => {
     expect(isMiddleEastAccount(profile({ username: "rima_alosta", accountCountry: null, bio: "📍Dubai" }))).toBe(false);
     expect(isMiddleEastAccount(profile({ username: "ascia", accountCountry: null, bio: "" }))).toBe(true);
+  });
+
+  it("uses the recorded Account based in value for @leomessi", () => {
+    const signal = inferCountrySignal(profile({ username: "leomessi", accountCountry: null, bio: "Welcome to the official Leo Messi Instagram account" }));
+    expect(signal).toMatchObject({ country: "United States", basis: "account" });
   });
 
   it("uses recorded Account based in values for @ascia and @rima_alosta", () => {
