@@ -169,3 +169,12 @@ describe("follower history ranges", () => {
     expect(panel).toContain("It is not a\n          measured count.");
   });
 });
+
+describe("axis precision", () => {
+  it("keeps close follower ticks distinct", async () => {
+    const { formatAxisCompact } = await import("../src/core/format");
+    expect(formatAxisCompact(1_040_000)).toBe("1.04M");
+    expect(formatAxisCompact(1_020_000)).toBe("1.02M");
+    expect(formatAxisCompact(932_000)).toBe("932K");
+  });
+});
