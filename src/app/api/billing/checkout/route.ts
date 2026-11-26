@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { hasHadSubscription } from "../../../../core/billing/accounts";
+import { activeDeal, dealAppliesTo } from "../../../../core/billing/deals";
 import { billingConfig, createCheckout, isBillingEnabled, productFor } from "../../../../core/billing/dodo";
 import { isPaidPlanId, PLANS } from "../../../../core/billing/plans";
 import { getViewer } from "../../../../core/billing/viewer";
@@ -29,14 +30,21 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // The free trial is only for an account's first subscription.
-    const trialDays = PLANS[plan].trialDays > 0 && !(await hasHadSubscription(viewer.user.id)) ? PLANS[plan].trialDays : 0;
+    // A running deal (e.g. Black Friday on yearly plans) applies its code and
+    // replaces the trial. Otherwise the free trial is for a first subscription.
+    const deal = activeDeal();
+    const discounted = dealAppliesTo(deal, interval);
+    const trialDays =
+      !discounted && PLANS[plan].trialDays > 0 && !(await hasHadSubscription(viewer.user.id))
+        ? PLANS[plan].trialDays
+        : 0;
     const url = await createCheckout(config, {
       productId,
       email: viewer.user.email,
       userId: viewer.user.id,
       returnUrl: new URL("/account?checkout=success", request.url).toString(),
       trialDays,
+      discountCode: discounted ? deal.code : null,
     });
     return NextResponse.redirect(url, 303);
   } catch (error) {

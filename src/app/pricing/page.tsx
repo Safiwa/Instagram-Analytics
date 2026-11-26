@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Check } from "lucide-react";
+import { activeDeal, dealAppliesTo, dealPrice, type Deal } from "../../core/billing/deals";
 import { billingConfig, isBillingEnabled, productFor } from "../../core/billing/dodo";
 import { PAID_PLAN_IDS, PLANS, TRIAL_DAYS, type BillingInterval, type Plan } from "../../core/billing/plans";
 import { getViewer } from "../../core/billing/viewer";
@@ -19,9 +20,21 @@ const ERRORS: Record<string, string> = {
   checkout: "The checkout could not be opened. Please try again in a moment.",
 };
 
-function price(plan: Plan, interval: BillingInterval): { amount: string; note: string } {
+function price(
+  plan: Plan,
+  interval: BillingInterval,
+  deal: Deal | null,
+): { amount: string; note: string; was?: string } {
   if (plan.monthlyUsd === 0) {
     return { amount: "$0", note: "forever" };
+  }
+  if (plan.id !== "free" && dealAppliesTo(deal, interval)) {
+    const amount = dealPrice(deal, plan.id);
+    return {
+      amount: `$${amount}`,
+      was: `$${plan.yearlyUsd}`,
+      note: `first year · $${(amount / 12).toFixed(2)}/mo`,
+    };
   }
   return interval === "yearly"
     ? { amount: `$${plan.yearlyUsd}`, note: "per year (2 months free)" }
@@ -30,9 +43,15 @@ function price(plan: Plan, interval: BillingInterval): { amount: string; note: s
 
 export default async function PricingPage({ searchParams }: PricingPageProps) {
   const { interval: rawInterval, error, feature } = await searchParams;
-  const interval: BillingInterval = rawInterval === "yearly" ? "yearly" : "monthly";
   const [viewer, config] = [await getViewer(), billingConfig()];
   const enabled = isBillingEnabled();
+  // Deals only show once plans can actually be bought.
+  const deal = enabled ? activeDeal() : null;
+  // During a yearly deal the page opens on yearly.
+  const interval: BillingInterval =
+    rawInterval === "yearly" || rawInterval === "monthly"
+      ? rawInterval
+      : deal?.interval ?? "monthly";
   const current = viewer.billingEnabled ? viewer.plan.id : null;
 
   return (
@@ -54,13 +73,17 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
           {(["monthly", "yearly"] as const).map((option) => (
             <Link
               key={option}
-              href={option === "yearly" ? "/pricing?interval=yearly" : "/pricing"}
+              href={`/pricing?interval=${option}`}
               aria-current={interval === option ? "true" : undefined}
               className={`rounded-lg px-4 py-1.5 font-medium transition ${
                 interval === option ? "bg-slate-950 text-white" : "text-slate-600 hover:bg-slate-100"
               }`}
             >
-              {option === "monthly" ? "Monthly" : "Yearly · 2 months free"}
+              {option === "monthly"
+                ? "Monthly"
+                : deal?.interval === "yearly"
+                  ? `Yearly · ${deal.percentOff}% off`
+                  : "Yearly · 2 months free"}
             </Link>
           ))}
         </div>
@@ -70,6 +93,29 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
         <p role="alert" className="rounded-xl bg-rose-50 px-4 py-3 text-center text-sm text-rose-700">
           {ERRORS[error]}
         </p>
+      ) : null}
+      {deal ? (
+        <div
+          data-testid="pricing-deal"
+          className="rounded-2xl bg-slate-950 px-5 py-4 text-center text-white"
+        >
+          <p className="text-sm font-semibold">
+            🖤 {deal.label}: {deal.percentOff}% off your first year on every yearly plan
+          </p>
+          <p className="mt-1 text-xs text-slate-300">
+            Pro for ${dealPrice(deal, "pro")} a year instead of ${PLANS.pro.yearlyUsd}, which is half the
+            monthly price. Ends{" "}
+            {new Intl.DateTimeFormat("en-GB", {
+              day: "numeric",
+              month: "short",
+              hour: "numeric",
+              minute: "2-digit",
+              timeZone: "Asia/Dubai",
+              timeZoneName: "short",
+            }).format(new Date(deal.endsAt))}
+            . Renews at the normal yearly price.
+          </p>
+        </div>
       ) : null}
       {feature === "report" ? (
         <p role="status" className="rounded-xl bg-indigo-50 px-4 py-3 text-center text-sm text-indigo-800">
@@ -84,7 +130,8 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {[PLANS.free, ...PAID_PLAN_IDS.map((id) => PLANS[id])].map((plan) => {
-          const { amount, note } = price(plan, interval);
+          const { amount, note, was } = price(plan, interval, deal);
+          const onDeal = plan.id !== "free" && dealAppliesTo(deal, interval);
           const isCurrent = current === plan.id;
           const purchasable =
             enabled && plan.id !== "free" && config !== null && productFor(config, plan.id, interval) !== null;
@@ -98,7 +145,11 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
             >
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-950">{plan.name}</h2>
-                {plan.highlighted ? (
+                {onDeal ? (
+                  <span className="rounded-full bg-slate-950 px-2 py-0.5 text-[11px] font-semibold text-white">
+                    {deal?.label} −{deal?.percentOff}%
+                  </span>
+                ) : plan.highlighted ? (
                   <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
                     {TRIAL_DAYS}-day free trial
                   </span>
@@ -106,6 +157,9 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
               </div>
               <p className="mt-1 text-sm text-slate-500">{plan.tagline}</p>
               <p className="mt-4">
+                {was ? (
+                  <span className="mr-2 text-lg font-medium text-slate-400 line-through">{was}</span>
+                ) : null}
                 <span className="text-3xl font-semibold tracking-tight text-slate-950">{amount}</span>{" "}
                 <span className="text-sm text-slate-500">{note}</span>
               </p>
@@ -141,7 +195,11 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
                           : "bg-slate-950 text-white hover:bg-slate-700"
                       }`}
                     >
-                      {plan.trialDays > 0 ? `Start ${plan.trialDays}-day free trial` : `Choose ${plan.name}`}
+                      {onDeal
+                        ? `Get ${plan.name} for ${amount}`
+                        : plan.trialDays > 0
+                          ? `Start ${plan.trialDays}-day free trial`
+                          : `Choose ${plan.name}`}
                     </button>
                   </form>
                 ) : (
@@ -166,6 +224,12 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
             The {TRIAL_DAYS}-day trial is on Pro, for your first subscription. Your card is charged when the trial
             ends unless you cancel before then.
           </li>
+          {deal ? (
+            <li>
+              {deal.label} prices apply to the first year of yearly plans bought before the deal ends, then renew at
+              the normal yearly price. The free trial does not apply to deal purchases.
+            </li>
+          ) : null}
           <li>Payments are handled securely by Dodo Payments, our reseller, which also handles VAT and sales tax.</li>
           <li>Prices are in US dollars; checkout shows the amount in your local currency.</li>
         </ul>
