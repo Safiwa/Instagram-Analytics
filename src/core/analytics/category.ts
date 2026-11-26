@@ -24,6 +24,31 @@ type Rule = { label: string; keywords: string[] };
 // so the category is inferred from the public name and biography. More specific
 // rules are checked first so brands are never mistaken for creators.
 const RULES: Rule[] = [
+  // Agencies describe themselves with words other rules would claim ("social
+  // media agency" -> media, "built for brands" -> brand, "content" -> creator),
+  // so the agency rule is checked first. Instagram's own business category
+  // "Marketing Agency" also matches here.
+  {
+    label: "Marketing agency",
+    keywords: [
+      "marketing agency",
+      "digital agency",
+      "digital marketing",
+      "advertising agency",
+      "ad agency",
+      "social media agency",
+      "social media marketing",
+      "creative agency",
+      "media agency",
+      "branding agency",
+      "pr agency",
+      "influencer marketing",
+      "influencer agency",
+      "influencer & celebrity management",
+      "engagement agency",
+      "agency",
+    ],
+  },
   // An explicit self-description is the strongest signal, so check it before the
   // business rules: a creator bio can still mention "brand collaborations".
   {
@@ -78,12 +103,18 @@ const RULES: Rule[] = [
     keywords: ["news", "media", "headlines", "magazine", "time out", "geographic", "original stories"],
   },
   {
-    label: "Business & brand",
-    keywords: ["we mean business", "brand", "mall", "dubaimall", "retail", "shop", "company"],
-  },
-  {
     label: "Food blogger",
-    keywords: ["food", "chef", "recipe", "cooking", "restaurant", "cafe", "food & drink"],
+    keywords: [
+      "food creator",
+      "food blogger",
+      "food",
+      "chef",
+      "recipe",
+      "cooking",
+      "restaurant",
+      "cafe",
+      "food & drink",
+    ],
   },
   {
     label: "Travel blogger",
@@ -91,7 +122,7 @@ const RULES: Rule[] = [
   },
   {
     label: "Reel/Video creator",
-    keywords: ["reel creator", "video creator", "tiktok", "youtube"],
+    keywords: ["reel creator", "reels creator", "video creator", "tiktok", "youtube"],
   },
   // "Personal blog" must precede "Blogger", whose "blog" keyword is broader.
   {
@@ -106,11 +137,22 @@ const RULES: Rule[] = [
     label: "Digital creator",
     keywords: ["digital creator", "creator"],
   },
+  // Business words come after every creator rule: creators often mention
+  // brands ("Brand Collaborations") without being a brand themselves.
+  {
+    label: "Business & brand",
+    keywords: ["we mean business", "brand", "mall", "dubaimall", "retail", "shop", "company"],
+  },
   {
     label: "Public figure",
     keywords: [
       "actor",
+      "actress",
       "singer",
+      "tv host",
+      "tv presenter",
+      "presenter",
+      "personality",
       "footballer",
       "football player",
       "athlete",
@@ -151,6 +193,7 @@ const GROUPS: Record<string, string> = {
   "News & media": "media",
   "Travel & tourism": "travel-business",
   "Business & brand": "business",
+  "Marketing agency": "agency",
   "Sport": "sport",
   "Music": "music",
 };
@@ -170,7 +213,12 @@ function looksLikePerson(displayName: string): boolean {
   return words.every((word) => /^[\p{Lu}][\p{Ll}'.-]*$/u.test(word));
 }
 
-function explicitCategory(text: string): string | null {
+// "Brand collaborations", "brand deals" and similar phrases describe a
+// creator's work with brands, so they never make an account a brand.
+const BRAND_WORK_PHRASES = /\bbrand\s*(collab\w*|deals?|partnerships?|work|inquiries|enquiries)\b/gi;
+
+function explicitCategory(rawText: string): string | null {
+  const text = rawText.replace(BRAND_WORK_PHRASES, " ");
   for (const rule of RULES) {
     if (rule.keywords.some((keyword) => matchesKeyword(text, keyword))) {
       return rule.label;
@@ -183,8 +231,25 @@ function explicitCategory(text: string): string | null {
 // category rule. The "Digital creator" / "Public figure" fallbacks are useful for
 // global benchmarks but must not satisfy the regional category-label gate.
 export function inferExplicitCategory(profile: CreatorProfile): string | null {
-  return explicitCategory(`${profile.displayName} ${profile.bio}`);
+  // Instagram's own category ("Reel creator", "Marketing Agency") wins when a
+  // data source returned one, so the label matches the Instagram profile. The
+  // adapters' generic placeholders never count; then the name and bio decide.
+  const instagramCategory = isInstagramCategory(profile.category)
+    ? explicitCategory(profile.category)
+    : null;
+  return instagramCategory ?? explicitCategory(`${profile.displayName} ${profile.bio}`);
 }
+
+export function isInstagramCategory(category: string | undefined): boolean {
+  return Boolean(category) && !GENERIC_CATEGORY_LABELS.has(category!.trim().toLowerCase());
+}
+
+const GENERIC_CATEGORY_LABELS = new Set([
+  "",
+  "instagram professional",
+  "instagram creator",
+  "instagram account",
+]);
 
 export function inferCategory(profile: CreatorProfile): string {
   const matched = inferExplicitCategory(profile);

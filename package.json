@@ -4,13 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node scripts/db-migrate.mjs --if-configured && next build",
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node scripts/db-migrate.mjs"
   },
   "dependencies": {
+    "@neondatabase/serverless": "1.2.1",
     "@tailwindcss/postcss": "4.3.5",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.1.0",
@@ -24,6 +26,7 @@
     "tailwindcss": "4.3.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.6.0",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

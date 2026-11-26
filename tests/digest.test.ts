@@ -14,9 +14,17 @@ const metrics = {
   avgComments: 10,
   avgSaves: null,
   engagementRate: 1.23,
+  typicalEngagementRate: null,
+  hiddenLikePosts: 0,
   engagementBasis: "likes+comments",
+  engagementSource: "public-posts",
+  storedEngagement: null,
   fakeFollowers: null,
   fakeFollowersPct: null,
+  fakeFollowersRange: null,
+  fakeFollowerRisk: null,
+  fakeFollowerSource: null,
+  followerAudit: null,
   followerGrowthPct: 4.56,
   authenticityPct: null,
   growthEstimated: true,
@@ -58,9 +66,9 @@ describe("weekly digest signup validation", () => {
     ).toEqual({ ok: false, message: "Invalid submission." });
   });
 
-  it("sets a 30-day trial end", () => {
+  it("sets a 14-day trial end", () => {
     const start = new Date("2026-11-20T00:00:00.000Z");
-    expect(trialEndsAt(start)).toBe("2026-12-20T00:00:00.000Z");
+    expect(trialEndsAt(start)).toBe("2026-12-04T00:00:00.000Z");
   });
 });
 
@@ -112,7 +120,7 @@ describe("weekly digest schedule", () => {
     trialEndsAt: "2026-12-01T00:00:00.000Z",
   };
 
-  it("does not stop after the displayed 30-day trial", () => {
+  it("does not stop after the displayed 14-day trial", () => {
     expect(isSubscriptionDue(subscription, new Date("2027-01-01T00:00:00.000Z"))).toBe(true);
   });
 

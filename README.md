@@ -252,11 +252,25 @@ request plus a few embed requests.
 |---|---|
 | `/` | Agency home and analysis dashboard: creator/brand collaboration positioning, lookup, global pulse leaderboards (worldwide + USA/Europe/Middle East/UAE), pipeline, metric engine, benchmark tiers, sources, confidence |
 | `/profile/[username]` | KPIs, 30-day growth analysis, category-matched peer and Middle East category benchmarks, estimate disclosure, interactions, recent posts, and public-data notices |
+| `/discover` | Search the in-house index by name/category, country, audience size; sort by followers, engagement, recency |
+| `/connect` | "For creators": connect an Instagram professional account to share verified insights; shows connection status and a disconnect button |
+| `/privacy` | Privacy policy, including the data-deletion section Meta links to |
+| `/api/instagram/connect`, `/api/instagram/callback` | Unified Login (Facebook Login for Business) start and callback |
+| `/api/instagram/followers` | POST (signed-in creator): upload the Instagram followers export for a follower-list audit |
+| `/api/instagram/disconnect` | POST: delete the signed-in creator's connection and insights |
+| `/api/instagram/deauthorize`, `/api/instagram/data-deletion` | Meta callbacks (signed_request) that delete a creator's connection |
 | `/compare?handles=a,b,c,d` | Side-by-side comparison (maximum four accounts) with a same-country/region weighted rank table and remaining comparable suggestions |
 | `/api/report?handles=a,b` | Downloadable PDF report |
 | `/api/digest/subscribe` | Validates and stores a weekly-digest signup |
 | `/api/digest/send` | Cron-only weekly digest sender |
 | `/api/digest/unsubscribe` | Signed one-click unsubscribe link |
+| `/api/collect` | Cron-only daily collector that stores one snapshot per tracked or recently searched profile |
+| `/pricing` | Free, Starter, Pro (14-day trial) and Agency plans, monthly or yearly |
+| `/account` | Email sign-in, current plan, lookups used, daily-tracked accounts, manage billing |
+| `/api/account/login`, `/api/account/verify`, `/api/account/logout` | Passwordless sign-in link flow |
+| `/api/account/track` | POST: add/remove a daily-tracked handle within the plan allowance |
+| `/api/billing/checkout`, `/api/billing/portal` | Dodo Payments hosted checkout and customer portal |
+| `/api/billing/webhook` | Signed Dodo Payments subscription webhooks |
 
 ## Header navigation
 
@@ -363,10 +377,11 @@ bursts of Business Discovery calls (`code 4`), so refreshes are deliberately pac
   changing `LEADERBOARD_HANDLES` or the rebuild logic bumps it, and any profile no longer in the
   curated list is filtered out on the next merge.
 
-The homepage engagement-rate tier table uses published Modash ranges by follower tier (Nano 5-10%,
-Micro 3-7%, Macro 1-3%, Mega 0.5-2%) with a link to the source. This app uses average likes and
-comments divided by followers over up to 12 recent posts, so the comparison is directional, not
-exact. The matching tier also appears as a hint on each profile's engagement card.
+The homepage engagement-rate tier table ("Our engagement index") is built from this site's own
+stored snapshots: the latest measured engagement rate of every profile stored in the last 30 days,
+grouped into Nano (1K-10K), Micro (10K-100K), Macro (100K-1M) and Mega (1M+). Each tier shows the
+middle half (25th-75th percentile) and median once it holds at least 8 profiles; until then it
+shows "Building · n/8". No third-party ranges are used. See "In-house history database" below.
 
 The homepage hero leads with a compact, top-positioned headline "Leading Instagram analytics platform
 in the UAE — performance-driven tools and a practical growth plan", followed by the lookup prompt.
@@ -384,8 +399,8 @@ Profile pages now surface verification, growth, and regional comparison:
   fresh public HTML profile lookup (`fetchPublicIdentity()`, 30-minute cache) when the signed proxy
   bridge is reachable, and otherwise `VERIFIED_HANDLES` in `src/core/data/verified.ts` — a snapshot of
   real public profile pages read on 2026-11-22 for the curated tracked pool, plus `rim.official__`,
-  the 4.5–6.3M UAE creator band (`amrmaskoun`, `wessamq`, `taimalfalasi`, `baneenstars`,
-  `technicalguruji`) and the 1.7–3.1M band (`sarahmalas`, `randdalati`, `rima_alosta`,
+  the 4.5–6.3M UAE creator band (`amrmaskoun`, `wessamq`, `taimalfalasi`, `baneenstars`)
+  and the 1.7–3.1M band (`sarahmalas`, `randdalati`, `rima_alosta`,
   `lookatsascha`) confirmed from real public Instagram pages/directories on 2026-11-23. Unknown
   handles stay "Not verified"; no badge is invented or modeled. The Middle East comparison panel
   uses creator category labels and the authenticity-aware regional rank described below.
@@ -459,7 +474,7 @@ Profile pages now surface verification, growth, and regional comparison:
   `alitofique`, `hinaashh`, `jexmi`, `najet.dh` and `elsakahwaji` around 250–327K, plus
   `donya_esmailiii`, `aiamwa`, `dina_h_ussien`, `poojaabis`, `taranum_sshahin`, `dina.ak`,
   `anshi_pandyala_official` and `zeniamk` around 46–72K, plus `amrmaskoun`, `wessamq`,
-  `taimalfalasi`, `baneenstars` and `technicalguruji` in the 4.5–6.3M UAE creator band, plus
+  `taimalfalasi` and `baneenstars` in the 4.5–6.3M UAE creator band, plus
   `sarahmalas`, `randdalati`, `rima_alosta` and `lookatsascha` in the 1.7–3.1M UAE creator band.
   These fill five-profile ranks at the smaller, mid-sized and larger UAE creator accounts without
   relaxing any gate. A candidate must (1) sit inside the
@@ -500,6 +515,220 @@ Profile pages now surface verification, growth, and regional comparison:
 All are computed on the server in `src/app/profile/[username]/page.tsx`. The tracked-pool fetch is
 guarded by `isLiveConfigured()` so local development without Meta keys does not make pointless API
 calls, and profile pages read the shared Upstash snapshot instead of calling Meta directly.
+
+## In-house history database (Postgres)
+
+The site keeps its own history so growth and engagement come from stored
+measurements instead of third-party tools. It is optional: without
+`DATABASE_URL` everything works exactly as before and nothing is stored.
+
+**What is stored** (`db/migrations/0001_profile_snapshots.sql`):
+
+| Table | One row per | Holds |
+|---|---|---|
+| `profiles` | Instagram handle | name, category, country, verified, tracked flag, lookup count, last lookup/snapshot |
+| `profile_snapshots` | profile per UTC day | followers, following, posts, engagement rate, average likes/comments/views, visible posts, source |
+| `posts` | post (keyed by shortcode) | type, date, permalink, caption, hashtags, location |
+| `post_snapshots` | post per UTC day | likes (null when hidden), comments, views |
+
+Only values measured from Instagram on that day are written. The stored-engagement
+fallback shown when Instagram hides all posts is never written back, and demo
+fixtures are never stored.
+
+**When rows are written**
+
+- Every profile page and comparison lookup stores today's snapshot after the
+  response is sent (`after()` from `next/server`), so pages are not slowed down.
+- `/api/collect` runs daily at 02:15 UTC as the `daily-collector` Vercel Schedule
+  (`vercel.json` → `schedules`; the weekly digest is the `weekly-digest` schedule). Both
+  were migrated from legacy Cron Jobs with `requestMethod: "GET"` and still receive
+  `Authorization: Bearer $CRON_SECRET`. Run either on demand from Vercel → Schedules →
+  Run Schedule. It marks the homepage
+  leaderboard and UAE/GCC handles as tracked, then refreshes tracked profiles and
+  anything searched in the last 30 days, oldest snapshot first, within a 40-second
+  budget. Handles that do not fit are first in line the next day.
+
+**What it changes on screen**
+
+- Profile header: `Tracking since <date> · N daily snapshots` once rows exist.
+- 30-day growth card: once a snapshot 30-45 days old exists, the change is
+  measured against it, the `Est.` badge disappears and the hint reads
+  "Measured from stored snapshots". Until then the disclosed estimate stays.
+- The 12-month growth figure stays a disclosed estimate until enough history exists.
+- Follower history panel (`tracking-history`): once a profile has two or more daily
+  snapshots, the profile page shows a daily followers chart with engagement rate on a
+  second axis (30D / 90D / 1Y ranges) and a change table for 1, 7, 30 and 90 days.
+  Each window uses the latest stored snapshot at least that old; shorter histories
+  show "Not enough history".
+- Engagement vs our index (`index-position`): the profile's percentile among indexed
+  profiles of the same audience tier (itself excluded), with the tier median and
+  middle half. Shown only when the tier holds at least 8 other profiles.
+- Stored engagement: when Instagram hides every post on a lookup, engagement rate and
+  averages come from the profile's most recent stored snapshot with visible posts
+  (up to 60 days old), labelled "Stored" with the measurement date on the page, in
+  rankings and in the PDF. This replaced the earlier hard-coded third-party figures.
+- Middle East peer panel: curated peers missing from the tracked pool are filled from
+  the index (`loadIndexedProfiles`) instead of a hand-captured static file.
+- `/discover` ("Find creators" in the header): search the index by name, handle or
+  category, country (from Instagram's "Account based in"), audience size, and sort by
+  followers, engagement or recency. Private profiles and profiles not measured in 30
+  days are excluded. Without `DATABASE_URL` the page explains that search is not enabled.
+
+**Setup (one time)**
+
+1. Vercel dashboard → project → **Storage** → **Create Database** → **Neon**
+   (Postgres, free plan) → connect it to the project. This adds `DATABASE_URL`
+   to every environment. (Or create a project at neon.tech and paste its pooled
+   connection string as `DATABASE_URL`.)
+2. Run the migration once from your machine:
+
+   ```powershell
+   $env:DATABASE_URL = "postgres://..."   # copy from Vercel > Storage > .env.local tab
+   npm run db:migrate
+   ```
+
+   It is idempotent: already-applied files are skipped. Since migration `0002`,
+   every build also runs it: `npm run build` runs `scripts/db-migrate.mjs
+   --if-configured` before `next build`, so each Vercel deployment (and each preview
+   database branch) gets new migrations before the code that needs them. Without
+   `DATABASE_URL` the step is skipped. Note: a local `npm run build` with
+   `DATABASE_URL` set applies migrations to that database too.
+3. Make sure `CRON_SECRET` is set in Vercel (it is shared with the weekly digest),
+   then redeploy. Test the collector:
+
+   ```powershell
+   curl.exe -H "Authorization: Bearer $env:CRON_SECRET" https://www.instagram-analytics.com/api/collect
+   ```
+
+   Expected: `{"ok":true,"due":N,"stored":N,"failed":0,"deferred":0}`.
+
+## Creator connections (verified Instagram Insights)
+
+Public pages cannot show audience demographics, reach, views, saves or shares. A creator
+who owns an Instagram **professional** (Creator or Business) account can connect it on
+`/connect`. Their profile page then shows a **Verified Instagram Insights** card
+(28-day reach, views, accounts engaged, interactions, saves, shares) and the
+**audience** section (top countries, age groups, gender), labelled as shared by the
+account owner. The PDF report includes the audience.
+
+**How it works: Instagram API with Unified Login**
+
+Meta no longer offers "API setup with Instagram login" to newer apps; this app uses
+the **Instagram API with Unified Login**, built on Facebook Login for Business.
+
+- The button opens `https://www.facebook.com/dialog/oauth` with the app ID and the
+  login configuration ID (`INSTAGRAM_LOGIN_CONFIG_ID`). The creator logs in with
+  Instagram or Facebook, picks their business portfolio and Instagram account, and
+  approves. No Facebook Page is needed, but a business portfolio is.
+- Configuration permissions: `instagram_basic`, `instagram_manage_insights`, and
+  `instagram_manage_messages` (required by Meta for this setup; the site never reads
+  or sends messages).
+- The callback exchanges the code at `graph.facebook.com/{v}/oauth/access_token` for a
+  Business Integration System User Access Token (does not expire), reads
+  `client_business_id` from `/me` and the shared accounts from
+  `/me/assigned_instagram_accounts`, stores the token AES-256-GCM encrypted per
+  Instagram account (`connected_accounts`, migrations `0002`/`0003`), pulls insights
+  at once, and sets a signed 30-day session cookie.
+- The daily collector refreshes each connected account's insights into
+  `account_insights` (one row per day). Connected handles are also tracked for daily
+  public snapshots. A revoked token (error 190) shows "Please reconnect".
+- Follower demographics need 100+ followers (Meta's rule). Metrics Instagram does not
+  return show a dash, never zero.
+- Disconnect, Meta's deauthorize callback, or a data deletion request delete the
+  connection, token and insights immediately (matched by Instagram account id or the
+  integration's app-scoped id).
+
+**Configured in the Meta app (Vibz Profile Insights)**
+
+- Business portfolio: Campaign Masters UAE.
+- Use case Instagram API → API setup with Unified login → configuration
+  "Instagram API (Unified Login)", ID `1141747911599517`, redirect URL
+  `https://www.instagram-analytics.com/api/instagram/callback`.
+- Facebook Login for Business → Settings: deauthorize callback
+  `…/api/instagram/deauthorize`, data deletion request URL `…/api/instagram/data-deletion`.
+
+**Vercel environment**
+
+`META_APP_ID`, `INSTAGRAM_LOGIN_CONFIG_ID` (not secret), `META_APP_SECRET` and
+`CONNECT_SECRET` (32+ random characters; secrets). Without all four plus
+`DATABASE_URL`, `/connect` shows "not enabled".
+
+**Access levels**
+
+Saving the configuration gives Standard Access, which works only for people with a role
+on the app (add the Instagram account as an Instagram Tester under App roles and accept
+the invite in Instagram → Settings → Website permissions → Apps and websites → Tester
+Invites). To let any creator connect, request **Advanced Access** for each permission
+in App Review (privacy policy: `https://www.instagram-analytics.com/privacy`) and switch
+the app to Live mode; Meta may require business verification for the portfolio.
+
+## Fake followers: modeled range, small accounts, follower-list audit
+
+- **Modeled range (default).** For public accounts the fake-follower share and
+  authenticity are modeled from public signals (`estimatePublicSignals`) and shown
+  as a range labelled "Est.". Instagram publishes no fake-follower counts.
+- **Small accounts.** Under 1,000 followers (`MIN_MODEL_FOLLOWERS`) no fake share
+  or authenticity is modeled: the page says "Too few followers to estimate", since a
+  model on a few dozen followers is noise.
+- **Follower-list audit (connected creators).** Meta's API cannot list followers,
+  so on `/connect` a connected creator uploads `followers_1.json` (or `.html`) from
+  Instagram's "Download your information" export (`POST /api/instagram/followers`).
+  Up to 300 followers (all of them for smaller lists, otherwise a random sample)
+  are stored in `follower_checks` (migration `0004`); each follower's public profile
+  is read once (`fetchFollowerSignals`) and scored by `followerAudit.ts` with the
+  site's rules (handle ending in more than 6 digits, no profile photo, no posts,
+  following no one, follow-ratio, empty profile, ...). Checks start right after the
+  upload (25 s budget) and the daily collector finishes the rest; unreadable
+  followers are retried 3 times, then skipped.
+- When the checked followers cover at least 95% of the current follower count the
+  audit is a **census**: the page shows an exact result, e.g. "0% (0 of 31 flagged)",
+  "Checked all 31 followers from the owner's follower list", without the "Est."
+  badge. Larger lists show the sampled share with a 95% range.
+- Only scoring fields are stored (counts and has photo / name / bio / private
+  flags); no follower text or media. Rows are deleted with the connection or
+  replaced by a new upload.
+
+## Paid plans (Dodo Payments)
+
+Four plans, defined once in `src/core/billing/plans.ts`:
+
+| | Free | Starter $9/mo | Pro $29/mo (14-day trial) | Agency $79/mo |
+|---|---|---|---|---|
+| Profile lookups | 3 / day | 50 / month | 300 / month | 1,500 / month |
+| Compare side by side | 2 | 2 | 3 | 4 |
+| Daily-tracked accounts | – | 1 | 10 | 50 |
+| Stored growth history shown | 7 days | 90 days | 12 months | Full |
+| PDF reports | – | – | ✓ | ✓ |
+
+Yearly billing is 10× the monthly price (2 months free).
+
+- **Lookups** are distinct profiles opened per period; reopening the same profile is free. Signed-in
+  visitors are metered per account, everyone else per keyed hash of their IP. Search-engine crawlers are
+  never metered, so profile pages stay indexable. Demo profiles never count.
+- **Accounts** use passwordless email links (`/account`), sent through Resend and signed with
+  `CONNECT_SECRET`; one email per address per minute.
+- **Checkout** (`/api/billing/checkout`) opens Dodo Payments' hosted checkout with the account id as metadata.
+  The 14-day Pro trial is set per checkout and only for an account's first subscription. **Webhooks**
+  (`/api/billing/webhook`, Standard Webhooks signature with a 5-minute replay window) keep the
+  `subscriptions` table in sync; late, older deliveries are skipped. A plan cancelled at period end keeps
+  access until then. **Manage billing** opens Dodo's customer portal.
+- **Why Dodo:** it is the merchant of record (collects and pays VAT/sales tax worldwide), accepts individual
+  sellers without a trade licence, and pays out to the owner's own bank account.
+- **Off by default.** Until `DODO_PAYMENTS_API_KEY`, `DODO_PAYMENTS_WEBHOOK_SECRET`, at least one
+  `DODO_PRODUCT_*`, `DATABASE_URL`, `CONNECT_SECRET` and Resend are set, the site behaves exactly as before
+  with no limits, and `/pricing` shows "Coming soon". Dodo stays in test mode until `DODO_PAYMENTS_MODE=live`,
+  and the **production** deployment keeps paid plans off until then (previews still run in test mode), so
+  the PR can be merged before the Dodo account is verified.
+
+Setup:
+1. Dodo Payments: sign up as an **Individual**, complete verification and add your bank account (must be in
+   your own name).
+2. In test mode, create one subscription product per plan (monthly, optionally yearly), priced in USD.
+3. Developer > Webhooks: endpoint `https://www.instagram-analytics.com/api/billing/webhook`, the
+   `subscription.*` events; copy the signing secret. Developer > API Keys: create a key.
+4. Add the `DODO_*` variables from `.env.example` in Vercel and redeploy (migration `0008_billing.sql` runs on
+   build). Buy each plan with a test card.
+5. Repeat products, webhook and key in live mode, update the variables, set `DODO_PAYMENTS_MODE=live`.
 
 ## Weekly digest (free 30-day trial)
 
@@ -674,6 +903,7 @@ npm run start      # production server
 npm test           # Vitest suite
 npm run typecheck  # tsc --noEmit
 npm run lint       # ESLint
+npm run db:migrate # apply db/migrations/*.sql to DATABASE_URL (once per new migration)
 ```
 
 ## Project layout

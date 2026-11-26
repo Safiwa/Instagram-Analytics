@@ -92,7 +92,7 @@ describe("country-aware peer suggestions", () => {
     expect(suggestions.every((match) => match.country.country === "United Arab Emirates")).toBe(
       true,
     );
-    expect(suggestions[0].reasons.join(" ")).toContain("similar audience size and engagement range");
+    expect(suggestions[0].reasons.join(" ")).toContain("similar audience size (within ±30%) and engagement range");
     expect(suggestions[0].reasons.join(" ")).toContain("five-factor fit");
   });
 
@@ -184,13 +184,14 @@ describe("peer ranking for the searched profile", () => {
     expect(usernames).toEqual(
       expect.arrayContaining(["dubai.target", "uae.peer1", "uae.peer2"]),
     );
+    // Other countries outside the region never fill rows.
     expect(usernames).not.toContain("london.peer1");
     expect(usernames).not.toContain("paris.peer1");
     expect(usernames).not.toContain("tokyo.peer1");
     expect(ranking!.total).toBe(3);
   });
 
-  it("returns null when no same-country peer exists for a known-country profile", () => {
+  it("never fills a known-country table from outside its region", () => {
     const target = profile("dubai.target", 60_000, "Fashion and beauty", 2_000);
     const london = profile("london.peer", 65_000, "Fashion and beauty", 2_200);
     const unknown = profile("unknown.peer", 62_000, "Fashion and beauty", 2_100);
@@ -198,8 +199,15 @@ describe("peer ranking for the searched profile", () => {
     expect(buildPeerRanking(target, computeMetrics(target), [target, london, unknown])).toBeNull();
   });
 
-  it("uses the nearest country tier only when the target country is not published", () => {
-    const target = profile("najet.dh", 60_000, "Fashion and beauty", 2_000);
+  it("fills from the same region and category group, marked", () => {
+    const target = profile("dubai.target", 60_000, "Fashion and beauty in Dubai", 2_000);
+    const riyadh = profile("riyadh.peer", 65_000, "Fashion and beauty in Riyadh", 2_200);
+    const ranking = buildPeerRanking(target, computeMetrics(target), [target, riyadh]);
+    expect(ranking?.rows.find((row) => row.profile.username === "riyadh.peer")?.fill).toBe("same-region");
+  });
+
+  it("never marks rows as other-country when the target country is not published", () => {
+    const target = profile("unpublished.creator", 60_000, "Fashion and beauty", 2_000);
     const sameRegion = profile("uae.peer", 61_000, "Fashion and beauty", 2_100);
     const differentCountry = profile("london.peer", 62_000, "Fashion and beauty", 2_200);
     const unknown = profile("unknown.peer", 63_000, "Fashion and beauty", 2_300);
@@ -213,8 +221,10 @@ describe("peer ranking for the searched profile", () => {
     const usernames = ranking!.rows.map((row) => row.profile.username);
 
     expect(usernames).toContain("uae.peer");
-    expect(usernames).not.toContain("london.peer");
-    expect(usernames).not.toContain("unknown.peer");
+    expect(ranking!.total).toBe(4);
+    for (const row of ranking!.rows) {
+      expect(row.fill).toBeUndefined();
+    }
   });
 
   it("falls back to inferred creator labels only when explicit peers are scarce", () => {
@@ -243,5 +253,98 @@ describe("peer ranking for the searched profile", () => {
   it("returns null when no comparable peer is available", () => {
     const target = profile("solo", 20_000, "Food blogger", 800);
     expect(buildPeerRanking(target, computeMetrics(target), [])).toBeNull();
+  });
+});
+
+describe("progressive follower bands and join dates", () => {
+  it("widens to 3x when nobody is within ±30%, and says so", () => {
+    const target = profile("dubai.style", 60_000, "Fashion and beauty", 2_000);
+    const wider = profile("uae.wider", 150_000, "Fashion and beauty", 5_000);
+
+    const [match] = findSimilarPeers(target, computeMetrics(target), [wider]);
+    expect(match?.profile.username).toBe("uae.wider");
+    expect(match?.band?.step).toBe("3x");
+    expect(match?.reasons.join(" ")).toContain("within 3x");
+  });
+
+  it("prefers a peer that started posting around the same time when other signals tie", () => {
+    const at = (base: CreatorProfile, postedAt: string): CreatorProfile => ({
+      ...base,
+      postsCount: 2,
+      recentPosts: base.recentPosts.map((item) => ({ ...item, postedAt })),
+    });
+    const target = at(profile("dubai.style", 60_000, "Fashion and beauty", 2_000), "2026-11-20T00:00:00.000Z");
+    const sameEra = at(profile("uae.a", 62_000, "Fashion and beauty", 2_000), "2026-10-01T00:00:00.000Z");
+    const oldEra = at(profile("uae.b", 62_000, "Fashion and beauty", 2_000), "2020-01-01T00:00:00.000Z");
+
+    const [first] = findSimilarPeers(target, computeMetrics(target), [oldEra, sameEra]);
+    expect(first?.profile.username).toBe("uae.a");
+    expect(first?.reasons.join(" ")).toContain("started posting around the same time");
+  });
+});
+
+
+describe("five-row same-country rank", () => {
+  it("ranks a small UAE agency against four UAE agencies, not creators", () => {
+    const agency = (username: string, followers: number, likes: number): CreatorProfile =>
+      profile(username, followers, "Dubai digital marketing agency", likes);
+    const target = profile("campaignmastersagency", 31, "Creative & digital analytics-based agency. Dubai, UAE", 3);
+    const pool = [
+      agency("dubai.a", 13_700, 40),
+      agency("dubai.b", 8_800, 30),
+      agency("dubai.c", 72_900, 10),
+      agency("dubai.d", 500, 8),
+      profile("dubai.creator", 40, "Digital creator in Dubai", 3),
+    ];
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), pool);
+    expect(ranking?.total).toBe(5);
+    expect(ranking?.rows.map((row) => row.profile.username)).not.toContain("dubai.creator");
+    expect(ranking?.rows.every((row) => row.category === "Marketing agency")).toBe(true);
+  });
+});
+
+describe("Syrian same-country peers", () => {
+  it("ranks @yaman.najjar against tracked Syrian public figures and creators", () => {
+    const target = profile(
+      "yaman.najjar",
+      691_500,
+      "Actor | Streamer 📹 📍🇸🇾🇳🇱 (YN Is My Family ) For business WhatsApp",
+      130_000,
+    );
+    const pool = [
+      profile("jennyesber", 4_800_000, "PUBLIC FIGURE ACTRESS JENNY ESBER", 7_000),
+      profile("nesreentafesh", 14_900_000, "As above so below", 30_000),
+      profile("dima_dalati", 280_600, "Unique Fashion | beauty | lifestyle", 4_000),
+      profile("wafamoustafa", 90_200, "Syrian activist and filmmaker", 2_000),
+      profile("jamel_alhasan", 2_800_000, "صحفي سوري|| Syrian journalist", 80_000),
+    ];
+
+    const kitchen = profile("imadssyriankitchen", 64_800, "Modern Syrian dishes from his home kitchen to London", 200);
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), [...pool, kitchen]);
+    const usernames = ranking?.rows.map((row) => row.profile.username) ?? [];
+    // Recorded "Account based in" values beat bio signals: Egypt, the UK and an
+    // unrecorded country are not Syria, and "Syrian" in a bio is not a location.
+    expect(usernames).toEqual(expect.arrayContaining(["yaman.najjar", "dima_dalati", "jennyesber"]));
+    // Syria first; Egypt (same region, same category group) fills a row, marked.
+    // The UK kitchen and the unpublished account never do.
+    const byName = new Map(ranking?.rows.map((row) => [row.profile.username, row]));
+    expect(byName.get("dima_dalati")?.fill).toBeUndefined();
+    expect(byName.get("nesreentafesh")?.fill).toBe("same-region");
+    expect(byName.has("imadssyriankitchen")).toBe(false);
+    expect(byName.has("wafamoustafa")).toBe(false);
+  });
+});
+
+describe("ten-profile rank tables", () => {
+  it("lists the searched profile plus nine same-country peers when asked", () => {
+    const target = profile("dubai.target", 60_000, "Fashion and beauty in Dubai", 2_000);
+    const pool = Array.from({ length: 12 }, (_, index) =>
+      profile(`uae.peer${index}`, 40_000 + index * 5_000, "Fashion and beauty in Dubai", 1_500 + index * 50),
+    );
+    const ranking = buildPeerRanking(target, computeMetrics(target), [target, ...pool], 9);
+    expect(ranking?.total).toBe(10);
+    expect(ranking?.rows.some((row) => row.isTarget)).toBe(true);
   });
 });

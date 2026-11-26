@@ -26,12 +26,17 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { InstagramLink } from "../../components/InstagramLink";
 import { MetricCard } from "../../components/MetricCard";
-import { inferCountrySignal } from "../../core/analytics/country";
+import { inferExplicitCategory, isInstagramCategory } from "../../core/analytics/category";
+import { inferCountrySignal, isMiddleEastAccount } from "../../core/analytics/country";
+import { MIN_MODEL_FOLLOWERS } from "../../core/analytics/estimates";
 import { ESTIMATE_CONFIDENCE_LABEL, type EstimateSignal } from "../../core/analytics/estimates";
+import type { IndexPosition } from "../../core/analytics/benchmark";
 import type { GrowthAnalysis } from "../../core/analytics/growth";
-import { round2, type ProfileMetrics } from "../../core/analytics/metrics";
-import type { PeerMatch, PeerRanking } from "../../core/analytics/peer";
+import { describeFakeFollowers, round2, type ProfileMetrics } from "../../core/analytics/metrics";
+import { likesVisible } from "../../core/analytics/posts";
+import { RANK_FILL_LABEL, type PeerMatch, type PeerRanking } from "../../core/analytics/peer";
 import type {
   KeyComparison,
   RegionalPeer,
@@ -39,6 +44,10 @@ import type {
 } from "../../core/analytics/regional";
 import type { AudienceSlice, CreatorProfile } from "../../core/data/types";
 import { formatCompact, formatDate, formatPercent } from "../../core/format";
+import { IndexPositionCard, TrackingHistoryPanel } from "./TrackingHistory";
+import { PostPerformancePanel } from "./PostPerformance";
+import type { StoredPostHistory } from "../../core/db/postHistory";
+import type { EstimatedPoint } from "../../core/analytics/estimatedHistory";
 
 const TOOLTIP_STYLE = {
   borderRadius: 12,
@@ -61,6 +70,9 @@ type ProfileDashboardProps = {
   regionalPeer: RegionalPeer | null;
   regionalComparison: KeyComparison[];
   regionalRanking: RegionalRanking | null;
+  indexPosition?: IndexPosition | null;
+  postHistory?: StoredPostHistory | null;
+  followerEstimate?: EstimatedPoint[];
 };
 
 function Stat({
@@ -119,10 +131,13 @@ export function ProfileDashboard({
   regionalPeer,
   regionalComparison,
   regionalRanking,
+  indexPosition = null,
+  postHistory = null,
+  followerEstimate = [],
 }: ProfileDashboardProps) {
   const interactions = profile.recentPosts.map((post) => ({
     label: formatDate(post.postedAt, false),
-    likes: post.likes,
+    likes: likesVisible(post) ? post.likes : 0,
     comments: post.comments,
     saves: post.saves,
   }));
@@ -130,27 +145,43 @@ export function ProfileDashboard({
   const hasViews = profile.recentPosts.some((post) => typeof post.viewCount === "number");
   const noPublicPosts =
     profile.source !== "demo" && !profile.isPrivate && profile.recentPosts.length === 0;
+  const hasStoredEngagement = metrics.engagementSource === "stored-snapshot";
+  const storedOn = metrics.storedEngagement
+    ? formatDate(`${metrics.storedEngagement.measuredOn}T00:00:00Z`)
+    : "";
+  const engagementUnavailable = metrics.engagementSource === "unavailable";
   const benchmarkCountry = inferCountrySignal(profile).country;
+  // The Middle East benchmark is shown only for Middle East accounts.
+  const showRegionalBenchmark = isMiddleEastAccount(profile);
   const benchmarkScope = benchmarkCountry
-    ? `Both the closest peer and ranking table are limited to accounts with the same inferred country (${benchmarkCountry}).`
-    : "Instagram does not publish a country signal for this profile, so the closest available country or region tier is used instead.";
-  // computeMetrics and rankFactors fall back to zero when Instagram exposes no
-  // posts. That zero is a placeholder, not a measurement, so never present it as
-  // a real value for the searched profile.
-  const targetSignal = (formatted: string, isTarget: boolean) =>
-    noPublicPosts && isTarget ? "—" : formatted;
+    ? `Compared with real accounts in the same category and country (${benchmarkCountry}); empty rows use only same-category accounts from neighbouring countries, marked.`
+    : "Compared with real accounts in the same category; no “Account based in” value is published, so the closest available country or region tier is used.";
+  // rankFactors falls back to zero when Instagram exposes no posts. That zero is
+  // a placeholder, not a measurement. Engagement from a dated stored snapshot is
+  // a real earlier measurement and stays visible; follower change and Reels remain hidden.
+  type SignalRow = {
+    isTarget: boolean;
+    postsNotExposed: boolean;
+    engagementSource: string;
+  };
+  const engagementSignal = (formatted: string, row: SignalRow) =>
+    row.postsNotExposed && row.engagementSource === "unavailable" ? "—" : formatted;
+  const changeSignal = (formatted: string, row: SignalRow) =>
+    row.postsNotExposed ? "—" : formatted;
   const momentumLabel =
     growth.momentum === "unknown" ? "Not enough data" : growth.momentum.charAt(0).toUpperCase() + growth.momentum.slice(1);
   const peerDelta = peer ? round2(metrics.engagementRate - peer.metrics.engagementRate) : null;
-  const peerInsight = noPublicPosts
-    ? "not comparable because this account's posts were not exposed"
-    : peerDelta === null
-      ? ""
-      : peerDelta > 0
-        ? `${peerDelta.toFixed(2)} points above this peer`
-        : peerDelta < 0
-          ? `${Math.abs(peerDelta).toFixed(2)} points below this peer`
-          : "level with this peer";
+  const peerInsight = hasStoredEngagement
+    ? `this site's stored measurement from ${storedOn}, not today's public posts`
+    : noPublicPosts
+      ? "not comparable because this account's posts were not exposed"
+      : peerDelta === null
+        ? ""
+        : peerDelta > 0
+          ? `${peerDelta.toFixed(2)} points above this peer`
+          : peerDelta < 0
+            ? `${Math.abs(peerDelta).toFixed(2)} points below this peer`
+            : "level with this peer";
 
   const initials =
     profile.displayName
@@ -235,8 +266,18 @@ export function ProfileDashboard({
               </span>
             </div>
             <p className="mt-0.5 text-sm text-slate-500">
-              @{profile.username} · {profile.category}
+              @{profile.username} ·{" "}
+              {isInstagramCategory(profile.category)
+                ? profile.category
+                : (inferExplicitCategory(profile) ?? profile.category)}
             </p>
+            {profile.tracking ? (
+              <p data-testid="tracking-since" className="mt-1 text-xs text-slate-500">
+                Tracking since {formatDate(`${profile.tracking.since}T00:00:00Z`)} ·{" "}
+                {profile.tracking.points.length.toLocaleString("en-US")} daily{" "}
+                {profile.tracking.points.length === 1 ? "snapshot" : "snapshots"}
+              </p>
+            ) : null}
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600">{profile.bio}</p>
             {profile.website ? (
               <a
@@ -257,8 +298,18 @@ export function ProfileDashboard({
           <Stat
             icon={Video}
             label="Fake-follower estimate"
-            value={formatCompact(metrics.fakeFollowers)}
-            note={metrics.authenticityEstimated ? "Modeled from public signals" : undefined}
+            value={describeFakeFollowers(metrics)}
+            note={
+              metrics.followerAudit?.census
+                ? `Checked all ${metrics.followerAudit.sampleSize.toLocaleString("en-US")} followers from the owner's follower list`
+                : metrics.followerAudit
+                  ? `Audit of ${metrics.followerAudit.sampleSize.toLocaleString("en-US")} sampled followers · 95% range`
+                  : metrics.authenticityEstimated
+                    ? "Modeled range from public signals, not a count"
+                    : profile.followers > 0 && profile.followers < MIN_MODEL_FOLLOWERS
+                      ? "Too few followers to estimate (under 1,000). The owner can connect and upload a follower list for an exact check."
+                      : undefined
+            }
           />
         </div>
       </section>
@@ -268,10 +319,22 @@ export function ProfileDashboard({
           data-testid="no-posts-notice"
           className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
         >
-          Instagram did not expose this account&apos;s posts to its public pages on this lookup, so
-          engagement and modeled metrics cannot be calculated yet. A dash (—) means the data was not
-          exposed, not zero. The follower, following, and total post counts are public. Try again in
-          a few minutes, or connect the official API for accounts you manage.
+          {hasStoredEngagement && metrics.storedEngagement ? (
+            <>
+              Instagram did not expose this account&apos;s posts on this lookup. Engagement rate,
+              average likes, and average comments below are this site&apos;s own measurement from
+              public posts on <strong>{storedOn}</strong>, the most recent stored snapshot with
+              visible posts. Reels, fake followers, authenticity, and follower growth from posts
+              remain unavailable. A dash (—) means the data was not exposed, not zero.
+            </>
+          ) : (
+            <>
+              Instagram did not expose this account&apos;s posts to its public pages on this lookup,
+              so engagement and modeled metrics cannot be calculated yet. A dash (—) means the data
+              was not exposed, not zero. The follower, following, and total post counts are public.
+              Try again in a few minutes, or connect the official API for accounts you manage.
+            </>
+          )}
         </div>
       ) : null}
 
@@ -286,22 +349,39 @@ export function ProfileDashboard({
         >
           {profile.isPrivate
             ? "This account is private. Public follower and post counts are available, but posts and engagement are hidden, so modeled metrics are unavailable."
-            : profile.source === "public"
-              ? "Public web data from Instagram's public profile page. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."
-              : "Official API data via Instagram Business Discovery. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."}
+            : profile.connectedInsights
+              ? "This account's owner connected it to this site, so audience demographics, reach, views, saves and shares below come from Instagram Insights. Followers, likes and comments are public data. Fake followers, authenticity, and 12-month growth remain modeled estimates."
+              : hasStoredEngagement
+              ? `Instagram hid this account's posts on this lookup. Saves, reach, and audience demographics are not exposed. The engagement figures are this site's stored measurement from ${storedOn}; fake followers, authenticity, and growth are not modeled without public posts.`
+              : profile.source === "public"
+                ? "Public web data from Instagram's public profile page. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."
+                : "Official API data via Instagram Business Discovery. Saves, reach, audience demographics, and measured follower history are not exposed. Fake followers, authenticity, and 12-month growth are modeled estimates from public signals when posts are visible."}
         </div>
       ) : null}
 
       <section data-testid="metric-grid" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard
           label="Engagement rate"
-          value={profile.isPrivate || noPublicPosts ? "—" : formatPercent(metrics.engagementRate)}
+          value={engagementUnavailable ? "—" : formatPercent(metrics.engagementRate)}
+          badge={hasStoredEngagement ? "Stored" : undefined}
           hint={
-            profile.isPrivate || noPublicPosts
+            engagementUnavailable
               ? "No public posts available"
-              : metrics.engagementBasis === "likes+comments"
-                ? "Public likes + comments / followers"
-                : "Avg likes + comments + saves / followers"
+              : hasStoredEngagement
+                ? `Measured ${storedOn} · likes + comments / followers`
+                : `${
+                    metrics.engagementBasis === "likes+comments"
+                      ? "Public likes + comments / followers"
+                      : "Avg likes + comments + saves / followers"
+                  }${
+                    metrics.typicalEngagementRate === null
+                      ? ""
+                      : ` · typical post ${formatPercent(metrics.typicalEngagementRate)}`
+                  }${
+                    metrics.hiddenLikePosts > 0
+                      ? ` · ${metrics.hiddenLikePosts} post${metrics.hiddenLikePosts === 1 ? "" : "s"} with hidden likes excluded`
+                      : ""
+                  }`
           }
         />
         <MetricCard
@@ -325,7 +405,9 @@ export function ProfileDashboard({
               ? "Modeled from public signals"
               : growth.monthGrowthPct === null
                 ? "History not available"
-                : "Last two monthly points"
+                : growth.measuredFromSnapshots
+                  ? "Measured from stored snapshots"
+                  : "Last two monthly points"
           }
         />
         <MetricCard
@@ -333,28 +415,50 @@ export function ProfileDashboard({
           value={formatPercent(metrics.authenticityPct)}
           badge={metrics.authenticityEstimated ? "Est." : undefined}
           hint={
-            metrics.authenticityEstimated
-              ? "100 - modeled fake follower share"
-              : metrics.authenticityPct === null
-                ? "Not available from public data"
+            metrics.followerAudit?.census
+              ? "100 - share flagged in the full follower check"
+              : metrics.followerAudit
+                ? "100 - flagged share of sampled followers"
+                : metrics.authenticityEstimated
+                  ? "100 - modeled fake follower share"
+                  : metrics.authenticityPct === null
+                    ? profile.followers > 0 && profile.followers < MIN_MODEL_FOLLOWERS
+                      ? "Too few followers to estimate"
+                      : "Not available from public data"
                 : "100 - fake follower share"
           }
         />
         <MetricCard
           label="Avg likes"
-          value={
-            profile.isPrivate || noPublicPosts ? "—" : formatCompact(metrics.avgLikes)
+          value={engagementUnavailable ? "—" : formatCompact(metrics.avgLikes)}
+          badge={hasStoredEngagement ? "Stored" : undefined}
+          hint={
+            engagementUnavailable
+              ? "No public posts available"
+              : hasStoredEngagement
+                ? `Measured ${storedOn} · average per post`
+                : metrics.hiddenLikePosts > 0
+                  ? "Average of posts that show likes"
+                  : "Average per public post"
           }
-          hint={profile.isPrivate || noPublicPosts ? "No public posts available" : "Average per public post"}
         />
         <MetricCard
           label="Avg comments"
-          value={
-            profile.isPrivate || noPublicPosts ? "—" : formatCompact(metrics.avgComments)
+          value={engagementUnavailable ? "—" : formatCompact(metrics.avgComments)}
+          badge={hasStoredEngagement ? "Stored" : undefined}
+          hint={
+            engagementUnavailable
+              ? "No public posts available"
+              : hasStoredEngagement
+                ? `Measured ${storedOn} · average per post`
+                : "Average per public post"
           }
-          hint={profile.isPrivate || noPublicPosts ? "No public posts available" : "Average per public post"}
         />
       </section>
+
+      {indexPosition ? (
+        <IndexPositionCard position={indexPosition} engagementRate={metrics.engagementRate} />
+      ) : null}
 
       <section
         data-testid="growth-analysis"
@@ -383,7 +487,7 @@ export function ProfileDashboard({
             <p className="mt-1 text-xs text-slate-500">
               {growth.monthGrowthFollowers === null
                 ? "Not available"
-                : `${growth.monthGrowthFollowers >= 0 ? "+" : ""}${growth.monthGrowthFollowers.toLocaleString("en-US")} followers ${growth.growthEstimated ? "(Est.)" : ""}`}
+                : `${growth.growthEstimated ? "≈ " : ""}${growth.monthGrowthFollowers >= 0 ? "+" : ""}${growth.monthGrowthFollowers.toLocaleString("en-US")} followers ${growth.growthEstimated ? "(Est.)" : ""}`}
             </p>
           </div>
           <div className="rounded-xl bg-slate-50 p-4">
@@ -508,6 +612,12 @@ export function ProfileDashboard({
               </ResponsiveContainer>
             </div>
           </div>
+        ) : (profile.tracking && profile.tracking.points.length >= 2) || followerEstimate.length > 0 ? (
+          <TrackingHistoryPanel
+            tracking={profile.tracking && profile.tracking.points.length >= 2 ? profile.tracking : null}
+            followers={profile.followers}
+            estimate={followerEstimate}
+          />
         ) : (
           <div
             data-testid="growth-unavailable"
@@ -518,6 +628,9 @@ export function ProfileDashboard({
               {metrics.growthEstimated ? "Modeled 12-month estimate" : "Not available"}
             </p>
             <p className="mt-3 text-sm leading-relaxed text-slate-600">
+              {profile.tracking
+                ? `Daily tracking started ${formatDate(`${profile.tracking.since}T00:00:00Z`)}. The measured history chart and follower-change table appear after the second daily snapshot. `
+                : ""}
               {metrics.growthEstimated
                 ? `Instagram does not publish historical follower counts. The ${formatPercent(
                     metrics.followerGrowthPct,
@@ -567,6 +680,14 @@ export function ProfileDashboard({
         </div>
       </section>
 
+      {postHistory && postHistory.posts.length > 0 ? (
+        <PostPerformancePanel
+          history={postHistory.posts}
+          followers={profile.followers}
+          fetchedAt={postHistory.fetchedAt}
+        />
+      ) : null}
+
       <section data-testid="recent-posts" className="rounded-2xl border border-slate-200 bg-white p-5">
         <h3 className="text-sm font-semibold text-slate-950">Recent posts</h3>
         <div className="mt-4 overflow-x-auto">
@@ -601,7 +722,9 @@ export function ProfileDashboard({
                       </span>
                     </td>
                     <td className="max-w-md py-3 pr-4 text-slate-950">{post.caption}</td>
-                    <td className="py-3 pr-4 text-right">{formatCompact(post.likes)}</td>
+                    <td className="py-3 pr-4 text-right">
+                      {likesVisible(post) ? formatCompact(post.likes) : "Hidden"}
+                    </td>
                     <td className="py-3 pr-4 text-right">{formatCompact(post.comments)}</td>
                     {hasSaves ? (
                       <td className="py-3 text-right">{formatCompact(post.saves)}</td>
@@ -616,20 +739,70 @@ export function ProfileDashboard({
         </div>
       </section>
 
-      {profile.audience ? (
+      {profile.connectedInsights ? (
         <section
-          data-testid="audience"
-          className="grid gap-6 rounded-2xl border border-slate-200 bg-white p-6 md:grid-cols-3"
+          data-testid="connected-insights"
+          className="rounded-2xl border border-emerald-200 bg-white p-6 shadow-sm"
         >
-          <AudienceBars title="Top countries" slices={profile.audience.topCountries} />
-          <AudienceBars title="Age groups" slices={profile.audience.ageGroups} />
-          <AudienceBars title="Gender" slices={profile.audience.gender} />
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <BadgeCheck className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+              <h3 className="text-sm font-semibold text-slate-950">Verified Instagram Insights</h3>
+            </div>
+            <p className="text-xs text-slate-500">
+              Shared by @{profile.username} · last {profile.connectedInsights.windowDays} days ·
+              updated {formatDate(`${profile.connectedInsights.capturedOn}T00:00:00Z`)}
+            </p>
+          </div>
+          <dl className="mt-4 grid gap-4 sm:grid-cols-3 xl:grid-cols-6">
+            {(
+              [
+                ["Reach", profile.connectedInsights.reach],
+                ["Views", profile.connectedInsights.views],
+                ["Accounts engaged", profile.connectedInsights.accountsEngaged],
+                ["Interactions", profile.connectedInsights.totalInteractions],
+                ["Saves", profile.connectedInsights.saves],
+                ["Shares", profile.connectedInsights.shares],
+              ] as const
+            ).map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-xs text-slate-500">{label}</dt>
+                <dd className="mt-1 text-lg font-semibold text-slate-950">{formatCompact(value)}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-3 text-[11px] text-slate-400">
+            From Instagram Insights via the account owner&apos;s own connection, not estimated. A dash
+            (—) means Instagram did not return that metric.
+          </p>
         </section>
       ) : null}
 
+      {profile.audience ? (
+        <section data-testid="audience" className="rounded-2xl border border-slate-200 bg-white p-6">
+          {profile.connectedInsights ? (
+            <p className="mb-4 text-xs text-slate-500">
+              Follower demographics from Instagram Insights, shared by @{profile.username}. Instagram
+              returns the top values only, so shares are of those values.
+            </p>
+          ) : null}
+          <div className="grid gap-6 md:grid-cols-3">
+            <AudienceBars title="Top countries" slices={profile.audience.topCountries} />
+            <AudienceBars title="Age groups" slices={profile.audience.ageGroups} />
+            <AudienceBars title="Gender" slices={profile.audience.gender} />
+          </div>
+        </section>
+      ) : null}
+
+      {/* Both benchmarks share one area, stacked. Each rank table lists up to ten
+          profiles in two columns of five on large screens. */}
+      <div
+        data-testid="benchmarks"
+        className="grid gap-6"
+      >
       <section
         data-testid="peer-benchmark"
-        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
       >
         <div className="flex items-start gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
@@ -643,12 +816,9 @@ export function ProfileDashboard({
               Closest category peers and where this profile ranks
             </h3>
             <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              We match this profile only to real public accounts in the same or a closely related
-              category (for example Digital creator, Blogger, Public figure, or Beauty). {benchmarkScope}{" "}
-              The group is ranked by followers, engagement rate, average likes, average comments and
-              follower change. Country is inferred from the handle first, then profile text, hashtags
-              and promoted locations; Instagram does not publish account country. This is a curated
-              reference set, not an exhaustive niche search.
+              {benchmarkScope}
+              <br />
+              Ranked by followers, engagement rate, average likes, average comments and follower change.
             </p>
           </div>
         </div>
@@ -696,6 +866,12 @@ export function ProfileDashboard({
                   </p>
                 </div>
               </div>
+              {peer.band ? (
+                <p className="text-xs text-slate-500">
+                  Follower range used: {peer.band.label}
+                  {peer.joinedLabel ? ` · Peer's ${peer.joinedLabel.toLowerCase()}` : ""}
+                </p>
+              ) : null}
               <p className="text-xs leading-relaxed text-slate-600">
                 Why this peer: {peer.reasons.join(", ")}. This profile&apos;s engagement is{" "}
                 <span className="font-semibold text-slate-950">{peerInsight}</span>.
@@ -724,8 +900,9 @@ export function ProfileDashboard({
                 </p>
                 {noPublicPosts ? (
                   <p className="mt-1 text-[11px] text-amber-700">
-                    This profile&apos;s post-based signals were not exposed, so its score reflects
-                    only the public signals available.
+                    {hasStoredEngagement
+                      ? `Posts were not exposed. Engagement uses this site's stored measurement from ${storedOn}; growth and Reels are unavailable.`
+                      : "This profile's post-based signals were not exposed, so its score reflects only the public signals available."}
                   </p>
                 ) : null}
               </div>
@@ -735,11 +912,11 @@ export function ProfileDashboard({
                 </span>
               ) : null}
             </div>
-            <ol className="divide-y divide-slate-100">
+            <ol className={rankListClass(ranking.rows.length)}>
               {ranking.rows.map((row, index) => (
                 <li
                   key={row.profile.username}
-                  className={`flex items-center gap-3 px-4 py-3 ${
+                  className={`flex min-w-0 items-center gap-3 border-b border-slate-100 bg-white px-4 py-3 ${
                     row.isTarget ? "bg-indigo-50/70" : ""
                   }`}
                 >
@@ -751,31 +928,42 @@ export function ProfileDashboard({
                     {String(index + 1).padStart(2, "0")}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <Link
-                      href={`/profile/${row.profile.username}`}
-                      className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-indigo-600"
-                    >
-                      <span className="truncate">{row.profile.displayName}</span>
-                      <ArrowUpRight
-                        className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-indigo-600"
-                        aria-hidden="true"
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <Link
+                        href={`/profile/${row.profile.username}`}
+                        className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-indigo-600"
+                      >
+                        <span className="truncate">{row.profile.displayName}</span>
+                        <ArrowUpRight
+                          className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-indigo-600"
+                          aria-hidden="true"
+                        />
+                        {row.isTarget ? (
+                          <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-indigo-700">
+                            This profile
+                          </span>
+                        ) : null}
+                      </Link>
+                      <InstagramLink
+                        username={row.profile.username}
+                        className="text-slate-400 hover:text-indigo-600"
                       />
-                      {row.isTarget ? (
-                        <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-indigo-700">
-                          This profile
-                        </span>
-                      ) : null}
-                    </Link>
+                    </div>
                     <p className="truncate text-xs text-slate-500">
                       @{row.profile.username} · {row.category} ·{" "}
                       {formatCompact(row.profile.followers)} followers
                       {row.matchScore !== null ? ` · ${row.matchScore.toFixed(0)}% match` : ""}
                     </p>
                     <p className="truncate text-[11px] text-slate-400">
-                      {row.country.label} · {targetSignal(formatCompact(row.avgLikes), row.isTarget)} avg likes ·{" "}
-                      {targetSignal(formatCompact(row.avgComments), row.isTarget)} avg comments ·{" "}
-                      {targetSignal(formatPercent(row.followerChangePct), row.isTarget)}
+                      {row.country.label} · {engagementSignal(formatCompact(row.avgLikes), row)} avg likes ·{" "}
+                      {engagementSignal(formatCompact(row.avgComments), row)} avg comments ·{" "}
+                      {changeSignal(formatPercent(row.followerChangePct), row)}
                       {row.followerChangeEstimated ? " est." : ""} follower change
+                      {row.isTarget && row.engagementSource === "stored-snapshot"
+                        ? ` · engagement stored ${storedOn}`
+                        : ""}
+                      {!row.isTarget && row.postsNotExposed ? " · posts not exposed" : ""}
+                      {row.fill ? ` · ${RANK_FILL_LABEL[row.fill]}` : ""}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
@@ -786,7 +974,7 @@ export function ProfileDashboard({
                       Rank score
                     </p>
                     <p className="mt-0.5 text-[10px] text-slate-500">
-                      {targetSignal(formatPercent(row.engagementRate), row.isTarget)} ER
+                      {engagementSignal(formatPercent(row.engagementRate), row)} ER
                     </p>
                   </div>
                 </li>
@@ -802,196 +990,246 @@ export function ProfileDashboard({
         )}
       </section>
 
-      <section
-        data-testid="regional-benchmark"
-        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-      >
-        <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
-            <MapPin className="h-4 w-4" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
-              Middle East category benchmark
-            </p>
-            <h3 className="mt-1 text-base font-semibold text-slate-950">
-              Closest Middle East profile and where this account sits
-            </h3>
+      {showRegionalBenchmark ? (
+        <section
+          data-testid="regional-benchmark"
+          className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        >
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <MapPin className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600">
+                Middle East category benchmark
+              </p>
+              <h3 className="mt-1 text-base font-semibold text-slate-950">
+                Closest Middle East profile and where this account sits
+              </h3>
+            </div>
           </div>
-        </div>
 
-        {regionalPeer ? (
-          <>
-            <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href={`/profile/${regionalPeer.profile.username}`}
-                    className="group inline-flex items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
-                  >
-                    {regionalPeer.profile.displayName}
-                    <ArrowUpRight
-                      className="h-3 w-3 text-slate-400 group-hover:text-emerald-600"
-                      aria-hidden="true"
-                    />
-                  </Link>
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                    {regionalPeer.matchScore}% regional match
-                  </span>
-                  <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
-                    {regionalPeer.category}
-                  </span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    {regionalPeer.country.label}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500">@{regionalPeer.profile.username}</p>
-                {regionalPeer.sharedActivity.length > 0 ? (
-                  <p className="text-xs text-slate-500">
-                    Shared activity: {regionalPeer.sharedActivity.join(", ")}
-                  </p>
-                ) : null}
-                <p className="text-xs leading-relaxed text-slate-600">
-                  Why this peer: {regionalPeer.matchReasons.join(", ")}.
-                </p>
-              </div>
-              <Link
-                href={`/compare?handles=${profile.username},${regionalPeer.profile.username}`}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
-              >
-                <TrendingUp className="h-4 w-4" aria-hidden="true" />
-                Compare side by side
-              </Link>
-            </div>
-
-            <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-              <div className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                <span>Key comparison</span>
-                <span>This profile</span>
-                <span>{regionalPeer.profile.displayName}</span>
-                <span>Insight</span>
-              </div>
-              {regionalComparison.map((comparison) => {
-                const hidden =
-                  noPublicPosts &&
-                  ["Engagement rate", "Avg likes", "Avg comments", "Follower change"].includes(
-                    comparison.label,
-                  );
-                return (
-                  <div
-                    key={comparison.label}
-                    className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 px-4 py-3 text-xs last:border-0"
-                  >
-                    <span className="font-medium text-slate-700">{comparison.label}</span>
-                    <span className="font-semibold text-slate-950">
-                      {hidden ? "—" : comparison.target}
-                    </span>
-                    <span className="font-semibold text-slate-950">{comparison.peer}</span>
-                    <span className="text-slate-500">
-                      {hidden ? "Posts not exposed" : comparison.insight}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            <p className="mt-2 text-[11px] text-slate-400">
-              Follower change is modeled from public signals for non-demo profiles; see the
-              estimates panel below for details.
-            </p>
-          </>
-        ) : (
-          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No comparable Middle East profile is available right now. Check back shortly.
-          </p>
-        )}
-
-        {regionalRanking ? (
-          <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-950">
-                  Rank #{regionalRanking.targetRank} of {regionalRanking.total} Middle East profiles
-                </p>
-                <p className="text-xs text-slate-500">
-                  Regional rank score · lower modeled fake-follower share ranks higher
-                </p>
-                {noPublicPosts ? (
-                  <p className="mt-1 text-[11px] text-amber-700">
-                    This profile&apos;s post-based signals were not exposed, so its score reflects
-                    only the public signals available.
-                  </p>
-                ) : null}
-              </div>
-              {regionalRanking.outperformedPercent !== null ? (
-                <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                  Ahead of {regionalRanking.outperformedPercent}% of these peers
-                </span>
-              ) : null}
-            </div>
-            <ol className="divide-y divide-slate-100">
-              {regionalRanking.rows.map((row, index) => (
-                <li
-                  key={row.profile.username}
-                  className={`flex items-center gap-3 px-4 py-3 ${
-                    row.isTarget ? "bg-emerald-50/70" : ""
-                  }`}
-                >
-                  <span
-                    className={`w-6 shrink-0 text-sm font-semibold ${
-                      row.isTarget ? "text-emerald-700" : "text-slate-400"
-                    }`}
-                  >
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <div className="min-w-0 flex-1">
+          {regionalPeer ? (
+            <>
+              <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Link
-                      href={`/profile/${row.profile.username}`}
-                      className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
+                      href={`/profile/${regionalPeer.profile.username}`}
+                      className="group inline-flex items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
                     >
-                      <span className="truncate">{row.profile.displayName}</span>
+                      {regionalPeer.profile.displayName}
                       <ArrowUpRight
-                        className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-emerald-600"
+                        className="h-3 w-3 text-slate-400 group-hover:text-emerald-600"
                         aria-hidden="true"
                       />
-                      {row.isTarget ? (
-                        <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-emerald-700">
-                          This profile
-                        </span>
-                      ) : null}
                     </Link>
-                    <p className="truncate text-xs text-slate-500">
-                      @{row.profile.username} · {row.category} ·{" "}
-                      {formatCompact(row.profile.followers)} followers
-                      {row.matchScore !== null ? ` · ${row.matchScore}% match` : ""}
-                    </p>
-                    <p className="truncate text-[11px] text-slate-400">
-                      {row.country.label} · {targetSignal(formatCompact(row.avgLikes), row.isTarget)} avg likes ·{" "}
-                      {targetSignal(formatCompact(row.avgComments), row.isTarget)} avg comments ·{" "}
-                      {targetSignal(formatPercent(row.followerChangePct), row.isTarget)}
-                      {row.followerChangeEstimated ? " est." : ""} follower change
-                    </p>
+                    <InstagramLink
+                      username={regionalPeer.profile.username}
+                      className="text-emerald-600 hover:text-emerald-800"
+                    />
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                      {regionalPeer.matchScore}% regional match
+                    </span>
+                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                      {regionalPeer.category}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      {regionalPeer.country.label}
+                    </span>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-sm font-semibold text-slate-950">
-                      {row.rankScore.toFixed(1)}
+                  <p className="text-xs text-slate-500">@{regionalPeer.profile.username}</p>
+                  {regionalPeer.sharedActivity.length > 0 ? (
+                    <p className="text-xs text-slate-500">
+                      Shared activity: {regionalPeer.sharedActivity.join(", ")}
                     </p>
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                      Regional rank score
+                  ) : null}
+                  {regionalPeer.band ? (
+                    <p className="text-xs text-slate-500">
+                      Follower range used: {regionalPeer.band.label}
+                      {regionalPeer.joinedLabel
+                        ? ` · Peer's ${regionalPeer.joinedLabel.toLowerCase()}`
+                        : ""}
                     </p>
-                    <p className="mt-0.5 text-[10px] text-slate-500">
-                      {targetSignal(formatPercent(row.engagementRate), row.isTarget)} ER
+                  ) : null}
+                  <p className="text-xs leading-relaxed text-slate-600">
+                    Why this peer: {regionalPeer.matchReasons.join(", ")}.
+                  </p>
+                </div>
+                <Link
+                  href={`/compare?handles=${profile.username},${regionalPeer.profile.username}`}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
+                >
+                  <TrendingUp className="h-4 w-4" aria-hidden="true" />
+                  Compare side by side
+                </Link>
+              </div>
+
+              <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+                <div className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <span>Key comparison</span>
+                  <span>This profile</span>
+                  <span>{regionalPeer.profile.displayName}</span>
+                  <span>Insight</span>
+                </div>
+                {regionalComparison.map((comparison) => {
+                  const unavailablePostMetric =
+                    metrics.engagementSource === "unavailable" &&
+                    ["Engagement rate", "Avg likes", "Avg comments"].includes(comparison.label);
+                  const hidden =
+                    noPublicPosts &&
+                    (comparison.label === "Follower change" || unavailablePostMetric);
+                  return (
+                    <div
+                      key={comparison.label}
+                      className="grid grid-cols-[1.2fr_1fr_1fr_1.4fr] gap-2 border-b border-slate-100 px-4 py-3 text-xs last:border-0"
+                    >
+                      <span className="font-medium text-slate-700">{comparison.label}</span>
+                      <span className="font-semibold text-slate-950">
+                        {hidden ? "—" : comparison.target}
+                      </span>
+                      <span className="font-semibold text-slate-950">{comparison.peer}</span>
+                      <span className="text-slate-500">
+                        {hidden
+                          ? comparison.label === "Follower change"
+                            ? "Not available"
+                            : "Posts not exposed"
+                          : comparison.insight}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-400">
+                {hasStoredEngagement
+                  ? `Engagement rate, avg likes, and avg comments for this profile are this site's stored measurement from ${storedOn}. Follower change is unavailable without public posts.`
+                  : noPublicPosts
+                    ? "Post-based values are unavailable because this account's posts were not exposed."
+                    : "Follower change is modeled from public signals for non-demo profiles; see the estimates panel below for details."}
+              </p>
+            </>
+          ) : (
+            <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
+              No Middle East profile in the same category is tracked yet. Peers appear as
+              more accounts in this category are looked up or tracked.
+            </p>
+          )}
+
+          {regionalRanking ? (
+            <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-950">
+                    Rank #{regionalRanking.targetRank} of {regionalRanking.total} of similar Middle East profiles
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Regional rank score · estimated authenticity adjusts rank when available
+                  </p>
+                  {regionalRanking.band ? (
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Follower range used: {regionalRanking.band.label}
                     </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : (
-          <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            No Middle East ranking is available right now. Check back shortly.
-          </p>
-        )}
-      </section>
+                  ) : null}
+                  {noPublicPosts ? (
+                    <p className="mt-1 text-[11px] text-amber-700">
+                      {hasStoredEngagement
+                        ? `Posts were not exposed. Engagement uses this site's stored measurement from ${storedOn}; growth and Reels are unavailable.`
+                        : "This profile's post-based signals were not exposed, so its score reflects only the public signals available."}
+                    </p>
+                  ) : null}
+                </div>
+                {regionalRanking.outperformedPercent !== null ? (
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                    Ahead of {regionalRanking.outperformedPercent}% of these peers
+                  </span>
+                ) : null}
+              </div>
+              <ol className={rankListClass(regionalRanking.rows.length)}>
+                {regionalRanking.rows.map((row, index) => (
+                  <li
+                    key={row.profile.username}
+                    className={`flex min-w-0 items-center gap-3 border-b border-slate-100 bg-white px-4 py-3 ${
+                      row.isTarget ? "bg-emerald-50/70" : ""
+                    }`}
+                  >
+                    <span
+                      className={`w-6 shrink-0 text-sm font-semibold ${
+                        row.isTarget ? "text-emerald-700" : "text-slate-400"
+                      }`}
+                    >
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <Link
+                          href={`/profile/${row.profile.username}`}
+                          className="group inline-flex max-w-full flex-wrap items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-emerald-600"
+                        >
+                          <span className="truncate">{row.profile.displayName}</span>
+                          <ArrowUpRight
+                            className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-emerald-600"
+                            aria-hidden="true"
+                          />
+                          {row.isTarget ? (
+                            <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium normal-case text-emerald-700">
+                              This profile
+                            </span>
+                          ) : null}
+                        </Link>
+                        <InstagramLink
+                          username={row.profile.username}
+                          className="text-emerald-600 hover:text-emerald-800"
+                        />
+                      </div>
+                      <p className="truncate text-xs text-slate-500">
+                        @{row.profile.username} · {row.category} ·{" "}
+                        {formatCompact(row.profile.followers)} followers
+                        {row.matchScore !== null ? ` · ${row.matchScore}% match` : ""}
+                      </p>
+                      <p className="truncate text-[11px] text-slate-400">
+                        {row.country.label} · {engagementSignal(formatCompact(row.avgLikes), row)} avg likes ·{" "}
+                        {engagementSignal(formatCompact(row.avgComments), row)} avg comments ·{" "}
+                        {changeSignal(formatPercent(row.followerChangePct), row)}
+                        {row.followerChangeEstimated ? " est." : ""} follower change
+                        {row.isTarget && row.engagementSource === "stored-snapshot"
+                          ? ` · engagement stored ${storedOn}`
+                          : ""}
+                        {!row.isTarget && row.postsNotExposed ? " · posts not exposed" : ""}
+                      {row.fill ? ` · ${RANK_FILL_LABEL[row.fill]}` : ""}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold text-slate-950">
+                        {row.rankScore.toFixed(1)}
+                      </p>
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400">
+                        Regional rank score
+                      </p>
+                      <p className="mt-0.5 text-[10px] text-slate-500">
+                        {engagementSignal(formatPercent(row.engagementRate), row)} ER
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : (
+            <p className="mt-4 rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">
+              No Middle East ranking in this category yet. It appears once a same-category
+              peer with a published Middle East location is tracked.
+            </p>
+          )}
+        </section>
+      ) : null}
+      </div>
     </div>
   );
+}
+
+// Rank tables list up to ten profiles: two columns of five on large screens
+// (filled top to bottom, left then right), one column otherwise.
+function rankListClass(rows: number): string {
+  return rows > 5
+    ? "grid lg:grid-flow-col lg:grid-cols-2 lg:grid-rows-5 lg:gap-x-px lg:bg-slate-100"
+    : "grid";
 }

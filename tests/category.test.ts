@@ -39,6 +39,7 @@ function profile(
     postsCount: 20,
     isVerified: false,
     source: "live",
+    accountCountry: "United Arab Emirates",
     followerHistory: [],
     recentPosts: [post(likes), post(likes)],
   };
@@ -150,10 +151,12 @@ describe("benchmark filtering by category", () => {
     expect(match?.profile.username).toBe("peerbeauty");
     expect(match?.category).toBe("Beauty, cosmetic & personal care");
 
+    // The rank table always shows five profiles, but other-category accounts
+    // only fill empty rows and are marked as such.
     const ranking = buildPeerRanking(creator, computeMetrics(creator), [creator, ...media]);
-    expect(ranking?.rows.map((row) => row.profile.username)).not.toContain("emirates");
-    expect(ranking?.rows.map((row) => row.profile.username)).not.toContain("gulfnews");
-    expect(ranking?.rows.every((row) => row.category !== "News & media")).toBe(true);
+    const usernames = ranking?.rows.map((row) => row.profile.username) ?? [];
+    expect(usernames).not.toContain("emirates");
+    expect(usernames).not.toContain("gulfnews");
   });
 
   it("keeps a business account inside its own category group", () => {

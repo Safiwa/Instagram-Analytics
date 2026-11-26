@@ -1,20 +1,41 @@
+import type { FollowerSample } from "../analytics/followerAudit";
+
 export type Post = {
   id: string;
   type: "Reel" | "Carousel" | "Photo" | "Video";
   caption: string;
   postedAt: string;
   likes: number;
+  // True when Instagram hides this post's like count (common on paid
+  // partnerships). `likes` is then 0 and must not be read as zero likes.
+  likesHidden?: boolean;
   comments: number;
   saves?: number;
   reach?: number;
   viewCount?: number;
   permalink?: string;
   hashtags: string[];
+  // Public location tag exposed by Instagram on the post/reel, when available.
+  location?: string;
 };
 
 export type MonthlyPoint = {
   month: string;
   followers: number;
+};
+
+// One stored daily snapshot from the in-house database (UTC day, YYYY-MM-DD).
+// engagementRate is null on days when no posts were visible.
+export type DailyPoint = {
+  date: string;
+  followers: number;
+  engagementRate: number | null;
+};
+
+export type TrackingHistory = {
+  // UTC day of the first stored snapshot for this profile.
+  since: string;
+  points: DailyPoint[];
 };
 
 export type AudienceSlice = {
@@ -28,6 +49,32 @@ export type Audience = {
   gender: AudienceSlice[];
 };
 
+// This site's own last measured engagement for the profile, read from a stored
+// daily snapshot. Used only when Instagram exposes no posts on a lookup, always
+// labelled with the day it was measured, and never fed into the modeled
+// fake-follower, authenticity, or growth calculations or stored again.
+export type StoredEngagement = {
+  measuredOn: string;
+  engagementRatePct: number;
+  averageLikes: number;
+  averageComments: number;
+};
+
+// First-party Instagram Insights the account owner shared by connecting their
+// account (Instagram API with Unified Login). Totals cover the 28 days before
+// capturedOn; null means Instagram did not return that metric.
+export type ConnectedInsights = {
+  capturedOn: string;
+  connectedSince: string;
+  windowDays: number;
+  reach: number | null;
+  views: number | null;
+  accountsEngaged: number | null;
+  totalInteractions: number | null;
+  saves: number | null;
+  shares: number | null;
+};
+
 export type CreatorProfile = {
   username: string;
   displayName: string;
@@ -37,12 +84,31 @@ export type CreatorProfile = {
   following: number;
   postsCount: number;
   isVerified: boolean;
+  // True when the data source could not tell whether the badge exists
+  // (Business Discovery never returns it). isVerified is then false.
+  verificationUnknown?: boolean;
   isPrivate?: boolean;
   source: "demo" | "public" | "live";
   profilePictureUrl?: string;
   website?: string;
+  // Instagram's "Account based in" value only when the platform actually
+  // publishes it. "Not shared" and unavailable values stay null/undefined.
+  accountCountry?: string | null;
+  // Instagram's numeric account id (the legacy "pk"). Ids are issued in rising
+  // order, so it gives an estimated join date; Instagram publishes no date.
+  instagramId?: string;
   fakeFollowers?: number;
   followerHistory: MonthlyPoint[];
+  // Daily snapshots stored by this site since it first saw the profile.
+  // Absent when the database is not configured or has no rows yet.
+  tracking?: TrackingHistory;
   recentPosts: Post[];
+  // A random sample of the account's followers, when a data source supplies
+  // one. Instagram's API cannot list another account's followers, so this is
+  // usually absent and fake followers fall back to the profile-level model.
+  followerSample?: FollowerSample[];
   audience?: Audience;
+  // Present only for accounts whose owner connected them to this site.
+  connectedInsights?: ConnectedInsights;
+  storedEngagement?: StoredEngagement;
 };

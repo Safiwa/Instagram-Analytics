@@ -13,9 +13,34 @@ export const RANK_WEIGHTS = {
   followerChange: 0.1,
 } as const;
 
+// The dedicated Middle East and UAE top-ten boards put 70% of the score on
+// follower count, then apply the existing relative weights of the remaining
+// four signals to the other 30%. Followers stay dominant, while engagement,
+// likes, comments and growth still separate similarly sized accounts.
+export const COUNTRY_BOARD_FOLLOWER_WEIGHT = 0.7;
+const NON_FOLLOWER_WEIGHT_TOTAL =
+  RANK_WEIGHTS.engagement +
+  RANK_WEIGHTS.avgLikes +
+  RANK_WEIGHTS.avgComments +
+  RANK_WEIGHTS.followerChange;
+export const COUNTRY_BOARD_WEIGHTS = {
+  followers: COUNTRY_BOARD_FOLLOWER_WEIGHT,
+  engagement:
+    (1 - COUNTRY_BOARD_FOLLOWER_WEIGHT) * (RANK_WEIGHTS.engagement / NON_FOLLOWER_WEIGHT_TOTAL),
+  avgLikes:
+    (1 - COUNTRY_BOARD_FOLLOWER_WEIGHT) * (RANK_WEIGHTS.avgLikes / NON_FOLLOWER_WEIGHT_TOTAL),
+  avgComments:
+    (1 - COUNTRY_BOARD_FOLLOWER_WEIGHT) * (RANK_WEIGHTS.avgComments / NON_FOLLOWER_WEIGHT_TOTAL),
+  followerChange:
+    (1 - COUNTRY_BOARD_FOLLOWER_WEIGHT) *
+    (RANK_WEIGHTS.followerChange / NON_FOLLOWER_WEIGHT_TOTAL),
+} as const;
+
 // The regional profile panel adds a disclosed authenticity term so a profile
 // with fewer estimated fake followers can outrank a nearly identical account
-// with a weaker audience. Global boards and compare rankings stay five-signal.
+// with a weaker audience. A missing authenticity value is not a zero: it is
+// excluded from the blend so unavailable data never silently penalizes a real
+// profile. Global boards and compare rankings stay five-signal.
 export const REGIONAL_AUTHENTICITY_WEIGHT = 0.1;
 
 export type RankFactorInput = {
@@ -59,6 +84,137 @@ export function isWithinFollowerLatency(
   );
 }
 
+// Peer benchmarks match follower size step by step: ±30% first, then up to 3x,
+// then up to 10x larger or smaller, and finally the nearest sizes available.
+// The chosen step is returned so the page can say which range was used.
+export type FollowerBandStep = "close" | "3x" | "10x" | "nearest";
+
+export type FollowerBand = {
+  step: FollowerBandStep;
+  min: number;
+  max: number;
+  label: string;
+};
+
+export const NEAREST_BAND_SIZE = 5;
+
+function compactCount(value: number): string {
+  if (value >= 1_000_000) {
+    return `${round2(value / 1_000_000)}M`;
+  }
+  if (value >= 1_000) {
+    return `${round2(value / 1_000)}K`;
+  }
+  return String(Math.round(value));
+}
+
+function bandRange(min: number, max: number): string {
+  return `${compactCount(min)}–${compactCount(max)} followers`;
+}
+
+function fixedBands(targetFollowers: number): FollowerBand[] {
+  const t = targetFollowers;
+  return [
+    {
+      step: "close",
+      min: Math.ceil(t * (1 - FOLLOWER_LATENCY)),
+      max: Math.floor(t * (1 + FOLLOWER_LATENCY)),
+      label: `Similar size: within ±30% (${bandRange(Math.ceil(t * 0.7), Math.floor(t * 1.3))})`,
+    },
+    {
+      step: "3x",
+      min: Math.ceil(t / 3),
+      max: Math.floor(t * 3),
+      label: `Widened to 3x: no peer within ±30%, compared within ${bandRange(Math.ceil(t / 3), Math.floor(t * 3))}`,
+    },
+    {
+      step: "10x",
+      min: Math.ceil(t / 10),
+      max: Math.floor(t * 10),
+      label: `Widened to 10x: no peer within 3x, compared within ${bandRange(Math.ceil(t / 10), Math.floor(t * 10))}`,
+    },
+  ];
+}
+
+function sizeDistance(target: number, candidate: number): number {
+  return Math.abs(Math.log(Math.max(candidate, 1) / Math.max(target, 1)));
+}
+
+// Picks the narrowest band that leaves at least one candidate, after the
+// caller's own eligibility test. Candidates outside every fixed band fall back
+// to the nearest NEAREST_BAND_SIZE sizes, labelled as such.
+export function selectFollowerBand<T>(
+  targetFollowers: number,
+  candidates: readonly T[],
+  followersOf: (candidate: T) => number,
+  eligibleInBand: (candidate: T, band: FollowerBand) => boolean = () => true,
+  // The nearest-size fallback beyond 10x is opt-in. Global peer suggestions
+  // keep the 10x ceiling; the Middle East panel opts in and says so.
+  // minCount: widen until the band holds at least this many candidates (a
+  // five-row rank table needs four peers). Defaults to one.
+  // countUsable: how many of a band's candidates the caller can actually use
+  // (e.g. after a per-country cap); defaults to all of them.
+  options: {
+    allowNearest?: boolean;
+    minCount?: number;
+    countUsable?: (candidates: T[]) => number;
+  } = {},
+): { band: FollowerBand; candidates: T[] } | null {
+  const minCount = Math.max(1, options.minCount ?? 1);
+  const countUsable = options.countUsable ?? ((items: T[]) => items.length);
+  const usable = candidates.filter((candidate) => followersOf(candidate) > 0);
+  if (targetFollowers <= 0 || usable.length === 0) {
+    return null;
+  }
+  for (const band of fixedBands(targetFollowers)) {
+    const inBand = usable.filter((candidate) => {
+      const followers = followersOf(candidate);
+      return followers >= band.min && followers <= band.max && eligibleInBand(candidate, band);
+    });
+    if (countUsable(inBand) >= minCount) {
+      return { band, candidates: inBand };
+    }
+  }
+  if (!options.allowNearest) {
+    // Without the nearest fallback, keep the widest fixed band that has anyone.
+    for (const band of [...fixedBands(targetFollowers)].reverse()) {
+      const inBand = usable.filter((candidate) => {
+        const followers = followersOf(candidate);
+        return followers >= band.min && followers <= band.max && eligibleInBand(candidate, band);
+      });
+      if (inBand.length > 0 && minCount > 1) {
+        return { band, candidates: inBand };
+      }
+    }
+    return null;
+  }
+  // Take the nearest sizes until enough are usable.
+  const sorted = [...usable].sort(
+    (left, right) =>
+      sizeDistance(targetFollowers, followersOf(left)) - sizeDistance(targetFollowers, followersOf(right)),
+  );
+  let take = Math.min(sorted.length, Math.max(NEAREST_BAND_SIZE, minCount));
+  while (take < sorted.length && countUsable(sorted.slice(0, take)) < minCount) {
+    take += 1;
+  }
+  const nearest = sorted.slice(0, take);
+  const sizes = nearest.map(followersOf);
+  const min = Math.min(...sizes);
+  const max = Math.max(...sizes);
+  return {
+    band: {
+      step: "nearest",
+      min,
+      max,
+      label:
+        minCount > 1
+          ? `Nearest sizes available: fewer than ${minCount} peers within 10x, so the closest tracked accounts are shown (${bandRange(min, max)})`
+          : `Nearest sizes available: no peer within 10x yet, so the closest tracked accounts are shown (${bandRange(min, max)})`,
+    },
+    candidates: nearest,
+  };
+}
+
 export type ComparableRangeInput = Pick<RankFactorInput, "followers" | "engagementRate">;
 
 export function isComparableRange(
@@ -85,6 +241,13 @@ export function isComparableRange(
   return higherRate <= lowerRate * COMPARABLE_ENGAGEMENT_MULTIPLIER + COMPARABLE_ENGAGEMENT_PADDING_PCT;
 }
 
+// The engagement half of isComparableRange(), for the widened follower bands.
+export function isComparableEngagement(targetRate: number, candidateRate: number): boolean {
+  const higherRate = Math.max(Math.max(0, targetRate), Math.max(0, candidateRate));
+  const lowerRate = Math.min(Math.max(0, targetRate), Math.max(0, candidateRate));
+  return higherRate <= lowerRate * COMPARABLE_ENGAGEMENT_MULTIPLIER + COMPARABLE_ENGAGEMENT_PADDING_PCT;
+}
+
 export function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
@@ -100,19 +263,37 @@ function logScore(value: number, ceiling: number): number {
   return clamp((Math.log10(value) / Math.log10(ceiling)) * 100, 0, 100);
 }
 
+function scoreComponents(entry: RankFactorInput) {
+  return {
+    followers: logScore(entry.followers, 200_000_000),
+    engagement: clamp((entry.engagementRate / 5) * 100, 0, 100),
+    avgLikes: logScore(entry.avgLikes, 2_000_000),
+    avgComments: logScore(entry.avgComments, 200_000),
+    followerChange: clamp(((entry.followerChangePct + 5) / 20) * 100, 0, 100),
+  };
+}
+
 export function rankScore(entry: RankFactorInput): number {
-  const followers = logScore(entry.followers, 200_000_000);
-  const engagement = clamp((entry.engagementRate / 5) * 100, 0, 100);
-  const avgLikes = logScore(entry.avgLikes, 2_000_000);
-  const avgComments = logScore(entry.avgComments, 200_000);
-  const followerChange = clamp(((entry.followerChangePct + 5) / 20) * 100, 0, 100);
+  const scores = scoreComponents(entry);
 
   return round2(
-    followers * RANK_WEIGHTS.followers +
-      engagement * RANK_WEIGHTS.engagement +
-      avgLikes * RANK_WEIGHTS.avgLikes +
-      avgComments * RANK_WEIGHTS.avgComments +
-      followerChange * RANK_WEIGHTS.followerChange,
+    scores.followers * RANK_WEIGHTS.followers +
+      scores.engagement * RANK_WEIGHTS.engagement +
+      scores.avgLikes * RANK_WEIGHTS.avgLikes +
+      scores.avgComments * RANK_WEIGHTS.avgComments +
+      scores.followerChange * RANK_WEIGHTS.followerChange,
+  );
+}
+
+export function countryBoardRankScore(entry: RankFactorInput): number {
+  const scores = scoreComponents(entry);
+
+  return round2(
+    scores.followers * COUNTRY_BOARD_WEIGHTS.followers +
+      scores.engagement * COUNTRY_BOARD_WEIGHTS.engagement +
+      scores.avgLikes * COUNTRY_BOARD_WEIGHTS.avgLikes +
+      scores.avgComments * COUNTRY_BOARD_WEIGHTS.avgComments +
+      scores.followerChange * COUNTRY_BOARD_WEIGHTS.followerChange,
   );
 }
 
@@ -120,10 +301,13 @@ export function regionalRankScore(
   entry: RankFactorInput,
   authenticityPct: number | null,
 ): number {
-  const authenticity = clamp(authenticityPct ?? 0, 0, 100);
+  const base = rankScore(entry);
+  if (authenticityPct === null || !Number.isFinite(authenticityPct)) {
+    return base;
+  }
+  const authenticity = clamp(authenticityPct, 0, 100);
   return round2(
-    rankScore(entry) * (1 - REGIONAL_AUTHENTICITY_WEIGHT) +
-      authenticity * REGIONAL_AUTHENTICITY_WEIGHT,
+    base * (1 - REGIONAL_AUTHENTICITY_WEIGHT) + authenticity * REGIONAL_AUTHENTICITY_WEIGHT,
   );
 }
 

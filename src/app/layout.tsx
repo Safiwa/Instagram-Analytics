@@ -3,6 +3,9 @@ import Link from "next/link";
 import { Activity, BarChart3, GitCompareArrows } from "lucide-react";
 import { Analytics } from "@vercel/analytics/next";
 import { SiteNav } from "../components/SiteNav";
+import { DEALS } from "../core/billing/deals";
+import { isBillingEnabled } from "../core/billing/dodo";
+import { DealBanner } from "../features/billing/DealBanner";
 import { isLiveConfigured } from "../core/data/adapter";
 import "./globals.css";
 
@@ -24,9 +27,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 <Activity className="h-4 w-4 text-white" aria-hidden="true" />
               </span>
               <span className="leading-tight">
-                Instagram
-                <br />
-                Analytics
+                Instagram Analytics
+                <span className="block text-[10px] font-normal leading-tight text-slate-400">
+                  by Campaign Masters
+                </span>
               </span>
             </Link>
 
@@ -57,11 +61,17 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           </aside>
 
           <main className="min-w-0 flex-1">
+            {/* Deals are advertised only once paid plans can be bought; each
+                banner shows itself only inside its own dates. */}
+            {isBillingEnabled() ? DEALS.map((deal) => <DealBanner key={deal.id} deal={deal} />) : null}
             <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
               <div className="relative flex h-16 items-center justify-between gap-4 px-4 sm:px-6">
                 <div className="flex items-center gap-2 lg:hidden">
                   <Link href="/" className="font-bold tracking-tight text-slate-950">
                     Instagram Analytics
+                    <span className="block text-[10px] font-normal text-slate-500">
+                      by Campaign Masters
+                    </span>
                   </Link>
                 </div>
                 <p className="hidden text-sm font-medium text-slate-500 lg:block">

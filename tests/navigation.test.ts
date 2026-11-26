@@ -11,10 +11,15 @@ describe("primary navigation", () => {
   it("links the page-based sections and the comparison workspace", () => {
     expect(PRIMARY_NAV).toEqual([
       { href: "/", label: "Discover" },
+      { href: "/discover", label: "Find creators" },
       { href: "/#global-pulse", label: "Leaderboards" },
       { href: "/#collaborations", label: "Collaborations" },
       { href: "/#metric-engine", label: "Analytics" },
       { href: "/compare", label: "Compare" },
+      { href: "/connect", label: "For creators" },
+      { href: "/pricing", label: "Pricing" },
+      { href: "/contact", label: "Contact Us" },
+      { href: "/account", label: "Account" },
     ]);
   });
 
@@ -37,6 +42,8 @@ describe("primary navigation", () => {
     expect(isNavItemActive("/", "/")).toBe(true);
     expect(isNavItemActive("/compare", "/")).toBe(false);
     expect(isNavItemActive("/compare", "/compare")).toBe(true);
+    expect(isNavItemActive("/discover", "/discover")).toBe(true);
+    expect(isNavItemActive("/discover", "/")).toBe(false);
     expect(isNavItemActive("/compare/results", "/compare")).toBe(true);
     expect(isNavItemActive("/comparison", "/compare")).toBe(false);
   });
@@ -73,5 +80,19 @@ describe("responsive header navigation", () => {
   it("keeps hash targets clear of the sticky header", () => {
     expect(source("src/app/globals.css")).toContain("scroll-padding-top: 5rem");
     expect(source("src/app/layout.tsx")).toContain("sticky top-0");
+  });
+
+  it("brands the logo as Instagram Analytics by Campaign Masters", () => {
+    const layout = source("src/app/layout.tsx");
+
+    expect(layout).toContain("Instagram Analytics");
+    expect(layout.match(/by Campaign Masters\n/g)).toHaveLength(2);
+    expect(layout).not.toContain("Campaign Masters UAE");
+  });
+
+  it("lists the company contact details on the Contact Us page", () => {
+    const page = source("src/app/contact/page.tsx");
+    expect(page).toContain("campaign@instagram-analytics.com");
+    expect(page).toContain("https://www.instagram.com/campaignmastersagency/");
   });
 });

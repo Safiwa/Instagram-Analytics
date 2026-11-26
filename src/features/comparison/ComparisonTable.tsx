@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, Download, TriangleAlert } from "lucide-react";
 import { ESTIMATE_CONFIDENCE_LABEL } from "../../core/analytics/estimates";
-import type { ProfileMetrics } from "../../core/analytics/metrics";
+import { describeFakeFollowers, type ProfileMetrics } from "../../core/analytics/metrics";
 import type { CreatorProfile } from "../../core/data/types";
 import { formatCompact, formatPercent } from "../../core/format";
 
@@ -41,10 +41,12 @@ const metricRows: { label: string; value: (row: ComparisonRow) => string }[] = [
   {
     label: "Fake-follower estimate",
     value: (row) =>
-      withEstimate(
-        formatCompact(row.metrics.fakeFollowers, "N/A"),
-        row.metrics.authenticityEstimated,
-      ),
+      row.metrics.fakeFollowersRange
+        ? describeFakeFollowers(row.metrics, "N/A")
+        : withEstimate(
+            describeFakeFollowers(row.metrics, "N/A"),
+            row.metrics.authenticityEstimated,
+          ),
   },
   { label: "Engagement rate", value: (row) => formatPercent(row.metrics.engagementRate) },
   {

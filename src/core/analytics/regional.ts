@@ -1,7 +1,6 @@
 import { formatCompact, formatPercent } from "../format";
 import type { CreatorProfile } from "../data/types";
 import {
-  categoryGroup,
   inferCategory,
   inferExplicitCategory,
   inferPostActivity,
@@ -10,15 +9,20 @@ import {
 import {
   countryRelationship,
   countryScore,
+  hasPublishedCountryEvidence,
   inferCountrySignal,
+  isMiddleEastCountry,
   type CountryRelationship,
   type CountrySignal,
 } from "./country";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
+import type { RankFill } from "./peer";
+import { joinDateSimilarity, joinedLabel as firstPostLabel } from "./accountAge";
 import {
   clampRankScoreToMatch,
   compareRank,
-  isWithinFollowerLatency,
+  selectFollowerBand,
+  type FollowerBand,
   rankFactorSimilarity,
   rankFactors,
   regionalRankScore,
@@ -47,6 +51,12 @@ export type RegionalPeer = {
   country: CountrySignal;
   countryRelationship: CountryRelationship;
   matchReasons: string[];
+  postsNotExposed: boolean;
+  engagementSource: ProfileMetrics["engagementSource"];
+  // The follower range this peer was matched in (±30%, 3x, 10x or nearest).
+  band?: FollowerBand;
+  joinedLabel?: string;
+  fill?: RankFill;
 };
 
 export type RegionalComparison = {
@@ -66,6 +76,9 @@ export type RegionalRankRow = {
   category: string;
   country: CountrySignal;
   isTarget: boolean;
+  postsNotExposed: boolean;
+  engagementSource: ProfileMetrics["engagementSource"];
+  fill?: RankFill;
 };
 
 export type RegionalRanking = {
@@ -73,10 +86,110 @@ export type RegionalRanking = {
   targetRank: number;
   total: number;
   outperformedPercent: number | null;
+  band?: FollowerBand;
 };
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+const MAX_COUNTRY_REPEATS = 3;
+
+function cappedCount(candidates: CreatorProfile[], targetCountry: CountrySignal): number {
+  const counts = new Map<string, number>();
+  if (targetCountry.country) {
+    counts.set(targetCountry.country, 1);
+  }
+  let usable = 0;
+  for (const candidate of candidates) {
+    const country = inferCountrySignal(candidate).country;
+    if (!country) {
+      continue;
+    }
+    const count = counts.get(country) ?? 0;
+    if (count < MAX_COUNTRY_REPEATS) {
+      counts.set(country, count + 1);
+      usable += 1;
+    }
+  }
+  return usable;
+}
+
+// The target row is itself part of the five-row benchmark, so its country counts
+// toward the three-row limit. Profiles without a published country do not add a
+// country to the count.
+function capCountryRepeats(
+  candidates: RegionalPeer[],
+  targetCountry: CountrySignal,
+  limit = candidates.length,
+): RegionalPeer[] {
+  const counts = new Map<string, number>();
+  if (
+    targetCountry.country &&
+    isMiddleEastCountry(targetCountry.country) &&
+    hasPublishedCountryEvidence(targetCountry)
+  ) {
+    counts.set(targetCountry.country, 1);
+  }
+
+  const selected: RegionalPeer[] = [];
+  for (const candidate of candidates) {
+    if (selected.length >= limit) {
+      break;
+    }
+    const country = candidate.country.country;
+    if (!country) {
+      continue;
+    }
+    const count = counts.get(country) ?? 0;
+    if (count >= MAX_COUNTRY_REPEATS) {
+      continue;
+    }
+    counts.set(country, count + 1);
+    selected.push(candidate);
+  }
+  return selected;
+}
+
+function fillCountryCap(
+  selected: RegionalPeer[],
+  fallback: RegionalPeer[],
+  targetCountry: CountrySignal,
+  limit: number,
+): RegionalPeer[] {
+  const result = capCountryRepeats(selected, targetCountry, limit);
+  if (result.length >= limit) {
+    return result;
+  }
+
+  const seen = new Set(result.map((peer) => peer.profile.username));
+  for (const peer of fallback) {
+    if (seen.has(peer.profile.username)) {
+      continue;
+    }
+    const extended = capCountryRepeats([...result, peer], targetCountry, limit);
+    if (extended.length === result.length + 1) {
+      result.push(peer);
+      seen.add(peer.profile.username);
+    }
+    if (result.length >= limit) {
+      break;
+    }
+  }
+  // Country variety first: at most three rows per country. When the pool has
+  // too few countries to complete the table, the remaining rows come from the
+  // best same-category Middle East peers left over, marked as such, so the
+  // table still reaches its full size.
+  for (const peer of fallback) {
+    if (result.length >= limit) {
+      break;
+    }
+    if (!seen.has(peer.profile.username)) {
+      result.push({ ...peer, fill: "country-limit" });
+      seen.add(peer.profile.username);
+    }
+  }
+  return result;
 }
 
 function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): string[] {
@@ -87,78 +200,133 @@ function sharedPostActivity(target: CreatorProfile, candidate: CreatorProfile): 
   );
 }
 
-// The Middle East panel keeps the curated pool and the hard ±30% follower band.
-// Category labels decide similarity: both sides must have an explicit public
-// creator label in the same creator group, and an exact label match is preferred
-// over a merely compatible creator label. Fallback labels do not qualify. Public
-// post activity only strengthens the match, so a hotel or news account can no
-// longer become a creator peer through its captions.
+// The Middle East panel matches follower size step by step: ±30% first, then
+// 3x, 10x, and finally the nearest sizes available, and reports the band used.
+// Category labels decide similarity: both sides need an explicit public label
+// (from the name, bio or Instagram's business category) in the same category
+// group, so creators meet creators and marketing agencies meet agencies, and an
+// exact label match is preferred. Fallback labels do not qualify. Public post
+// activity and the first-public-post date only strengthen the match.
 function rankedCandidates(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
+  minCount = 1,
 ): RegionalPeer[] {
   const targetCountry = inferCountrySignal(target);
   const targetFactors = rankFactors(target, metrics);
   const targetCategory = inferExplicitCategory(target);
+  const targetPostsNotExposed = target.recentPosts.length === 0;
 
-  if (!targetCategory || categoryGroup(targetCategory) !== "creator") {
+  if (!targetCategory) {
+    return [];
+  }
+  // A known country must be one of the published Middle East countries and must
+  // come from public evidence. An unknown target is still allowed: its row is
+  // disclosed as "Country not published" and its peers remain evidence-gated.
+  if (
+    targetCountry.country &&
+    (!isMiddleEastCountry(targetCountry.country) ||
+      !hasPublishedCountryEvidence(targetCountry))
+  ) {
     return [];
   }
 
-  const candidates = pool.filter((candidate) => {
+  const eligible = pool.filter((candidate) => {
     const candidateCategory = inferExplicitCategory(candidate);
+    if (
+      candidate.username === target.username ||
+      candidate.followers <= 0 ||
+      // A no-post searched profile may be ranked alongside other no-post
+      // accounts, but never against invented activity. Their rows are disclosed.
+      !(targetPostsNotExposed || candidate.recentPosts.length > 0) ||
+      candidateCategory === null ||
+      !isSimilarCategory(targetCategory, candidateCategory)
+    ) {
+      return false;
+    }
+    const country = inferCountrySignal(candidate);
     return (
-      candidate.username !== target.username &&
-      candidate.followers > 0 &&
-      candidate.recentPosts.length > 0 &&
-      isWithinFollowerLatency(target.followers, candidate.followers) &&
-      candidateCategory !== null &&
-      categoryGroup(candidateCategory) === "creator" &&
-      isSimilarCategory(targetCategory, candidateCategory)
+      country.country !== null &&
+      isMiddleEastCountry(country.country) &&
+      hasPublishedCountryEvidence(country)
     );
   });
 
-  return candidates
-    .map((candidate) => {
-      const candidateMetrics = computeMetrics(candidate);
-      const candidateFactors = rankFactors(candidate, candidateMetrics);
-      const candidateCountry = inferCountrySignal(candidate);
-      const relationship = countryRelationship(targetCountry, candidateCountry);
-      const candidateCategory = inferExplicitCategory(candidate) ?? inferCategory(candidate);
-      const sameCategoryLabel = inferExplicitCategory(candidate) === targetCategory;
-      const shared = sharedPostActivity(target, candidate);
-      const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
-      const activityScore = shared.length > 0 ? clamp(80 + shared.length * 5, 0, 100) : 75;
-      const raw = factorScore * 0.55 + countryScore(relationship) * 0.3 + activityScore * 0.15;
+  const selection = selectFollowerBand(
+    target.followers,
+    eligible,
+    (candidate) => candidate.followers,
+    () => true,
+    {
+      allowNearest: true,
+      minCount,
+      // Widen until enough peers survive the three-per-country limit.
+      countUsable: (items) => cappedCount(items, targetCountry),
+    },
+  );
+  if (!selection) {
+    return [];
+  }
+  const { band } = selection;
 
-      const matchReasons = [
-        `${sameCategoryLabel ? "same category label" : "same creator category group"}: ${candidateCategory}`,
-        ...(shared.length > 0 ? [`shared activity: ${shared.join(", ")}`] : []),
-        `regional fit ${Math.round(factorScore)}%`,
-      ];
+  const ranked = selection.candidates.map((candidate) => {
+    const candidateMetrics = computeMetrics(candidate);
+    const candidateFactors = rankFactors(candidate, candidateMetrics);
+    const candidateCountry = inferCountrySignal(candidate);
+    const relationship = countryRelationship(targetCountry, candidateCountry);
+    const candidateCategory = inferExplicitCategory(candidate) ?? inferCategory(candidate);
+    const sameCategoryLabel = inferExplicitCategory(candidate) === targetCategory;
+    const shared = sharedPostActivity(target, candidate);
+    const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
+    const activityScore = shared.length > 0 ? clamp(80 + shared.length * 5, 0, 100) : 75;
+    const joinScore = joinDateSimilarity(target, candidate);
+    const joinedLabel = firstPostLabel(candidate);
+    const raw =
+      factorScore * (joinScore === null ? 0.55 : 0.47) +
+      (joinScore ?? 0) * (joinScore === null ? 0 : 0.08) +
+      countryScore(relationship) * 0.3 +
+      activityScore * 0.15;
 
-      return {
-        profile: candidate,
-        metrics: candidateMetrics,
-        factors: candidateFactors,
-        matchScore: clampRankScoreToMatch(raw),
-        category: candidateCategory,
-        sameCategoryLabel,
-        sharedActivity: shared,
-        country: candidateCountry,
-        countryRelationship: relationship,
-        matchReasons,
-      };
-    })
-    .sort(
-      (left, right) =>
-        Number(right.sameCategoryLabel) - Number(left.sameCategoryLabel) ||
-        right.matchScore - left.matchScore ||
-        regionalRankScore(right.factors, right.metrics.authenticityPct) -
-          regionalRankScore(left.factors, left.metrics.authenticityPct) ||
-        left.profile.username.localeCompare(right.profile.username),
-    );
+    const postsNotExposed = candidate.recentPosts.length === 0;
+    const matchReasons = [
+      `${sameCategoryLabel ? "same category label" : "same category group"}: ${candidateCategory}`,
+      ...(shared.length > 0 ? [`shared activity: ${shared.join(", ")}`] : []),
+      `regional fit ${Math.round(factorScore)}%`,
+      ...(joinScore !== null && joinScore >= 75 && joinedLabel
+        ? [`started posting around the same time (${joinedLabel.toLowerCase()})`]
+        : []),
+      ...(postsNotExposed ? ["posts not exposed; public signals only"] : []),
+    ];
+
+    return {
+      profile: candidate,
+      metrics: candidateMetrics,
+      factors: candidateFactors,
+      matchScore: clampRankScoreToMatch(raw),
+      category: candidateCategory,
+      sameCategoryLabel,
+      sharedActivity: shared,
+      country: candidateCountry,
+      countryRelationship: relationship,
+      matchReasons,
+      postsNotExposed,
+      engagementSource: candidateMetrics.engagementSource,
+      band,
+      ...(joinedLabel ? { joinedLabel } : {}),
+    };
+  });
+
+  ranked.sort(
+    (left, right) =>
+      Number(right.sameCategoryLabel) - Number(left.sameCategoryLabel) ||
+      right.matchScore - left.matchScore ||
+      regionalRankScore(right.factors, right.metrics.authenticityPct) -
+        regionalRankScore(left.factors, left.metrics.authenticityPct) ||
+      left.profile.username.localeCompare(right.profile.username),
+  );
+
+  return ranked;
 }
 
 export function findRegionalCategoryPeer(
@@ -166,7 +334,10 @@ export function findRegionalCategoryPeer(
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
 ): RegionalPeer | null {
-  return rankedCandidates(target, metrics, pool)[0] ?? null;
+  const candidates = rankedCandidates(target, metrics, pool);
+  // The headline comparison card should show a profile with visible activity
+  // whenever one exists; no-post accounts belong in the disclosed rank table.
+  return candidates.find((candidate) => !candidate.postsNotExposed) ?? candidates[0] ?? null;
 }
 
 function differenceInsight(
@@ -254,24 +425,69 @@ export function buildKeyComparisons(
   ];
 }
 
+function regionalScore(peer: RegionalPeer): number {
+  return regionalRankScore(peer.factors, peer.metrics.authenticityPct);
+}
+
+// Most profiles use the strongest four real peers. A searched profile with no
+// exposed posts scores from public signals only, so the strongest-four rule can
+// hide the genuinely comparable lower-scoring accounts. Bracket that score with
+// two higher and two lower real peers instead; the rows remain ordered by score.
+function selectRegionalPeers(
+  candidates: RegionalPeer[],
+  targetCountry: CountrySignal,
+  targetScore: number,
+  limit: number,
+  targetPostsNotExposed: boolean,
+): RegionalPeer[] {
+  const byScore = [...candidates].sort(
+    (left, right) =>
+      regionalScore(right) - regionalScore(left) ||
+      left.profile.username.localeCompare(right.profile.username),
+  );
+
+  if (!targetPostsNotExposed) {
+    return fillCountryCap(byScore, byScore, targetCountry, limit);
+  }
+
+  const higher = byScore.filter((peer) => regionalScore(peer) > targetScore);
+  const lower = byScore
+    .filter((peer) => regionalScore(peer) <= targetScore)
+    .sort((left, right) => regionalScore(right) - regionalScore(left));
+  const upperCount = Math.ceil(limit / 2);
+  const lowerCount = limit - upperCount;
+  const selected = [...higher.slice(0, upperCount), ...lower.slice(0, lowerCount)];
+  const seen = new Set(selected.map((peer) => peer.profile.username));
+  const remaining = byScore
+    .filter((peer) => !seen.has(peer.profile.username))
+    .sort(
+      (left, right) =>
+        Math.abs(regionalScore(left) - targetScore) - Math.abs(regionalScore(right) - targetScore),
+    );
+
+  // Apply the three-country limit after bracketing so the target keeps two
+  // genuinely higher and two genuinely lower peers whenever they exist.
+  return fillCountryCap(selected, remaining, targetCountry, limit);
+}
+
 export function buildRegionalRanking(
   target: CreatorProfile,
   metrics: ProfileMetrics,
   pool: CreatorProfile[],
-  // Four peers plus the searched profile keeps the panel at five rows.
+  // The profile page passes nine peers for a ten-row table.
   limit = 4,
 ): RegionalRanking | null {
   const targetFactors = rankFactors(target, metrics);
   const targetRegionalScore = regionalRankScore(targetFactors, metrics.authenticityPct);
-  const peers = [...rankedCandidates(target, metrics, pool)]
-    .sort(
-      (left, right) =>
-        regionalRankScore(right.factors, right.metrics.authenticityPct) -
-          regionalRankScore(left.factors, left.metrics.authenticityPct) ||
-        right.profile.followers - left.profile.followers ||
-        left.profile.username.localeCompare(right.profile.username),
-    )
-    .slice(0, limit);
+  const peers: (RegionalPeer & { fill?: RankFill })[] = selectRegionalPeers(
+    // Widen the follower band until four peers exist, so the table shows five
+    // profiles whenever the pool has them.
+    rankedCandidates(target, metrics, pool, limit),
+    inferCountrySignal(target),
+    targetRegionalScore,
+    limit,
+    target.recentPosts.length === 0,
+  );
   if (peers.length === 0) {
     return null;
   }
@@ -289,6 +505,8 @@ export function buildRegionalRanking(
       category: inferExplicitCategory(target) ?? inferCategory(target),
       country: inferCountrySignal(target),
       isTarget: true,
+      postsNotExposed: target.recentPosts.length === 0,
+      engagementSource: metrics.engagementSource,
     },
     ...peers.map((peer) => ({
       profile: peer.profile,
@@ -302,6 +520,9 @@ export function buildRegionalRanking(
       category: peer.category,
       country: peer.country,
       isTarget: false,
+      postsNotExposed: peer.postsNotExposed,
+      engagementSource: peer.engagementSource,
+      ...(peer.fill ? { fill: peer.fill } : {}),
     })),
   ];
 
@@ -317,5 +538,6 @@ export function buildRegionalRanking(
     targetRank: rows.findIndex((row) => row.isTarget) + 1,
     total: rows.length,
     outperformedPercent: Math.round((beaten / peers.length) * 100),
+    ...(peers[0].band ? { band: peers[0].band } : {}),
   };
 }

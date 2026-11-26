@@ -105,6 +105,9 @@ function cristianoProfile(): CreatorProfile {
 const EMPTY_ESTIMATES = {
   fakeFollowers: null,
   fakeFollowersPct: null,
+  fakeFollowersLowPct: null,
+  fakeFollowersHighPct: null,
+  fakeFollowerRisk: null,
   authenticityPct: null,
   followerGrowthPct: null,
   confidence: null,
@@ -177,8 +180,8 @@ describe("public-signal estimates", () => {
     const strong = estimatePublicSignals(strongProfile());
     const weak = estimatePublicSignals(weakProfile());
 
-    expect(weak.fakeFollowersPct).toBe(65);
-    expect(weak.authenticityPct).toBe(35);
+    expect(weak.fakeFollowersPct).toBe(59);
+    expect(weak.authenticityPct).toBe(41);
     expect(weak.confidence).toBe("low");
     expect(weak.fakeFollowersPct).toBeGreaterThan(Number(strong.fakeFollowersPct));
     expect(Number(weak.authenticityPct)).toBeLessThan(Number(strong.authenticityPct));

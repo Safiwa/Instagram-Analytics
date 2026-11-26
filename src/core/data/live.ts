@@ -1,4 +1,5 @@
 import { log } from "../logging/logger";
+import { fetchPublicIdentity } from "./public";
 import type { CreatorProfile, Post } from "./types";
 import { isVerifiedHandle } from "./verified";
 
@@ -102,6 +103,8 @@ function mapPost(media: IgMedia & { timestamp: string }): Post {
     caption,
     postedAt: media.timestamp,
     likes: Math.max(0, media.like_count ?? 0),
+    // Business Discovery omits like_count when the owner hides likes.
+    ...(typeof media.like_count === "number" ? {} : { likesHidden: true }),
     comments: Math.max(0, media.comments_count ?? 0),
     viewCount: typeof media.view_count === "number" ? media.view_count : undefined,
     permalink: media.permalink,
@@ -124,9 +127,15 @@ function mapProfile(data: IgBusinessDiscovery, fallbackUsername: string): Creato
     // business_discovery cannot return the badge; use the real public-data
     // snapshot as a fallback. Fresh web identity lookups override this in adapter.ts.
     isVerified: isVerifiedHandle(username),
+    // Outside the snapshot the badge is unknown until adapter.ts merges a
+    // fresh public identity lookup.
+    ...(isVerifiedHandle(username) ? {} : { verificationUnknown: true }),
     source: "live",
     profilePictureUrl: data.profile_picture_url,
     website: data.website,
+    // Business Discovery has no account-country field. The public transparency
+    // parser fills this when Instagram publishes it; null means not shared.
+    accountCountry: null,
     followerHistory: [],
     recentPosts: media.slice(0, 12).map(mapPost),
     audience: undefined,
@@ -219,7 +228,24 @@ export async function fetchLiveProfile(username: string): Promise<CreatorProfile
     throw mapped;
   }
 
-  const profile = mapProfile(data.business_discovery, key);
+  let profile = mapProfile(data.business_discovery, key);
+  // Business Discovery has no "Account based in" field. Read the genuine public
+  // value here as well so tracked-pool refreshes carry it; a failed lookup never
+  // fails the live profile.
+  try {
+    const identity = await fetchPublicIdentity(key);
+    profile = {
+      ...profile,
+      accountCountry: identity?.accountCountry ?? null,
+      ...(identity?.instagramId ? { instagramId: identity.instagramId } : {}),
+      ...(identity?.category ? { category: identity.category } : {}),
+    };
+  } catch (error) {
+    log.warn("public account-country enrichment failed", {
+      username: key,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
   cache.set(key, { expiresAt: Date.now() + CACHE_TTL_MS, profile });
   if (cache.size > CACHE_MAX) {
     const oldest = cache.keys().next().value;

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  COUNTRY_BOARD_WEIGHTS,
+  countryBoardRankScore,
   isComparableRange,
   RANK_WEIGHTS,
   rankFactorSimilarity,
@@ -53,9 +55,17 @@ describe("shared weighted ranking", () => {
       avgComments: 100,
       avgSaves: null,
       engagementRate: 1.1,
+      typicalEngagementRate: null,
+      hiddenLikePosts: 0,
       engagementBasis: "likes+comments",
+      engagementSource: "public-posts",
+      storedEngagement: null,
       fakeFollowers: null,
       fakeFollowersPct: null,
+      fakeFollowersRange: null,
+      fakeFollowerRisk: null,
+      fakeFollowerSource: null,
+      followerAudit: null,
       followerGrowthPct: 11.11,
       authenticityPct: null,
       growthEstimated: false,
@@ -100,9 +110,17 @@ describe("shared weighted ranking", () => {
       avgComments: 100,
       avgSaves: null,
       engagementRate: 1.1,
+      typicalEngagementRate: null,
+      hiddenLikePosts: 0,
       engagementBasis: "likes+comments",
+      engagementSource: "public-posts",
+      storedEngagement: null,
       fakeFollowers: null,
       fakeFollowersPct: null,
+      fakeFollowersRange: null,
+      fakeFollowerRisk: null,
+      fakeFollowerSource: null,
+      followerAudit: null,
       followerGrowthPct: null,
       authenticityPct: null,
       growthEstimated: false,
@@ -125,10 +143,45 @@ describe("shared weighted ranking", () => {
   });
 });
 
+describe("country-board weighted ranking", () => {
+  it("puts 70% on followers and keeps the remaining signals in their current proportions", () => {
+    const weights = Object.values(COUNTRY_BOARD_WEIGHTS);
+
+    expect(COUNTRY_BOARD_WEIGHTS.followers).toBe(0.7);
+    expect(weights.reduce((sum, weight) => sum + weight, 0)).toBeCloseTo(1, 6);
+    expect(COUNTRY_BOARD_WEIGHTS.engagement).toBeCloseTo(0.133333, 6);
+    expect(COUNTRY_BOARD_WEIGHTS.avgLikes).toBeCloseTo(0.066667, 6);
+    expect(COUNTRY_BOARD_WEIGHTS.avgComments).toBeCloseTo(0.033333, 6);
+    expect(COUNTRY_BOARD_WEIGHTS.followerChange).toBeCloseTo(0.066667, 6);
+  });
+
+  it("lets stronger remaining signals outweigh a modest follower gap", () => {
+    const larger = {
+      followers: 1_000_000,
+      engagementRate: 0.1,
+      avgLikes: 1_000,
+      avgComments: 0,
+      followerChangePct: 0,
+    };
+    const stronger = {
+      followers: 900_000,
+      engagementRate: 13,
+      avgLikes: 100_000,
+      avgComments: 20_000,
+      followerChangePct: 0,
+    };
+
+    expect(stronger.followers).toBeLessThan(larger.followers);
+    expect(countryBoardRankScore(stronger)).toBeGreaterThan(countryBoardRankScore(larger));
+  });
+});
+
 describe("authenticity-aware regional ranking", () => {
   const factors = {
     followers: 100_000,
     engagementRate: 1.1,
+    typicalEngagementRate: null,
+    hiddenLikePosts: 0,
     avgLikes: 1_000,
     avgComments: 100,
     followerChangePct: 11.11,
@@ -143,8 +196,9 @@ describe("authenticity-aware regional ranking", () => {
     expect(regionalRankScore(factors, 100)).toBeGreaterThan(regionalRankScore(factors, 40));
   });
 
-  it("treats a missing authenticity as zero and clamps out-of-range values", () => {
-    expect(regionalRankScore(factors, null)).toBe(regionalRankScore(factors, 0));
+  it("excludes a missing authenticity instead of treating it as zero", () => {
+    expect(regionalRankScore(factors, null)).toBe(rankScore(factors));
+    expect(regionalRankScore(factors, null)).toBeGreaterThan(regionalRankScore(factors, 0));
     expect(regionalRankScore(factors, 200)).toBe(regionalRankScore(factors, 100));
     expect(regionalRankScore(factors, -20)).toBe(regionalRankScore(factors, 0));
   });

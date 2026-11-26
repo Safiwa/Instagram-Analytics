@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ArrowUpRight, Flame, Gauge, MapPin } from "lucide-react";
+import { InstagramLink } from "../../components/InstagramLink";
 import {
   getLeaderboard,
   TRENDING_WINDOW_DAYS,
@@ -32,12 +33,14 @@ function EntryRow({
   value,
   label,
   meta,
+  showCountry,
 }: {
   entry: LeaderboardEntry;
   rank: number;
   value: string;
   label: string;
   meta: string;
+  showCountry: boolean;
 }) {
   return (
     <li className="flex items-center gap-3 border-t border-slate-100 py-3 first:border-0 first:pt-0">
@@ -45,18 +48,25 @@ function EntryRow({
         {String(rank).padStart(2, "0")}
       </span>
       <div className="min-w-0 flex-1">
-        <Link
-          href={`/profile/${entry.username}`}
-          className="group inline-flex max-w-full items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-indigo-600"
-        >
-          <span className="truncate">{entry.displayName}</span>
-          <ArrowUpRight
-            className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-indigo-600"
-            aria-hidden="true"
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Link
+            href={`/profile/${entry.username}`}
+            className="group inline-flex max-w-full items-center gap-1 text-sm font-semibold text-slate-950 transition hover:text-indigo-600"
+          >
+            <span className="truncate">{entry.displayName}</span>
+            <ArrowUpRight
+              className="h-3 w-3 shrink-0 text-slate-400 group-hover:text-indigo-600"
+              aria-hidden="true"
+            />
+          </Link>
+          <InstagramLink
+            username={entry.username}
+            className="text-slate-400 hover:text-indigo-600"
           />
-        </Link>
+        </div>
         <p className="truncate text-xs text-slate-500">
-          @{entry.username} · {formatCompact(entry.followers)} followers
+          @{entry.username}
+          {showCountry ? ` · ${entry.countryLabel}` : ""} · {formatCompact(entry.followers)} followers
         </p>
         <p className="truncate text-[11px] text-slate-400">{meta}</p>
       </div>
@@ -78,9 +88,10 @@ function RankCard({
   label,
   metaFor,
   testId,
+  showCountry = false,
 }: {
   title: string;
-  subtitle: string;
+  subtitle?: string;
   icon: typeof Flame;
   entries: LeaderboardEntry[];
   emptyMessage: string;
@@ -88,6 +99,7 @@ function RankCard({
   label: string;
   metaFor: (entry: LeaderboardEntry) => string;
   testId: string;
+  showCountry?: boolean;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -97,7 +109,9 @@ function RankCard({
         </span>
         <div>
           <h3 className="text-sm font-semibold text-slate-950">{title}</h3>
-          <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{subtitle}</p>
+          {subtitle ? (
+            <p className="mt-0.5 text-xs leading-relaxed text-slate-500">{subtitle}</p>
+          ) : null}
         </div>
       </div>
       {entries.length > 0 ? (
@@ -110,6 +124,7 @@ function RankCard({
               value={valueFor(entry)}
               label={label}
               meta={metaFor(entry)}
+              showCountry={showCountry}
             />
           ))}
         </ol>
@@ -126,6 +141,16 @@ const RANK_SUBTITLE =
   "Ranked by followers (55%), engagement rate (20%), average likes (10%), average comments (5%) and 30-day follower change (10%)";
 const REGION_RANK_SUBTITLE =
   "Ranked by follower count first, with the same weighted score breaking ties";
+const WEIGHTED_REGION_RANK_SUBTITLE =
+  "Ranked with 70% followers, then the remaining weighted signals";
+
+function regionSubtitle(definition: (typeof REGION_BOARDS)[number]): string | undefined {
+  if (definition.id === "middle-east") return undefined;
+  if (definition.id === "uae") {
+    return `${definition.description}. ${WEIGHTED_REGION_RANK_SUBTITLE}.`;
+  }
+  return `${definition.description}. ${REGION_RANK_SUBTITLE}.`;
+}
 
 export async function GlobalPulse() {
   const board = await getLeaderboard();
@@ -141,9 +166,10 @@ export async function GlobalPulse() {
         </h2>
         <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
           Weighted leaderboards from the {board.tracked} public Creator and Business accounts we
-          track. Country boards are ordered strictly by follower count; worldwide boards still use
-          the weighted score with followers carrying the most weight. Rankings refresh every 15
-          minutes and every number links back to a full analysis.
+          track. USA and Europe country boards are ordered strictly by follower count; Middle East
+          and UAE boards give followers 70% of the score and the remaining signals 30%; worldwide
+          boards use the shared weighted score. Rankings refresh every 15 minutes and every number
+          links back to a full analysis.
         </p>
       </div>
 
@@ -162,6 +188,7 @@ export async function GlobalPulse() {
             label="Rank score"
             metaFor={(entry) => signalMeta(entry, true)}
             testId="trending-list"
+            showCountry
           />
           <RankCard
             title="High engagement"
@@ -173,6 +200,7 @@ export async function GlobalPulse() {
             label="Rank score"
             metaFor={(entry) => signalMeta(entry)}
             testId="engagement-list"
+            showCountry
           />
         </div>
       </div>
@@ -181,6 +209,12 @@ export async function GlobalPulse() {
         <h3 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
           By country
         </h3>
+        <p className="text-xs leading-relaxed text-slate-500">
+          Every board’s country labels use Instagram’s published “Account based in” value first.
+          When it is not shared, they use public post/reel locations, hashtags and location flags,
+          then other public handle/profile signals or clearly marked curated metadata. Middle East and
+          UAE boards require public evidence, and unavailable values stay marked as not published.
+        </p>
         <div className="grid gap-4 lg:grid-cols-2">
           {REGION_BOARDS.map((definition) => {
             const entries = board.regional[definition.id];
@@ -188,14 +222,19 @@ export async function GlobalPulse() {
               <RankCard
                 key={definition.id}
                 title={definition.label}
-                subtitle={`${definition.description}. ${REGION_RANK_SUBTITLE}.`}
+                subtitle={regionSubtitle(definition)}
                 icon={MapPin}
                 entries={entries}
                 emptyMessage={`No tracked account in ${definition.label.replace(" · top 10", "")} yet. Check back shortly.`}
-                valueFor={(entry) => entry.rankScore.toFixed(0)}
+                valueFor={(entry) =>
+                  definition.id === "middle-east" || definition.id === "uae"
+                    ? entry.boardScore.toFixed(0)
+                    : entry.rankScore.toFixed(0)
+                }
                 label="Rank score"
                 metaFor={(entry) => signalMeta(entry)}
                 testId={`region-${definition.id}-list`}
+                showCountry={definition.id === "middle-east" || definition.id === "europe"}
               />
             );
           })}

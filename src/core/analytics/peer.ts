@@ -15,9 +15,12 @@ import {
   type CountrySignal,
 } from "./country";
 import { computeMetrics, type ProfileMetrics } from "./metrics";
+import { joinDateSimilarity, joinedLabel as firstPostLabel } from "./accountAge";
 import {
   compareRank,
-  isComparableRange,
+  isComparableEngagement,
+  selectFollowerBand,
+  type FollowerBand,
   rankFactorSimilarity,
   rankFactors,
   rankScore,
@@ -72,6 +75,11 @@ export type PeerMatch = {
   country: CountrySignal;
   countryRelationship: CountryRelationship;
   reasons: string[];
+  // The follower range the match came from. Absent for ranking tables, which
+  // keep every category peer.
+  band?: FollowerBand;
+  // The peer's first public post ("First post Nov 2026"), when every post is visible.
+  joinedLabel?: string;
 };
 
 type ScoreOptions = {
@@ -129,20 +137,33 @@ function scorePeers(
     return [];
   }
 
-  const scored = candidates
-    .map((candidate) => {
-      const candidateCategory = inferCategory(candidate);
-      const candidateMetrics = computeMetrics(candidate);
-      const candidateFactors = rankFactors(candidate, candidateMetrics);
-      return { candidate, candidateCategory, candidateMetrics, candidateFactors };
-    })
-    // A suggested benchmark must sit in the same audience-size and engagement
-    // band. Category and country fit cannot excuse a 1K vs 10M gap. Ranking
-    // tables keep all category peers so the five-profile group stays visible.
-    .filter(
-      ({ candidateFactors }) =>
-        !requireComparableRange || isComparableRange(targetFactors, candidateFactors),
-    )
+  const prepared = candidates.map((candidate) => {
+    const candidateCategory = inferCategory(candidate);
+    const candidateMetrics = computeMetrics(candidate);
+    const candidateFactors = rankFactors(candidate, candidateMetrics);
+    return { candidate, candidateCategory, candidateMetrics, candidateFactors };
+  });
+
+  // A suggested benchmark must sit in a believable audience-size band. Bands
+  // widen step by step (±30%, 3x, 10x, then nearest sizes) and the band used is
+  // reported. Ranking tables keep all category peers so the group stays visible.
+  let band: FollowerBand | undefined;
+  let inRange = prepared;
+  if (requireComparableRange) {
+    const selection = selectFollowerBand(
+      target.followers,
+      prepared,
+      (item) => item.candidate.followers,
+      (item) => isComparableEngagement(targetFactors.engagementRate, item.candidateFactors.engagementRate),
+    );
+    if (!selection) {
+      return [];
+    }
+    band = selection.band;
+    inRange = selection.candidates;
+  }
+
+  const scored = inRange
     .map(({ candidate, candidateCategory, candidateMetrics, candidateFactors }) => {
       const candidateCountry = inferCountrySignal(candidate);
       const relationship = countryRelationship(targetCountry, candidateCountry);
@@ -150,12 +171,16 @@ function scorePeers(
       const topicScore = sharedTopics.length > 0 ? clamp(60 + sharedTopics.length * 20, 0, 100) : 0;
       const factorScore = rankFactorSimilarity(targetFactors, candidateFactors);
       const exactCategory = candidateCategory === targetCategory;
+      const joinScore = joinDateSimilarity(target, candidate);
+      const joinedLabel = firstPostLabel(candidate);
 
       // Weighted signal fit, category fit, country fit and themes all contribute.
-      // The country tier filter below makes same-country candidates win whenever
-      // they exist; the score then orders them by the same criteria as the ranking.
+      // The first-public-post date is a small soft weight, used only when both
+      // accounts show every post they have published. The country tier filter below makes same-country
+      // candidates win whenever they exist.
       const score = round2(
-        factorScore * 0.35 +
+        factorScore * (joinScore === null ? 0.35 : 0.27) +
+          (joinScore ?? 0) * (joinScore === null ? 0 : 0.08) +
           topicScore * 0.15 +
           countryScore(relationship) * 0.25 +
           (exactCategory ? 100 : 75) * 0.25,
@@ -166,8 +191,17 @@ function scorePeers(
         exactCategory ? `${candidateCategory} category` : `similar ${candidateCategory} category`,
       );
       reasons.push(countryReason(relationship, targetCountry, candidateCountry));
-      if (requireComparableRange) {
-        reasons.push("similar audience size and engagement range");
+      if (band) {
+        reasons.push(
+          band.step === "close"
+            ? "similar audience size (within ±30%) and engagement range"
+            : band.step === "nearest"
+              ? "nearest audience size available"
+              : `audience size within ${band.step} and similar engagement`,
+        );
+      }
+      if (joinScore !== null && joinScore >= 75 && joinedLabel) {
+        reasons.push(`started posting around the same time (${joinedLabel.toLowerCase()})`);
       }
       reasons.push(
         `five-factor fit ${Math.round(factorScore)}% (followers, engagement, likes, comments, follower change)`,
@@ -185,6 +219,8 @@ function scorePeers(
         country: candidateCountry,
         countryRelationship: relationship,
         reasons,
+        ...(band ? { band } : {}),
+        ...(joinedLabel ? { joinedLabel } : {}),
       };
     });
 
@@ -246,6 +282,20 @@ export type PeerRankingRow = {
   category: string;
   country: CountrySignal;
   isTarget: boolean;
+  postsNotExposed: boolean;
+  engagementSource: ProfileMetrics["engagementSource"];
+  // Why a row outside the main rule was added to complete five profiles.
+  fill?: RankFill;
+};
+
+// Rank tables aim for five profiles. Peers come from the same country and a
+// similar category; when the pool has fewer, rows are filled only from the same
+// region and category group, and each such row says so.
+export type RankFill = "same-region" | "country-limit";
+
+export const RANK_FILL_LABEL: Record<RankFill, string> = {
+  "same-region": "same category from a neighbouring country, added to complete the table",
+  "country-limit": "same category, added beyond 3 per country to complete the table",
 };
 
 export type PeerRanking = {
@@ -271,19 +321,47 @@ export function buildPeerRanking(
     requireSameCountry: true,
     fillCountryTiers: false,
   } as const;
-  let peers = scorePeers(target, metrics, pool, options).slice(0, limit);
+  let peers: (PeerMatch & { fill?: RankFill })[] = scorePeers(target, metrics, pool, options).slice(
+    0,
+    limit,
+  );
+  const targetCountry = inferCountrySignal(target);
+  const targetCategory = inferExplicitCategory(target) ?? inferCategory(target);
+  // Each fill row is labelled by what actually differs from the main rule.
+  const fillFor = (): RankFill => "same-region";
+  const add = (extra: PeerMatch[], fill: boolean) => {
+    if (peers.length >= limit) {
+      return;
+    }
+    const seen = new Set(peers.map((peer) => peer.profile.username));
+    const fresh = extra
+      .filter((peer) => !seen.has(peer.profile.username))
+      .slice(0, limit - peers.length)
+      .map((peer) => (fill ? { ...peer, fill: fillFor() } : peer));
+    peers = [...peers, ...fresh];
+  };
 
   // Explicit public labels remain the rule. Only when that leaves gaps do we
   // admit inferred creator-group labels, and only to fill the remaining rows.
-  if (peers.length < limit) {
-    const fallback = scorePeers(target, metrics, pool, {
-      ...options,
-      allowInferredCandidates: true,
-    });
-    const seen = new Set(peers.map((peer) => peer.profile.username));
-    peers = [...peers, ...fallback.filter((peer) => !seen.has(peer.profile.username))].slice(
-      0,
-      limit,
+  add(scorePeers(target, metrics, pool, { ...options, allowInferredCandidates: true }), false);
+
+  // Still short of five: fill only from the same region and the same category
+  // group (e.g. a Saudi agency for a UAE agency), marked as such. Other
+  // countries and other categories are never used; the table shows fewer rows.
+  const anyCountry = {
+    ...options,
+    requireSameCountry: false,
+    fillCountryTiers: true,
+    allowInferredCandidates: true,
+  };
+  const wider = scorePeers(target, metrics, pool, anyCountry);
+  if (targetCountry.country !== null) {
+    add(
+      wider.filter(
+        (peer) =>
+          peer.countryRelationship === "same-region" && isSimilarCategory(targetCategory, peer.category),
+      ),
+      true,
     );
   }
 
@@ -305,6 +383,8 @@ export function buildPeerRanking(
       category: inferCategory(target),
       country: inferCountrySignal(target),
       isTarget: true,
+      postsNotExposed: target.recentPosts.length === 0,
+      engagementSource: metrics.engagementSource,
     },
     ...peers.map((peer) => ({
       profile: peer.profile,
@@ -318,6 +398,9 @@ export function buildPeerRanking(
       category: peer.category,
       country: peer.country,
       isTarget: false,
+      ...(peer.fill ? { fill: peer.fill } : {}),
+      postsNotExposed: peer.profile.recentPosts.length === 0,
+      engagementSource: peer.metrics.engagementSource,
     })),
   ];
 
