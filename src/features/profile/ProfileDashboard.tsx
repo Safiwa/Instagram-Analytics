@@ -47,6 +47,7 @@ import { formatCompact, formatDate, formatPercent } from "../../core/format";
 import { IndexPositionCard, TrackingHistoryPanel } from "./TrackingHistory";
 import { PostPerformancePanel } from "./PostPerformance";
 import type { StoredPostHistory } from "../../core/db/postHistory";
+import type { EstimatedPoint } from "../../core/analytics/estimatedHistory";
 
 const TOOLTIP_STYLE = {
   borderRadius: 12,
@@ -71,6 +72,7 @@ type ProfileDashboardProps = {
   regionalRanking: RegionalRanking | null;
   indexPosition?: IndexPosition | null;
   postHistory?: StoredPostHistory | null;
+  followerEstimate?: EstimatedPoint[];
 };
 
 function Stat({
@@ -131,6 +133,7 @@ export function ProfileDashboard({
   regionalRanking,
   indexPosition = null,
   postHistory = null,
+  followerEstimate = [],
 }: ProfileDashboardProps) {
   const interactions = profile.recentPosts.map((post) => ({
     label: formatDate(post.postedAt, false),
@@ -609,8 +612,12 @@ export function ProfileDashboard({
               </ResponsiveContainer>
             </div>
           </div>
-        ) : profile.tracking && profile.tracking.points.length >= 2 ? (
-          <TrackingHistoryPanel tracking={profile.tracking} followers={profile.followers} />
+        ) : (profile.tracking && profile.tracking.points.length >= 2) || followerEstimate.length > 0 ? (
+          <TrackingHistoryPanel
+            tracking={profile.tracking && profile.tracking.points.length >= 2 ? profile.tracking : null}
+            followers={profile.followers}
+            estimate={followerEstimate}
+          />
         ) : (
           <div
             data-testid="growth-unavailable"
