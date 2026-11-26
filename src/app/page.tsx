@@ -177,10 +177,10 @@ export default function Home() {
             Creator partnership agency
           </p>
           <h1 className="mt-3 max-w-4xl text-2xl font-semibold leading-tight tracking-tight md:text-3xl">
-            Leading Marketing agency connecting brands with creators and managing events over the Middle East
+            Metrics-based marketing for Instagram creator screening and influencer vetting.
           </h1>
           <p className="mt-3 text-base font-medium text-indigo-200">
-            From discovery and paid partnerships to affiliates and live experiences.
+            Transparent algorithms, no vanity numbers — see the proof before you pick a creator.
           </p>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">
             Explore any public Instagram profile to see how real signals support creator vetting,
