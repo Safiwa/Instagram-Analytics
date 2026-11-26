@@ -11,6 +11,10 @@ import { withStoredHistory } from "../../core/db/enrich";
 import { recordProfileSnapshot } from "../../core/db/snapshots";
 import { ComparisonTable, type ComparisonRow } from "../../features/comparison/ComparisonTable";
 import { ensureRecordedLocations } from "../../core/db/accountLocations";
+import { recordLookups } from "../../core/billing/accounts";
+import { cheapestPlanWith, PLANS } from "../../core/billing/plans";
+import { checkLookups, getViewer } from "../../core/billing/viewer";
+import { UpgradeNotice } from "../../features/billing/UpgradeNotice";
 
 export const maxDuration = 60;
 
@@ -20,7 +24,27 @@ type ComparePageProps = {
 
 export default async function ComparePage({ searchParams }: ComparePageProps) {
   const { handles } = await searchParams;
-  const parsed = parseHandles(handles);
+  const requested = parseHandles(handles);
+  const viewer = await getViewer();
+  // Plan limit on side-by-side accounts, then on distinct profiles opened.
+  const compareMax = viewer.plan.limits.compareMax;
+  const planCut = requested.handles.length > compareMax;
+  const parsed = { ...requested, handles: requested.handles.slice(0, compareMax) };
+  const gate = await checkLookups(viewer, parsed.handles);
+  if (!gate.allowed) {
+    const limits = viewer.plan.limits;
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Compare profiles</h1>
+        <UpgradeNotice
+          testId="lookup-limit"
+          signedIn={viewer.user !== null}
+          title={`Not enough lookups left this ${limits.lookupPeriod}`}
+          description={`This comparison needs ${gate.toRecord.length} new profile lookup(s) and you have used ${gate.used} of ${limits.lookups}. Upgrade for more.`}
+        />
+      </div>
+    );
+  }
   await ensureRecordedLocations();
   const resolutions = await Promise.all(
     parsed.handles.map(async (handle) => {
@@ -44,6 +68,15 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
   // Every compared profile is a lookup: store today's snapshot after responding.
   const compared = rows.map((row) => row.profile);
   after(() => Promise.all(compared.map((profile) => recordProfileSnapshot(profile, { lookup: true }))));
+  const subject = viewer.subject;
+  const counted = compared
+    .filter((profile) => profile.source !== "demo")
+    .map((profile) => profile.username.toLowerCase())
+    .filter((name) => gate.toRecord.includes(name));
+  if (subject && counted.length > 0) {
+    after(() => recordLookups(subject, gate.period, counted));
+  }
+  const nextCompareStep = cheapestPlanWith((limits) => limits.compareMax > compareMax);
 
   const tracked = rows.length > 0 ? await getTrackedProfiles() : [];
   const existing = new Set(rows.map((row) => row.profile.username.toLowerCase()));
@@ -58,7 +91,7 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
     compareRanking.map((row) => row.profile.username.toLowerCase()),
   );
   const suggestions =
-    rows.length > 0 && rows.length < 4
+    rows.length > 0 && rows.length < compareMax
       ? findSimilarPeers(rows[0].profile, rows[0].metrics, tracked, 8)
           .filter(
             (match) =>
@@ -78,9 +111,18 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
           Compare profiles
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Up to four accounts, identical metrics, one report.
+          Up to {compareMax === 4 ? "four" : compareMax} accounts, identical metrics, one report.
         </p>
       </div>
+
+      {viewer.billingEnabled && planCut ? (
+        <UpgradeNotice
+          testId="compare-limit"
+          signedIn={viewer.user !== null}
+          title={`${viewer.plan.name} compares ${compareMax} accounts at a time`}
+          description={`Only the first ${compareMax} handles are shown. ${PLANS[nextCompareStep].name} compares up to ${PLANS[nextCompareStep].limits.compareMax}.`}
+        />
+      ) : null}
 
       {rows.length === 0 ? (
         <EmptyState
@@ -187,7 +229,7 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
           <ul className="mt-5 grid gap-3 sm:grid-cols-2">
             {suggestions.map((match) => {
               const handles = [...rows.map((row) => row.profile.username), match.profile.username]
-                .slice(0, 4)
+                .slice(0, compareMax)
                 .join(",");
               return (
                 <li

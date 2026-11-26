@@ -265,6 +265,12 @@ request plus a few embed requests.
 | `/api/digest/send` | Cron-only weekly digest sender |
 | `/api/digest/unsubscribe` | Signed one-click unsubscribe link |
 | `/api/collect` | Cron-only daily collector that stores one snapshot per tracked or recently searched profile |
+| `/pricing` | Free, Starter, Pro (14-day trial) and Agency plans, monthly or yearly |
+| `/account` | Email sign-in, current plan, lookups used, daily-tracked accounts, manage billing |
+| `/api/account/login`, `/api/account/verify`, `/api/account/logout` | Passwordless sign-in link flow |
+| `/api/account/track` | POST: add/remove a daily-tracked handle within the plan allowance |
+| `/api/billing/checkout`, `/api/billing/portal` | Lemon Squeezy hosted checkout and customer portal |
+| `/api/billing/webhook` | Signed Lemon Squeezy subscription webhooks |
 
 ## Header navigation
 
@@ -681,6 +687,42 @@ the app to Live mode; Meta may require business verification for the portfolio.
 - Only scoring fields are stored (counts and has photo / name / bio / private
   flags); no follower text or media. Rows are deleted with the connection or
   replaced by a new upload.
+
+## Paid plans (Lemon Squeezy)
+
+Four plans, defined once in `src/core/billing/plans.ts`:
+
+| | Free | Starter $9/mo | Pro $29/mo (14-day trial) | Agency $79/mo |
+|---|---|---|---|---|
+| Profile lookups | 3 / day | 50 / month | 300 / month | 1,500 / month |
+| Compare side by side | 2 | 2 | 3 | 4 |
+| Daily-tracked accounts | – | 1 | 10 | 50 |
+| Stored growth history shown | 7 days | 90 days | 12 months | Full |
+| PDF reports | – | – | ✓ | ✓ |
+
+Yearly billing is 10× the monthly price (2 months free).
+
+- **Lookups** are distinct profiles opened per period; reopening the same profile is free. Signed-in
+  visitors are metered per account, everyone else per keyed hash of their IP. Search-engine crawlers are
+  never metered, so profile pages stay indexable. Demo profiles never count.
+- **Accounts** use passwordless email links (`/account`), sent through Resend and signed with
+  `CONNECT_SECRET`; one email per address per minute.
+- **Checkout** (`/api/billing/checkout`) opens Lemon Squeezy's hosted checkout with the account id as custom
+  data. **Webhooks** (`/api/billing/webhook`, `X-Signature` HMAC) keep the `subscriptions` table in sync;
+  a cancelled plan keeps access until the paid period ends. **Manage billing** links to Lemon Squeezy's
+  customer portal.
+- **Off by default.** Until every `LEMONSQUEEZY_*` key, at least one variant, `DATABASE_URL`,
+  `CONNECT_SECRET` and Resend are set, the site behaves exactly as before with no limits, and `/pricing`
+  shows "Coming soon".
+
+Setup:
+1. Lemon Squeezy: create one subscription product per plan with monthly (and optionally yearly) variants.
+   Turn on a 14-day free trial on the Pro variants. Choose bank or PayPal payouts under Settings > Payouts.
+2. Settings > Webhooks: URL `https://www.instagram-analytics.com/api/billing/webhook`, tick the
+   `subscription_*` events, copy the signing secret.
+3. Add the `LEMONSQUEEZY_*` variables from `.env.example` in Vercel and redeploy (migration `0008_billing.sql`
+   runs automatically on build).
+4. Test in Lemon Squeezy test mode with a test card before switching the store live.
 
 ## Weekly digest (free 30-day trial)
 

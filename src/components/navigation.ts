@@ -13,6 +13,8 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: "/#metric-engine", label: "Analytics" },
   { href: "/compare", label: "Compare" },
   { href: "/connect", label: "For creators" },
+  { href: "/pricing", label: "Pricing" },
+  { href: "/account", label: "Account" },
 ];
 
 export function isNavItemActive(pathname: string, href: string): boolean {
