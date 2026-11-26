@@ -42,12 +42,12 @@ export const REGION_BOARDS: { id: Region; label: string; description: string }[]
   {
     id: "middle-east",
     label: "Middle East creators · top 10",
-    description: `Tracked creators in ${MIDDLE_EAST_COUNTRIES.join(", ")}; brands and organisations are listed separately`,
+    description: `Tracked creators in ${MIDDLE_EAST_COUNTRIES.join(", ")}; brands and organisations are not included`,
   },
   {
     id: "uae",
     label: "UAE creators · top 10",
-    description: "Tracked creators based in the UAE; brands and organisations are listed separately",
+    description: "Tracked creators based in the UAE; brands and organisations are not included",
   },
 ];
 
