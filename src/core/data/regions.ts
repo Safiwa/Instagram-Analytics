@@ -41,13 +41,13 @@ export const REGION_BOARDS: { id: Region; label: string; description: string }[]
   { id: "europe", label: "Europe · top 10", description: "Tracked accounts based in Europe" },
   {
     id: "middle-east",
-    label: "Middle East · top 10",
-    description: `Tracked accounts in ${MIDDLE_EAST_COUNTRIES.join(", ")}`,
+    label: "Middle East creators · top 10",
+    description: `Tracked creators in ${MIDDLE_EAST_COUNTRIES.join(", ")}; brands and organisations are listed separately`,
   },
   {
     id: "uae",
-    label: "UAE · top 10",
-    description: "Tracked accounts based in the UAE, also shown on the dedicated UAE board",
+    label: "UAE creators · top 10",
+    description: "Tracked creators based in the UAE; brands and organisations are listed separately",
   },
 ];
 
@@ -85,6 +85,12 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   gucci: "europe",
 
   // Middle East (including UAE accounts, which also have a dedicated board)
+  // Creators from Saudi Arabia, Iraq, Kuwait and Egypt for the creators-only
+  // Middle East board (country checked on the live site).
+  emadanwer: "middle-east",
+  enaastaleb: "middle-east",
+  ascia: "middle-east",
+  kindaalloush: "middle-east",
   // Other Middle East countries, so the regional table is not mostly UAE.
   ahmedhelmy: "middle-east",
   yasmine_sabri: "middle-east",
@@ -147,7 +153,6 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   baneenstars: "uae",
   sarahmalas: "uae",
   randdalati: "uae",
-  rima_alosta: "uae",
   lookatsascha: "uae",
   khalus_recipes: "uae",
   ladyandhersweetescapes: "uae",
@@ -168,6 +173,43 @@ export function regionForHandle(username: string): Region | null {
 // Every curated handle shown on a region board (the Middle East board includes UAE).
 export function regionBoardHandles(board: Region): string[] {
   return Object.keys(ACCOUNT_REGIONS).filter((handle) => isInRegionBoard(handle, board));
+}
+
+// Organisations on the Middle East and UAE lists: airlines, tourism boards,
+// news outlets, venues, agencies and brands. The Middle East and UAE top-ten
+// boards are for creators; these accounts get their own brands board.
+const MIDDLE_EAST_ORGANIZATIONS = new Set([
+  "qatarairways",
+  "visitqatar",
+  "aljazeera",
+  "alarabiya",
+  "asharqnews",
+  "arabnews",
+  "visitsaudi",
+  "flynas",
+  "qatar",
+  "visitjordan",
+  "explorepalestine",
+  "visitkuwait",
+  "visitoman",
+  "dreamize_",
+  "mkvdigital",
+  "tikit.ae",
+  "hudabeauty",
+  "emirates",
+  "flydubai",
+  "timeoutdubai",
+  "gulfnews",
+  "khaleejtimes",
+  "arabianbusiness",
+  "jumeirah",
+  "burjkhalifa",
+  "dubaimall",
+  "rafflesdubai",
+]);
+
+export function isMiddleEastOrganization(username: string): boolean {
+  return MIDDLE_EAST_ORGANIZATIONS.has(username.toLowerCase());
 }
 
 export function isInRegionBoard(username: string, board: Region): boolean {

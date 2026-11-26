@@ -14,6 +14,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: "/compare", label: "Compare" },
   { href: "/connect", label: "For creators" },
   { href: "/pricing", label: "Pricing" },
+  { href: "/contact", label: "Contact Us" },
   { href: "/account", label: "Account" },
 ];
 

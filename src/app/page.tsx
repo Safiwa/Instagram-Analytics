@@ -177,7 +177,7 @@ export default function Home() {
             Creator partnership agency
           </p>
           <h1 className="mt-3 max-w-4xl text-2xl font-semibold leading-tight tracking-tight md:text-3xl">
-            UAE-Based marketing agency connecting brands with creators and managing events over the Middle East
+            Leading Marketing agency connecting brands with creators and managing events over the Middle East
           </h1>
           <p className="mt-3 text-base font-medium text-indigo-200">
             From discovery and paid partnerships to affiliates and live experiences.
