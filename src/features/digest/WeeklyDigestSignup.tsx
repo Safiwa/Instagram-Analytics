@@ -78,7 +78,7 @@ export function WeeklyDigestSignup() {
             </li>
             <li className="flex items-center gap-2">
               <CircleCheck className="h-4 w-4 text-indigo-600" aria-hidden="true" />
-              No card required. Free for 30 days
+              No card required. Free for 14 days
             </li>
           </ul>
         </div>
