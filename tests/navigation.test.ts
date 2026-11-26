@@ -17,6 +17,7 @@ describe("primary navigation", () => {
       { href: "/#metric-engine", label: "Analytics" },
       { href: "/compare", label: "Compare" },
       { href: "/connect", label: "For creators" },
+      { href: "/contact", label: "Contact Us" },
     ]);
   });
 
@@ -79,10 +80,17 @@ describe("responsive header navigation", () => {
     expect(source("src/app/layout.tsx")).toContain("sticky top-0");
   });
 
-  it("brands the logo as Instagram Analytics by Campaign Masters UAE", () => {
+  it("brands the logo as Instagram Analytics by Campaign Masters", () => {
     const layout = source("src/app/layout.tsx");
 
     expect(layout).toContain("Instagram Analytics");
-    expect(layout.match(/by Campaign Masters UAE/g)).toHaveLength(2);
+    expect(layout.match(/by Campaign Masters\n/g)).toHaveLength(2);
+    expect(layout).not.toContain("Campaign Masters UAE");
+  });
+
+  it("lists the company contact details on the Contact Us page", () => {
+    const page = source("src/app/contact/page.tsx");
+    expect(page).toContain("campaign@instagram-analytics.com");
+    expect(page).toContain("https://www.instagram.com/campaignmastersagency/");
   });
 });
