@@ -62,13 +62,13 @@ describe("country signal inference", () => {
     expect(notShared.basis).toBe("handle");
   });
 
-  it("uses public posts before the handle when the account country is not shared", () => {
+  it("uses strong post evidence before the handle when the account country is not shared", () => {
     const signal = inferCountrySignal(
       profile({
         username: "dubai.style",
         accountCountry: null,
         bio: "Fashion in Paris",
-        recentPosts: [post(["#London"])],
+        recentPosts: [post(["#London"]), post(["#London"]), post(["#London"])],
       }),
     );
 
@@ -163,7 +163,7 @@ describe("country signal inference", () => {
   });
 
   it("resolves the real UAE creator band around @alaaabuharb", () => {
-    const handles = ["sarahmalas", "randdalati", "rima_alosta", "lookatsascha"];
+    const handles = ["sarahmalas", "randdalati", "lookatsascha"];
     for (const username of handles) {
       const signal = inferCountrySignal(
         profile({ username, bio: "Based in Dubai" }),
@@ -395,6 +395,37 @@ describe("Middle East benchmark eligibility", () => {
     expect(isMiddleEastAccount({ ...base, username: "emirates" })).toBe(true);
     expect(isMiddleEastAccount({ ...base, username: "raw.lebanon" })).toBe(
       true,
+    );
+  });
+
+  it("does not let one trip post outrank the bio's own flag", () => {
+    const signal = inferCountrySignal(
+      profile({
+        username: "part.time.actress",
+        accountCountry: null,
+        bio: "🇰🇼 part time actress, full time personality",
+        recentPosts: [post(["#Jeddah"]), post(["#makeup"])],
+      }),
+    );
+    expect(signal.country).toBe("Kuwait");
+    expect(signal.basis).toBe("profile");
+  });
+
+  it("reads a 📍 pin before heritage flags", () => {
+    const signal = inferCountrySignal(
+      profile({
+        username: "mixed.heritage",
+        accountCountry: null,
+        bio: "🇵🇸 Palestinian × Russian 🇷🇺 📍Dubai | 📩 hello@example.com",
+      }),
+    );
+    expect(signal.country).toBe("United Arab Emirates");
+  });
+
+  it("uses recorded Account based in values for @ascia and @rima_alosta", () => {
+    expect(inferCountrySignal(profile({ username: "ascia", accountCountry: null, bio: "" })).country).toBe("Kuwait");
+    expect(inferCountrySignal(profile({ username: "rima_alosta", accountCountry: null, bio: "📍Dubai" })).country).toBe(
+      "Russia",
     );
   });
 });

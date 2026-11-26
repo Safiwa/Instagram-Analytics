@@ -190,6 +190,14 @@ const COUNTRY_RULES: CountryRule[] = [
     handleAliases: ["uk", "london"],
   },
   {
+    country: "Russia",
+    region: "europe",
+    flag: "🇷🇺",
+    code: "RU",
+    aliases: ["russia", "moscow", "saint petersburg"],
+    handleAliases: ["russia", "moscow"],
+  },
+  {
     country: "Italy",
     region: "europe",
     flag: "🇮🇹",
@@ -259,6 +267,8 @@ const ACCOUNT_BASED_IN_BY_HANDLE: Record<string, string | null> = {
   imadssyriankitchen: "United Kingdom",
   wafamoustafa: null,
   alisha_sajjal: "United Arab Emirates",
+  ascia: "Kuwait",
+  rima_alosta: "Russia",
   "najet.dh": "United Arab Emirates",
 };
 
@@ -521,7 +531,16 @@ function postCountryVotes(profile: CreatorProfile): Map<string, number> {
 // Only a clear majority of promoted locations is treated as public evidence.
 // Mixed or tied signals stay unresolved instead of picking a country by rule
 // order. This is what keeps content from one country out of another's board.
-function dominantPostCountry(profile: CreatorProfile): CountryRule | null {
+// Posts tagged in one country can be a trip (an Umrah visit, a holiday), so
+// they only outrank what the profile says about itself when the evidence is
+// strong: at least three posts and at least 60% of all located posts.
+const STRONG_POST_VOTES = 3;
+const STRONG_POST_SHARE = 0.6;
+
+function dominantPostCountry(
+  profile: CreatorProfile,
+  strength: "strong" | "any" = "any",
+): CountryRule | null {
   const votes = [...postCountryVotes(profile)].sort(
     (left, right) => right[1] - left[1] || left[0].localeCompare(right[0]),
   );
@@ -531,7 +550,32 @@ function dominantPostCountry(profile: CreatorProfile): CountryRule | null {
   if (votes.length > 1 && votes[0][1] === votes[1][1]) {
     return null;
   }
+  if (strength === "strong") {
+    const total = votes.reduce((sum, [, count]) => sum + count, 0);
+    if (votes[0][1] < STRONG_POST_VOTES || votes[0][1] / total < STRONG_POST_SHARE) {
+      return null;
+    }
+  }
   return countryRuleForCountry(votes[0][0]);
+}
+
+// A "📍Dubai" pin in the bio states where the account is based, so it is read
+// before flags, which often show heritage ("🇵🇸 Palestinian × Russian 🇷🇺").
+function pinnedCountry(text: string): CountryRule | null {
+  const pins = text.match(/📍\s*([^|•\n📩📧☎️]{1,40})/gu) ?? [];
+  for (const pin of pins) {
+    const place = pin.replace("📍", "");
+    const flag = matchCountryFlag(place);
+    if (flag) {
+      return flag;
+    }
+    const normalized = normalize(place);
+    const named = matchCountry((alias) => hasNormalizedAlias(normalized, alias));
+    if (named) {
+      return named;
+    }
+  }
+  return null;
 }
 
 export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
@@ -557,11 +601,11 @@ export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
       : { country: null, region: null, label: "Country not published", basis: null };
   }
 
-  // If it is not shared, the public posts and reels are the next requested
-  // source: their location tags, hashtags and location flags count as votes.
-  const postMatch = dominantPostCountry(profile);
-  if (postMatch) {
-    return signal(postMatch, region, "posts");
+  // If it is not shared, strong evidence from public posts and reels comes
+  // next: their location tags, hashtags and location flags count as votes.
+  const strongPosts = dominantPostCountry(profile, "strong");
+  if (strongPosts) {
+    return signal(strongPosts, region, "posts");
   }
 
   const handleMatch = matchCountry((alias) => hasHandleAlias(username, alias), "handle");
@@ -570,6 +614,10 @@ export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
   }
 
   const profileTextRaw = `${profile.displayName} ${profile.bio} ${profile.website ?? ""}`;
+  const pinned = pinnedCountry(profile.bio);
+  if (pinned) {
+    return signal(pinned, region, "profile");
+  }
   const profileFlagMatch = matchCountryFlag(profileTextRaw);
   if (profileFlagMatch) {
     return signal(profileFlagMatch, region, "profile");
@@ -578,6 +626,12 @@ export function inferCountrySignal(profile: CreatorProfile): CountrySignal {
   const profileMatch = matchCountry((alias) => hasNormalizedAlias(profileText, alias));
   if (profileMatch) {
     return signal(profileMatch, region, "profile");
+  }
+
+  // Weaker post evidence (a few tagged posts) still beats having nothing.
+  const anyPosts = dominantPostCountry(profile);
+  if (anyPosts) {
+    return signal(anyPosts, region, "posts");
   }
 
   const curatedCountry =
