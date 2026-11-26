@@ -422,6 +422,11 @@ describe("Middle East benchmark eligibility", () => {
     expect(signal.country).toBe("United Arab Emirates");
   });
 
+  it("hides the Middle East panel for an account recorded as based outside the region", () => {
+    expect(isMiddleEastAccount(profile({ username: "rima_alosta", accountCountry: null, bio: "📍Dubai" }))).toBe(false);
+    expect(isMiddleEastAccount(profile({ username: "ascia", accountCountry: null, bio: "" }))).toBe(true);
+  });
+
   it("uses recorded Account based in values for @ascia and @rima_alosta", () => {
     expect(inferCountrySignal(profile({ username: "ascia", accountCountry: null, bio: "" })).country).toBe("Kuwait");
     expect(inferCountrySignal(profile({ username: "rima_alosta", accountCountry: null, bio: "📍Dubai" })).country).toBe(
