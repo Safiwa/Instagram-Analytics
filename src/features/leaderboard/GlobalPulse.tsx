@@ -238,6 +238,18 @@ export async function GlobalPulse() {
               />
             );
           })}
+          <RankCard
+            title="Middle East brands · top 10"
+            subtitle="Airlines, tourism boards, media, venues and brands across the Middle East and UAE. Same 70/30 follower-weighted score, at most three per country."
+            icon={MapPin}
+            entries={board.middleEastBrands}
+            emptyMessage="No tracked Middle East brand yet. Check back shortly."
+            valueFor={(entry) => entry.boardScore.toFixed(0)}
+            label="Rank score"
+            metaFor={(entry) => signalMeta(entry)}
+            testId="region-middle-east-brands-list"
+            showCountry
+          />
         </div>
       </div>
     </section>

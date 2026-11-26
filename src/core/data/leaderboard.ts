@@ -7,6 +7,7 @@ import { fetchLiveProfile, isLiveConfigured } from "./live";
 import {
   EUROPE_COUNTRIES,
   isInRegionBoard,
+  isMiddleEastOrganization,
   MIDDLE_EAST_COUNTRIES,
   REGION_BOARDS,
   type Region,
@@ -124,6 +125,17 @@ export const LEADERBOARD_HANDLES = [
   "ladyandhersweetescapes",
   "airagymn",
   "raw.lebanon",
+  // Creators from other Middle East countries for the creators-only Middle
+  // East board (country checked on the live site).
+  "emadanwer",
+  "enaastaleb",
+  "ascia",
+  "kindaalloush",
+  "yasmine_sabri",
+  "haifawehbe",
+  "dalalid",
+  "jennyesber",
+  "dima_dalati",
 ] as const;
 
 // Real, public UAE/GCC accounts verified through the live Instagram Business Discovery
@@ -196,6 +208,9 @@ export type Leaderboard = {
   trending: LeaderboardEntry[];
   engaged: LeaderboardEntry[];
   regional: Record<Region, LeaderboardEntry[]>;
+  // Middle East and UAE airlines, tourism boards, media, venues and brands,
+  // kept off the creators-only Middle East and UAE boards.
+  middleEastBrands: LeaderboardEntry[];
   tracked: number;
   generatedAt: string;
   windowDays: number;
@@ -336,9 +351,11 @@ function regionalBoards(entries: LeaderboardEntry[]): Record<Region, Leaderboard
   const boards = {} as Record<Region, LeaderboardEntry[]>;
   for (const board of REGION_BOARDS) {
     const weightedFollowers = board.id === "middle-east" || board.id === "uae";
+    const creatorsOnly = board.id === "middle-east" || board.id === "uae";
     const eligible = entries
       .filter((entry) => isInRegionBoard(entry.username, board.id))
       .filter((entry) => isCountryBoardEligible(entry, board.id))
+      .filter((entry) => !creatorsOnly || !isMiddleEastOrganization(entry.username))
       .sort(weightedFollowers ? byCountryBoardRank : byFollowersFirst);
     // The dedicated UAE board stays UAE-only; the wider Middle East board must
     // keep looking at other countries instead of filling with one country.
@@ -346,6 +363,15 @@ function regionalBoards(entries: LeaderboardEntry[]): Record<Region, Leaderboard
     boards[board.id] = boardEntries.slice(0, LEADERBOARD_SIZE);
   }
   return boards;
+}
+
+function middleEastBrandBoard(entries: LeaderboardEntry[]): LeaderboardEntry[] {
+  const eligible = entries
+    .filter((entry) => isMiddleEastOrganization(entry.username))
+    .filter((entry) => isInRegionBoard(entry.username, "middle-east"))
+    .filter((entry) => isCountryBoardEligible(entry, "middle-east"))
+    .sort(byCountryBoardRank);
+  return capCountryRepeats(eligible).slice(0, LEADERBOARD_SIZE);
 }
 
 export function rankProfiles(profiles: CreatorProfile[], now = new Date()): Leaderboard {
@@ -371,6 +397,7 @@ export function rankProfiles(profiles: CreatorProfile[], now = new Date()): Lead
     trending,
     engaged,
     regional: regionalBoards(entries),
+    middleEastBrands: middleEastBrandBoard(entries),
     tracked: entries.length,
     generatedAt: now.toISOString(),
     windowDays: TRENDING_WINDOW_DAYS,
@@ -383,7 +410,7 @@ function emptyLeaderboard(): Leaderboard {
 
 // Bump the prefix whenever the tracked-pool rebuild logic changes so a snapshot
 // written by the previous version is not reused with the new expectations.
-const TRACKED_SIGNATURE = `v9:${LEADERBOARD_HANDLES.join(",")}`;
+const TRACKED_SIGNATURE = `v10:${LEADERBOARD_HANDLES.join(",")}`;
 
 // Meta rate-limits large bursts of Business Discovery calls. Instead of
 // rebuilding all 55 profiles at once, each refresh updates a small rotating
