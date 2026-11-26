@@ -165,5 +165,7 @@ describe("follower history ranges", () => {
     expect(panel).toContain('data-testid="history-range-note"');
     expect(panel).toContain("measured so far");
     expect(panel).toContain("isAnimationActive={false}");
+    expect(panel).toContain('data-testid="estimate-note"');
+    expect(panel).toContain("It is not a\n          measured count.");
   });
 });

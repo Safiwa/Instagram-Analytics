@@ -21,6 +21,7 @@ import { recordProfileSnapshot } from "../../../core/db/snapshots";
 import { ProfileDashboard } from "../../../features/profile/ProfileDashboard";
 import { ensureRecordedLocations } from "../../../core/db/accountLocations";
 import { getPostHistory } from "../../../core/db/postHistory";
+import { estimateFollowerHistory } from "../../../core/analytics/estimatedHistory";
 
 export const maxDuration = 60;
 
@@ -95,6 +96,18 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       ? null
       : indexPosition(profile.username, profile.followers, metrics.engagementRate, sample);
   const growth = analyzeGrowth(profile);
+  // Estimated weekly followers for the year before daily tracking began,
+  // labelled Est. on the chart. Demo and private profiles get none.
+  const firstMeasured = profile.tracking?.points[0];
+  const followerEstimate =
+    resolved.source === "demo" || profile.isPrivate
+      ? []
+      : estimateFollowerHistory({
+          anchorFollowers: firstMeasured?.followers ?? profile.followers,
+          anchorDate: firstMeasured?.date ?? new Date().toISOString().slice(0, 10),
+          growthPct12m: metrics.followerGrowthPct,
+          posts: postHistory?.posts ?? [],
+        });
   const initial = buildBenchmarks(profile, metrics, tracked, regionalPool);
   const excluded = excludedExclusiveHandles(initial);
   // Remove duplicate peers from the pools before ranking, so a five-profile
@@ -124,6 +137,7 @@ export default async function ProfilePage({ params }: ProfilePageProps) {
       regionalRanking={regionalRanking}
       indexPosition={position}
       postHistory={postHistory}
+      followerEstimate={followerEstimate}
     />
   );
 }

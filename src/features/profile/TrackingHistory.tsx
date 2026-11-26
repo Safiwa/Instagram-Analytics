@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import type { IndexPosition } from "../../core/analytics/benchmark";
+import type { EstimatedPoint } from "../../core/analytics/estimatedHistory";
 import { followerChanges, pointsInRange } from "../../core/analytics/history";
 import type { TrackingHistory as History } from "../../core/data/types";
 import { formatCompact, formatDate, formatPercent } from "../../core/format";
@@ -38,18 +39,46 @@ function signed(value: number, formatted: string): string {
 
 // Daily follower and engagement history measured by this site's own collector.
 export function TrackingHistoryPanel({
-  tracking,
+  tracking: measured,
   followers,
+  estimate = [],
 }: {
-  tracking: History;
+  tracking: History | null;
   followers: number;
+  // Estimated weekly followers for the year before tracking began (dashed).
+  estimate?: EstimatedPoint[];
 }) {
   const [range, setRange] = useState<(typeof RANGES)[number]["days"]>(90);
-  const visible = pointsInRange(tracking.points, range).map((point) => ({
-    ...point,
-    label: dayLabel(point.date),
-  }));
-  const changes = followerChanges(tracking.points, followers);
+  const [renderedAt] = useState(() => Date.now());
+  const today = new Date(renderedAt).toISOString().slice(0, 10);
+  const tracking: History = measured ?? { since: today, points: [] };
+  const firstMeasured = tracking.points[0];
+  const cutoff = renderedAt - range * 86_400_000;
+  // Estimated points end where measurement starts; the first measured point
+  // also carries the estimate so the dashed and solid lines meet.
+  const estimated = estimate
+    .filter(
+      (point) =>
+        Date.parse(`${point.date}T00:00:00Z`) >= cutoff &&
+        (!firstMeasured || point.date < firstMeasured.date),
+    )
+    .map((point) => ({
+      date: point.date,
+      estimated: point.followers,
+      followers: null as number | null,
+      engagementRate: null as number | null,
+      label: dayLabel(point.date),
+    }));
+  const visible = [
+    ...estimated,
+    ...pointsInRange(tracking.points, range).map((point, index) => ({
+      ...point,
+      estimated: index === 0 && estimated.length > 0 ? point.followers : (null as number | null),
+      label: dayLabel(point.date),
+    })),
+  ];
+  const hasEstimate = estimated.length > 0;
+  const changes = measured ? followerChanges(tracking.points, followers) : [];
   const hasEngagement = visible.some((point) => point.engagementRate !== null);
   // Days actually measured so far. A range longer than that shows the same
   // points as a shorter one, so the chart says why instead of looking unchanged.
@@ -69,8 +98,10 @@ export function TrackingHistoryPanel({
         <div>
           <h3 className="text-sm font-semibold text-slate-950">Follower history</h3>
           <p className="text-xs text-slate-500">
-            Measured daily by this site since {formatDate(`${tracking.since}T00:00:00Z`)} ·{" "}
-            {tracking.points.length.toLocaleString("en-US")} snapshots
+            {measured
+              ? `Measured daily by this site since ${formatDate(`${tracking.since}T00:00:00Z`)} · ${tracking.points.length.toLocaleString("en-US")} snapshots`
+              : "Not measured yet"}
+            {estimate.length > 0 ? " · earlier values Est." : ""}
           </p>
         </div>
         <div className="flex rounded-lg border border-slate-200 p-0.5" role="group" aria-label="Range">
@@ -90,7 +121,7 @@ export function TrackingHistoryPanel({
         </div>
       </div>
 
-      {range > measuredDays ? (
+      {range > measuredDays && !hasEstimate ? (
         <p data-testid="history-range-note" className="mt-3 text-xs text-slate-500">
           Only {measuredDays.toLocaleString("en-US")} {measuredDays === 1 ? "day" : "days"} measured so far,
           so {rangeLabel} shows all of it. Instagram does not publish older follower history; this
@@ -135,7 +166,9 @@ export function TrackingHistoryPanel({
               formatter={(value, name) =>
                 name === "engagementRate"
                   ? [formatPercent(Number(value)), "Engagement rate"]
-                  : [Number(value).toLocaleString("en-US"), "Followers"]
+                  : name === "estimated"
+                    ? [`${Number(value).toLocaleString("en-US")} (Est.)`, "Followers"]
+                    : [Number(value).toLocaleString("en-US"), "Followers"]
               }
             />
             <Area
@@ -147,6 +180,19 @@ export function TrackingHistoryPanel({
               fill="url(#trackingFill)"
               isAnimationActive={false}
             />
+            {hasEstimate ? (
+              <Line
+                yAxisId="followers"
+                type="monotone"
+                dataKey="estimated"
+                stroke="#818cf8"
+                strokeWidth={2}
+                strokeDasharray="5 4"
+                dot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            ) : null}
             {hasEngagement ? (
               <Line
                 yAxisId="engagement"
@@ -163,9 +209,20 @@ export function TrackingHistoryPanel({
         </ResponsiveContainer>
       </div>
       <p className="mt-2 text-[11px] text-slate-400">
-        Indigo: followers{hasEngagement ? " · Amber: engagement rate (right axis)" : ""}
+        {measured ? "Indigo: measured followers" : ""}
+        {hasEstimate ? `${measured ? " · " : ""}Dashed: estimated followers (Est.)` : ""}
+        {hasEngagement ? " · Amber: engagement rate (right axis)" : ""}
       </p>
+      {hasEstimate ? (
+        <p data-testid="estimate-note" className="mt-1 text-[11px] leading-relaxed text-slate-500">
+          Est. — Instagram does not publish past follower counts. The dashed line spreads the modeled
+          12-month growth across the year in proportion to the interactions the account&apos;s real
+          posts earned each week{measured ? ", ending where daily measurement begins" : ""}. It is not a
+          measured count.
+        </p>
+      ) : null}
 
+      {changes.length > 0 ? (
       <table data-testid="follower-changes" className="mt-4 w-full text-left text-sm">
         <thead className="text-[10px] uppercase tracking-wider text-slate-500">
           <tr>
@@ -200,6 +257,7 @@ export function TrackingHistoryPanel({
           ))}
         </tbody>
       </table>
+      ) : null}
     </div>
   );
 }

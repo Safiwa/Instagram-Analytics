@@ -118,3 +118,36 @@ describe("stored post history", () => {
     expect(refused?.posts).toHaveLength(1);
   });
 });
+
+describe("estimated follower history", () => {
+  it("ends at the anchor, starts at the modeled 12-month level and grows faster in busier weeks", async () => {
+    const { estimateFollowerHistory } = await import("../src/core/analytics/estimatedHistory");
+    const anchorDate = "2026-11-24";
+    const anchor = Date.parse(`${anchorDate}T00:00:00Z`);
+    const busy = (weeksAgo: number) => ({
+      postedAt: new Date(anchor - weeksAgo * 7 * DAY - DAY).toISOString(),
+      type: "Photo" as const,
+      likes: 10_000,
+      comments: 0,
+      views: null,
+    });
+    const points = estimateFollowerHistory({
+      anchorFollowers: 120_000,
+      anchorDate,
+      growthPct12m: 20,
+      posts: [busy(10)],
+    });
+    expect(points).toHaveLength(52);
+    expect(points[0].followers).toBe(100_000);
+    expect(points.at(-1)!.followers).toBeLessThan(120_000);
+    const steps = points.slice(1).map((point, index) => point.followers - points[index].followers);
+    expect(Math.max(...steps)).toBeGreaterThan(steps[0] * 3);
+  });
+
+  it("returns nothing without a growth figure", async () => {
+    const { estimateFollowerHistory } = await import("../src/core/analytics/estimatedHistory");
+    expect(
+      estimateFollowerHistory({ anchorFollowers: 1_000, anchorDate: "2026-11-24", growthPct12m: null, posts: [] }),
+    ).toEqual([]);
+  });
+});
