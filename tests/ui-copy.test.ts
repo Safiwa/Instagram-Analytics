@@ -158,3 +158,12 @@ describe("same-country peer benchmark", () => {
     expect(dashboard).toContain("no “Account based in” value is published");
   });
 });
+
+describe("follower history ranges", () => {
+  it("explains when a range is longer than the measured history", () => {
+    const panel = source("src/features/profile/TrackingHistory.tsx");
+    expect(panel).toContain('data-testid="history-range-note"');
+    expect(panel).toContain("measured so far");
+    expect(panel).toContain("isAnimationActive={false}");
+  });
+});

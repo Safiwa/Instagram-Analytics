@@ -51,6 +51,17 @@ export function TrackingHistoryPanel({
   }));
   const changes = followerChanges(tracking.points, followers);
   const hasEngagement = visible.some((point) => point.engagementRate !== null);
+  // Days actually measured so far. A range longer than that shows the same
+  // points as a shorter one, so the chart says why instead of looking unchanged.
+  const measuredDays = Math.max(
+    1,
+    Math.round(
+      (Date.parse(`${tracking.points.at(-1)?.date ?? tracking.since}T00:00:00Z`) -
+        Date.parse(`${tracking.since}T00:00:00Z`)) /
+        86_400_000,
+    ) + 1,
+  );
+  const rangeLabel = RANGES.find((option) => option.days === range)?.label ?? "";
 
   return (
     <div data-testid="tracking-history" className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -78,6 +89,14 @@ export function TrackingHistoryPanel({
           ))}
         </div>
       </div>
+
+      {range > measuredDays ? (
+        <p data-testid="history-range-note" className="mt-3 text-xs text-slate-500">
+          Only {measuredDays.toLocaleString("en-US")} {measuredDays === 1 ? "day" : "days"} measured so far,
+          so {rangeLabel} shows all of it. Instagram does not publish older follower history; this
+          view fills in as daily snapshots accumulate.
+        </p>
+      ) : null}
 
       <div className="mt-4 h-60 w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -125,6 +144,7 @@ export function TrackingHistoryPanel({
               stroke="#4f46e5"
               strokeWidth={2}
               fill="url(#trackingFill)"
+              isAnimationActive={false}
             />
             {hasEngagement ? (
               <Line
@@ -135,6 +155,7 @@ export function TrackingHistoryPanel({
                 strokeWidth={1.5}
                 dot={false}
                 connectNulls={false}
+                isAnimationActive={false}
               />
             ) : null}
           </ComposedChart>
