@@ -9,6 +9,7 @@ import {
   popGraphicsState,
   pushGraphicsState,
   rgb,
+  PDFString,
   type PDFFont,
   type PDFImage,
   type PDFPage,
@@ -18,6 +19,7 @@ import { engagementTrend, postsPerWeek } from "../../core/analytics/estimates";
 import { computeMetrics, describeFakeFollowers, type ProfileMetrics } from "../../core/analytics/metrics";
 import { likesVisible } from "../../core/analytics/posts";
 import type { CreatorProfile, Post } from "../../core/data/types";
+import { inferCountrySignal } from "../../core/analytics/country";
 import { formatCompact, formatDate, formatPercent, instagramProfileUrl } from "../../core/format";
 
 const PAGE_WIDTH = 595.28;
@@ -187,48 +189,94 @@ function wrapText(text: string, font: PDFFont, size: number, maxWidth: number): 
   return lines;
 }
 
+const SITE_URL = "https://www.instagram-analytics.com";
+const PAGE_MARGIN = 36;
+const INNER_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2;
+const GOOD = rgb(0.06, 0.6, 0.42);
+const WARN = rgb(0.85, 0.47, 0.04);
+
+function postUrl(profile: CreatorProfile, post: Post): string {
+  return post.permalink && /^https:\/\/(www\.)?instagram\.com\//.test(post.permalink)
+    ? post.permalink
+    : instagramProfileUrl(profile.username);
+}
+
+function interactions(post: Post): number {
+  return (likesVisible(post) ? post.likes : 0) + post.comments;
+}
+
+// Typical engagement for an account's size, used only to phrase an insight.
+function typicalEngagement(followers: number): number {
+  if (followers < 10_000) return 4;
+  if (followers < 100_000) return 2.5;
+  if (followers < 1_000_000) return 1.5;
+  return 1;
+}
+
+type Insight = { tone: "good" | "warn" | "neutral"; text: string };
+
+function profileInsights(profile: CreatorProfile, metrics: ProfileMetrics): Insight[] {
+  const insights: Insight[] = [];
+  if (engagementAvailable(profile, metrics)) {
+    const typical = typicalEngagement(profile.followers);
+    const rate = metrics.engagementRate;
+    insights.push(
+      rate >= typical
+        ? {
+            tone: "good",
+            text: `Engagement ${formatPercent(rate)} is above the ~${typical}% typical for accounts of this size.`,
+          }
+        : {
+            tone: "warn",
+            text: `Engagement ${formatPercent(rate)} is below the ~${typical}% typical for accounts of this size.`,
+          },
+    );
+  } else {
+    insights.push({
+      tone: "neutral",
+      text: "No posts are exposed by the public source, so engagement is N/A rather than zero.",
+    });
+  }
+  const trend = engagementTrend(profile.recentPosts);
+  if (trend !== null) {
+    insights.push({
+      tone: trend >= 0 ? "good" : "warn",
+      text: `Interactions on the latest posts are ${trend >= 0 ? "up" : "down"} ${Math.abs(trend).toFixed(0)}% versus earlier posts.`,
+    });
+  }
+  const byType = new Map<string, number[]>();
+  for (const post of profile.recentPosts) {
+    byType.set(post.type, [...(byType.get(post.type) ?? []), interactions(post)]);
+  }
+  const formats = [...byType.entries()]
+    .map(([type, values]) => ({ type, avg: values.reduce((a, b) => a + b, 0) / values.length, n: values.length }))
+    .sort((a, b) => b.avg - a.avg);
+  if (formats.length > 1) {
+    insights.push({
+      tone: "neutral",
+      text: `${formats[0].type}s earn the most interactions (avg ${formatCompact(formats[0].avg)} across ${formats[0].n} post${formats[0].n === 1 ? "" : "s"}).`,
+    });
+  }
+  const cadence = postsPerWeek(profile.recentPosts);
+  if (cadence !== null && insights.length < 4) {
+    insights.push({
+      tone: cadence >= 2 ? "good" : "warn",
+      text: `Posting ${cadence.toFixed(1)} times a week${cadence < 2 ? "; 3+ a week usually sustains reach" : ""}.`,
+    });
+  }
+  return insights.slice(0, 4);
+}
+
+// One A4 page: header, identity, KPIs, a clickable interactions chart, top
+// posts, insights and a short disclosure. Comparisons get one page too.
+// Handles, bars, posts and the dashboard button are clickable links.
 export async function buildReport(profiles: CreatorProfile[]): Promise<ReportResult> {
   const pdf = await PDFDocument.create();
+  pdf.setTitle(`Instagram analysis: ${profiles.map((profile) => `@${profile.username}`).join(", ")}`);
+  pdf.setAuthor(REPORT_BRAND);
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-
-  let page: PDFPage = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-  const pages: PDFPage[] = [page];
-  let y = PAGE_HEIGHT - 52;
-
-  const addPage = () => {
-    page = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-    pages.push(page);
-    y = PAGE_HEIGHT - 52;
-    page.drawText(truncateToWidth(REPORT_BRAND, bold, 8, CONTENT_WIDTH / 2), {
-      x: MARGIN,
-      y: y - 8,
-      size: 8,
-      font: bold,
-      color: ACCENT,
-    });
-    page.drawText("Instagram Profile Analytics Report", {
-      x: PAGE_WIDTH - MARGIN - 150,
-      y: y - 8,
-      size: 8,
-      font: regular,
-      color: MUTED,
-    });
-    y -= 24;
-    page.drawLine({
-      start: { x: MARGIN, y },
-      end: { x: PAGE_WIDTH - MARGIN, y },
-      thickness: 0.7,
-      color: RULE,
-    });
-    y -= 18;
-  };
-
-  const ensureSpace = (height: number) => {
-    if (y - height < FOOTER_TOP + 16) {
-      addPage();
-    }
-  };
+  const page: PDFPage = pdf.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
 
   const text = (
     value: TextLike,
@@ -241,131 +289,109 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
   ) => {
     const safe = toAscii(value, "");
     if (!safe) {
-      return;
+      return 0;
     }
-    const drawn =
-      maxWidth === undefined ? safe : truncateToWidth(safe, font, size, maxWidth);
+    const drawn = maxWidth === undefined ? safe : truncateToWidth(safe, font, size, maxWidth);
     page.drawText(drawn, { x, y: top - size, size, font, color });
+    return font.widthOfTextAtSize(drawn, size);
   };
 
-  const line = (
-    value: TextLike,
-    size = 9,
-    font: PDFFont = regular,
-    color = INK,
-    gap = 6,
-    x = MARGIN,
-    maxWidth = CONTENT_WIDTH,
-  ) => {
-    ensureSpace(size + gap);
-    text(value, x, y, size, font, color, maxWidth);
-    y -= size + gap;
+  const link = (x: number, bottom: number, width: number, height: number, url: string) => {
+    const annotation = pdf.context.obj({
+      Type: "Annot",
+      Subtype: "Link",
+      Rect: [x, bottom, x + width, bottom + height],
+      Border: [0, 0, 0],
+      A: { Type: "Action", S: "URI", URI: PDFString.of(url) },
+    });
+    page.node.addAnnot(pdf.context.register(annotation));
   };
 
-  const paragraph = (
-    value: TextLike,
-    size = 9,
-    color = INK_SOFT,
-    gap = 5,
-    x = MARGIN,
-    width = CONTENT_WIDTH,
-    maxLines?: number,
-  ) => {
-    const lines = wrapText(toAscii(value, ""), regular, size, width);
-    const visible = maxLines === undefined ? lines : lines.slice(0, maxLines);
-    for (const [index, content] of visible.entries()) {
-      const isLast = index === visible.length - 1;
-      const suffix = maxLines !== undefined && lines.length > maxLines ? "..." : "";
-      line(
-        `${content}${suffix}`,
-        size,
-        regular,
-        color,
-        isLast ? gap : 3,
-        x,
-        width,
-      );
+  const linkText = (value: string, url: string, x: number, top: number, size = 8, color = ACCENT, font = bold) => {
+    const width = text(value, x, top, size, font, color);
+    page.drawLine({
+      start: { x, y: top - size - 1.5 },
+      end: { x: x + width, y: top - size - 1.5 },
+      thickness: 0.4,
+      color,
+    });
+    link(x, top - size - 3, width, size + 4, url);
+    return width;
+  };
+
+  const sectionTitle = (title: string, top: number, hint?: string) => {
+    page.drawRectangle({ x: PAGE_MARGIN, y: top - 11, width: 2.5, height: 11, color: ACCENT });
+    const width = text(title, PAGE_MARGIN + 7, top, 9.5, bold, INK);
+    if (hint) {
+      text(hint, PAGE_MARGIN + 7 + width + 8, top - 1.5, 7, regular, MUTED);
     }
-  };
-
-  const section = (title: string, subtitle?: string) => {
-    ensureSpace(subtitle ? 46 : 32);
-    page.drawRectangle({ x: MARGIN, y: y - 21, width: 3, height: 21, color: ACCENT });
-    text(title, MARGIN + 10, y, 13, bold, INK, CONTENT_WIDTH - 10);
-    y -= 18;
-    if (subtitle) {
-      text(subtitle, MARGIN + 10, y, 8, regular, MUTED, CONTENT_WIDTH - 10);
-      y -= 14;
-    }
-    y -= 8;
+    return top - 17;
   };
 
   const badge = (label: string, x: number, top: number, color = ACCENT, background = ACCENT_SOFT) => {
-    const size = 7;
-    const labelWidth = Math.min(
-      bold.widthOfTextAtSize(toAscii(label, ""), size) + 12,
-      CONTENT_WIDTH,
-    );
-    page.drawRectangle({
-      x,
-      y: top - 13,
-      width: labelWidth,
-      height: 13,
-      color: background,
-      borderWidth: 0.5,
-      borderColor: color,
-    });
-    text(label, x + 6, top - 2.5, size, bold, color);
-    return labelWidth;
+    const width = bold.widthOfTextAtSize(toAscii(label, ""), 6.5) + 10;
+    page.drawRectangle({ x, y: top - 12, width, height: 12, color: background, borderWidth: 0.4, borderColor: color });
+    text(label, x + 5, top - 3, 6.5, bold, color);
+    return width;
   };
 
-  const kpiCard = (
-    x: number,
-    top: number,
-    width: number,
-    label: string,
-    value: string,
-    highlight = false,
-  ) => {
-    const height = 48;
+  const kpi = (x: number, top: number, width: number, label: string, value: string, note?: string, highlight = false) => {
+    const height = 40;
     page.drawRectangle({
       x,
       y: top - height,
       width,
       height,
       color: highlight ? CYAN_SOFT : PANEL,
-      borderWidth: 0.6,
+      borderWidth: 0.5,
       borderColor: highlight ? CYAN : RULE,
     });
-    text(label, x + 8, top - 12, 6.5, bold, MUTED, width - 16);
-    text(value, x + 8, top - 29, 12, bold, highlight ? ACCENT : INK, width - 16);
+    text(label, x + 7, top - 7, 6, bold, MUTED, width - 14);
+    text(value, x + 7, top - 18, 12, bold, highlight ? ACCENT : INK, width - 14);
+    if (note) {
+      text(note, x + 7, top - 32, 5.5, regular, MUTED, width - 14);
+    }
   };
 
-  const drawCircularAvatar = (
-    image: PDFImage | null,
-    profile: CreatorProfile,
-    x: number,
-    bottom: number,
-    diameter: number,
-  ) => {
+  const avatarImage = async (url?: string): Promise<PDFImage | null> => {
+    if (!url) return null;
+    let target: URL;
+    try {
+      target = new URL(url);
+    } catch {
+      return null;
+    }
+    if (target.protocol !== "https:" || !isAllowedAvatarHost(target.hostname)) return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const response = await fetch(target.href, {
+        headers: { Accept: "image/png,image/jpeg" },
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!response.ok) return null;
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.length === 0 || bytes.length > 5_000_000) return null;
+      const type = response.headers.get("content-type")?.toLowerCase() ?? "";
+      if (type.includes("image/png") || (bytes[0] === 0x89 && bytes[1] === 0x50)) return await pdf.embedPng(bytes);
+      if (type.includes("image/jpeg") || (bytes[0] === 0xff && bytes[1] === 0xd8)) return await pdf.embedJpg(bytes);
+      return null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  const avatar = (image: PDFImage | null, profile: CreatorProfile, x: number, bottom: number, diameter: number) => {
     const radius = diameter / 2;
     const cx = x + radius;
     const cy = bottom + radius;
     const k = 0.5522847498;
-
-    page.drawCircle({
-      x: cx,
-      y: cy,
-      size: radius,
-      color: ACCENT_SOFT,
-      borderWidth: 1,
-      borderColor: ACCENT,
-    });
-
+    page.drawCircle({ x: cx, y: cy, size: radius, color: ACCENT_SOFT, borderWidth: 1, borderColor: ACCENT });
     if (image) {
       const scale = Math.max(diameter / image.width, diameter / image.height);
-      const drawWidth = image.width * scale;
-      const drawHeight = image.height * scale;
       page.pushOperators(
         pushGraphicsState(),
         moveTo(cx, cy + radius),
@@ -378,604 +404,336 @@ export async function buildReport(profiles: CreatorProfile[]): Promise<ReportRes
         endPath(),
       );
       page.drawImage(image, {
-        x: cx - drawWidth / 2,
-        y: cy - drawHeight / 2,
-        width: drawWidth,
-        height: drawHeight,
+        x: cx - (image.width * scale) / 2,
+        y: cy - (image.height * scale) / 2,
+        width: image.width * scale,
+        height: image.height * scale,
       });
       page.pushOperators(popGraphicsState());
-      page.drawCircle({
-        x: cx,
-        y: cy,
-        size: radius,
-        borderWidth: 1,
-        borderColor: WHITE,
-      });
       return;
     }
-
     const initials = initialsFor(profile);
-    const initialsWidth = bold.widthOfTextAtSize(initials, 12);
-    text(initials, cx - initialsWidth / 2, cy + 6, 12, bold, ACCENT, diameter - 4);
+    const size = diameter * 0.32;
+    text(initials, cx - bold.widthOfTextAtSize(initials, size) / 2, cy + size / 2, size, bold, ACCENT);
   };
 
-  const loadAvatar = async (url?: string): Promise<PDFImage | null> => {
-    if (!url) {
-      return null;
-    }
-
-    let target: URL;
-    try {
-      target = new URL(url);
-    } catch {
-      return null;
-    }
-    if (target.protocol !== "https:" || !isAllowedAvatarHost(target.hostname)) {
-      return null;
-    }
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    try {
-      const response = await fetch(target.href, {
-        headers: { Accept: "image/png,image/jpeg" },
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      if (!response.ok) {
-        return null;
-      }
-
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.length === 0 || bytes.length > 5_000_000) {
-        return null;
-      }
-
-      const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
-      const isPng =
-        contentType.includes("image/png") ||
-        (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47);
-      const isJpg =
-        contentType.includes("image/jpeg") ||
-        (bytes[0] === 0xff && bytes[1] === 0xd8);
-
-      if (isPng) {
-        return await pdf.embedPng(bytes);
-      }
-      if (isJpg) {
-        return await pdf.embedJpg(bytes);
-      }
-      return null;
-    } catch {
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
-  const reportRows = profiles.map((profile) => ({ profile, metrics: computeMetrics(profile) }));
-  const hasEstimates = reportRows.some((row) => row.metrics.estimateConfidence !== null);
-  const hasStored = reportRows.some((row) => row.metrics.storedEngagement !== null);
-  const label = sourceLabel(profiles);
+  const rows = profiles.map((profile) => ({ profile, metrics: computeMetrics(profile) }));
   const generated = new Date().toISOString().slice(0, 10);
+  const dashboardUrl =
+    profiles.length === 1
+      ? `${SITE_URL}/profile/${encodeURIComponent(profiles[0].username)}`
+      : `${SITE_URL}/compare?handles=${profiles.map((profile) => encodeURIComponent(profile.username)).join(",")}`;
 
-  page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 96, width: PAGE_WIDTH, height: 96, color: INK });
-  text(REPORT_BRAND, MARGIN, PAGE_HEIGHT - 30, 11, bold, WHITE, CONTENT_WIDTH);
-  text("Instagram Analysis Report", MARGIN, PAGE_HEIGHT - 60, 22, bold, WHITE, CONTENT_WIDTH);
+  // Header band with the live-dashboard button.
+  page.drawRectangle({ x: 0, y: PAGE_HEIGHT - 70, width: PAGE_WIDTH, height: 70, color: INK });
+  text(REPORT_BRAND, PAGE_MARGIN, PAGE_HEIGHT - 16, 8, bold, CYAN, INNER_WIDTH - 150);
   text(
-    `Generated ${generated} | ${label} | ${profiles.length} profile${profiles.length === 1 ? "" : "s"}`,
-    MARGIN,
-    PAGE_HEIGHT - 82,
-    8.5,
-    regular,
-    CYAN,
-    CONTENT_WIDTH,
-  );
-  y = PAGE_HEIGHT - 122;
-
-  section("Executive summary", "What this report covers and how the figures should be read");
-  const totalFollowers = profiles.reduce((sum, profile) => sum + profile.followers, 0);
-  const measuredProfiles = reportRows.filter((row) => engagementAvailable(row.profile, row.metrics));
-  const averageEngagement =
-    measuredProfiles.length > 0
-      ? measuredProfiles.reduce((sum, row) => sum + row.metrics.engagementRate, 0) /
-        measuredProfiles.length
-      : null;
-  const strongest =
-    measuredProfiles.length > 0
-      ? [...measuredProfiles].sort((a, b) => b.metrics.engagementRate - a.metrics.engagementRate)[0]
-      : null;
-
-  paragraph(
-    `This dossier reviews ${profiles.length} Instagram account${profiles.length === 1 ? "" : "s"} using ${label.toLowerCase()}. It combines public account facts, post-level engagement, growth and authenticity disclosures, and a source-aware comparison. Values Instagram does not publish are shown as N/A, not as zero.`,
-    9,
-    INK_SOFT,
-    8,
-  );
-
-  const summaryCardHeight = 58;
-  ensureSpace(summaryCardHeight + 10);
-  const summaryCardTop = y;
-  page.drawRectangle({
-    x: MARGIN,
-    y: y - summaryCardHeight,
-    width: CONTENT_WIDTH,
-    height: summaryCardHeight,
-    color: PANEL,
-    borderWidth: 0.6,
-    borderColor: RULE,
-  });
-  const summaryWidth = CONTENT_WIDTH / 3;
-  text("COMBINED FOLLOWERS", MARGIN + 10, y - 12, 6.5, bold, MUTED, summaryWidth - 20);
-  text(
-    formatCompact(totalFollowers, "N/A"),
-    MARGIN + 10,
-    y - 30,
-    13,
+    profiles.length === 1 ? "Instagram Analysis Report" : "Instagram Comparison Report",
+    PAGE_MARGIN,
+    PAGE_HEIGHT - 30,
+    17,
     bold,
-    INK,
-    summaryWidth - 20,
-  );
-  text("AVG ENGAGEMENT", MARGIN + summaryWidth + 10, y - 12, 6.5, bold, MUTED, summaryWidth - 20);
-  text(
-    averageEngagement === null ? "N/A" : formatPercent(averageEngagement, "N/A"),
-    MARGIN + summaryWidth + 10,
-    y - 30,
-    13,
-    bold,
-    INK,
-    summaryWidth - 20,
-  );
-  const leaderLabel = strongest ? `@${strongest.profile.username}` : "Not available";
-  text(
-    "HIGHEST ENGAGEMENT",
-    MARGIN + summaryWidth * 2 + 10,
-    y - 12,
-    6.5,
-    bold,
-    MUTED,
-    summaryWidth - 20,
+    WHITE,
   );
   text(
-    leaderLabel,
-    MARGIN + summaryWidth * 2 + 10,
-    y - 30,
-    11,
-    bold,
-    ACCENT,
-    summaryWidth - 20,
-  );
-  y = summaryCardTop - summaryCardHeight - 14;
-
-  if (hasStored) {
-    line(
-      "Where Instagram hid every post on this lookup, engagement figures are this site's own last stored measurement, dated per profile.",
-      8,
-      regular,
-      MUTED,
-      8,
-    );
-  }
-  if (hasEstimates) {
-    line(
-      "Fake followers, authenticity and growth are modeled estimates wherever measured history is unavailable.",
-      8,
-      regular,
-      MUTED,
-      8,
-    );
-  }
-
-  for (const [index, { profile, metrics }] of reportRows.entries()) {
-    if (index > 0) {
-      addPage();
-    }
-    section(`Profile ${index + 1}: @${profile.username}`, "Identity, headline metrics and data basis");
-
-    const avatarTop = y;
-    const avatarSize = 38;
-    ensureSpace(avatarSize + 8);
-    const avatar = await loadAvatar(profile.profilePictureUrl);
-    drawCircularAvatar(avatar, profile, MARGIN, avatarTop - avatarSize, avatarSize);
-
-    const identityX = MARGIN + avatarSize + 12;
-    const identityWidth = CONTENT_WIDTH - avatarSize - 12;
-    text(toAscii(profile.displayName, `@${profile.username}`), identityX, avatarTop - 4, 15, bold, INK, identityWidth);
-    text(
-      `@${profile.username} | ${toAscii(profile.category, "Uncategorized")}`,
-      identityX,
-      avatarTop - 22,
-      9,
-      regular,
-      MUTED,
-      identityWidth,
-    );
-
-    let badgeX = identityX;
-    const verificationWidth = badge(profile.isVerified ? "Verified" : "Not verified", badgeX, avatarTop - 39);
-    badgeX += verificationWidth + 6;
-    const sourceWidth = badge(
-      profileSourceLabel(profile),
-      badgeX,
-      avatarTop - 39,
-      INK_SOFT,
-      PANEL,
-    );
-    badgeX += sourceWidth + 6;
-    if (metrics.growthEstimated || metrics.authenticityEstimated || metrics.storedEngagement) {
-      badge(
-        metrics.storedEngagement ? "Stored measurement" : "Est. metrics",
-        badgeX,
-        avatarTop - 39,
-        ACCENT,
-        ACCENT_SOFT,
-      );
-    }
-    y = avatarTop - avatarSize - 12;
-
-    const kpiTop = y;
-    const gap = 7;
-    const cardWidth = (CONTENT_WIDTH - gap * 3) / 4;
-    ensureSpace(56);
-    kpiCard(MARGIN, kpiTop, cardWidth, "FOLLOWERS", formatCompact(profile.followers, "N/A"));
-    kpiCard(
-      MARGIN + cardWidth + gap,
-      kpiTop,
-      cardWidth,
-      metrics.storedEngagement ? "ENGAGEMENT (STORED)" : "ENGAGEMENT",
-      engagementValue(profile, metrics),
-      true,
-    );
-    kpiCard(
-      MARGIN + (cardWidth + gap) * 2,
-      kpiTop,
-      cardWidth,
-      "AUTHENTICITY",
-      formatPercent(metrics.authenticityPct, "N/A") +
-        (metrics.authenticityEstimated ? " est." : ""),
-    );
-    kpiCard(
-      MARGIN + (cardWidth + gap) * 3,
-      kpiTop,
-      cardWidth,
-      "12M GROWTH",
-      formatPercent(metrics.followerGrowthPct, "N/A") + (metrics.growthEstimated ? " est." : ""),
-    );
-    y = kpiTop - 56 - 14;
-
-    section("Account snapshot", "Public profile fields and measurement basis");
-    line(`Following ${formatCompact(profile.following, "N/A")} | Posts ${formatCompact(profile.postsCount, "N/A")} | Public profile ${toAscii(instagramProfileUrl(profile.username), "")}`);
-    line(
-      `Account country ${toAscii(profile.accountCountry ?? "Not published", "")} | Website ${toAscii(profile.website ?? "Not published", "")}`,
-    );
-    if (profile.bio) {
-      paragraph(`Bio: ${profile.bio}`, 8.5, MUTED, 8, MARGIN, CONTENT_WIDTH, 3);
-    }
-    if (profile.isPrivate) {
-      line("Private account: posts and engagement are not exposed publicly.", 8.5, regular, MUTED, 8);
-    }
-
-    section("Engagement analysis", "Measured from visible public posts unless labeled otherwise");
-    const postCount = profile.recentPosts.length;
-    const trend = engagementTrend(profile.recentPosts);
-    const cadence = postsPerWeek(profile.recentPosts);
-    line(
-      `Recent post sample ${postCount} | Avg likes ${postMetric(metrics.avgLikes, profile.recentPosts)} | Avg comments ${postMetric(metrics.avgComments, profile.recentPosts)} | Avg saves ${metrics.avgSaves === null ? "N/A" : formatCompact(metrics.avgSaves, "N/A")}`,
-      8.5,
-      regular,
-      INK_SOFT,
-      6,
-    );
-    line(
-      `Engagement basis ${toAscii(metrics.engagementBasis.replaceAll(":", " "), "")} | Interaction trend ${trend === null ? "N/A" : `${trend > 0 ? "+" : ""}${trend.toFixed(2)}%`} | Cadence ${cadence === null ? "N/A" : `${cadence.toFixed(1)} posts/week`}`,
-      8.5,
-      regular,
-      MUTED,
-      8,
-    );
-
-    if (metrics.storedEngagement) {
-      const stored = metrics.storedEngagement;
-      line(
-        `Last stored measurement: ${formatPercent(stored.engagementRatePct, "N/A")} engagement, ${formatCompact(stored.averageLikes, "N/A")} avg likes, ${formatCompact(stored.averageComments, "N/A")} avg comments.`,
-        8.5,
-        regular,
-        INK_SOFT,
-        4,
-      );
-      line(
-        `Measured by this site from public posts on ${toAscii(stored.measuredOn, "")}; Instagram hid the posts on this lookup.`,
-        8,
-        regular,
-        MUTED,
-        8,
-      );
-    } else if (postCount === 0) {
-      line(
-        "No posts are exposed by the public source. Engagement-related averages are shown as N/A, not zeros.",
-        8.5,
-        regular,
-        MUTED,
-        8,
-      );
-    }
-
-    section("Growth and authenticity", "Measured history first, disclosed estimates only where required");
-    const history = profile.followerHistory;
-    if (history.length >= 2) {
-      line(
-        `Measured history: ${toAscii(history[0].month, "")} ${formatCompact(history[0].followers, "N/A")} to ${toAscii(history[history.length - 1].month, "")} ${formatCompact(history[history.length - 1].followers, "N/A")}.`,
-        8.5,
-        regular,
-        INK_SOFT,
-        6,
-      );
-    }
-    line(
-      `12-month change ${formatPercent(metrics.followerGrowthPct, "N/A")}${metrics.growthEstimated ? " (est.)" : metrics.followerGrowthPct === null ? "" : " (measured)"} | Fake followers ${describeFakeFollowers(metrics, "N/A")}${metrics.authenticityEstimated ? " (est.)" : ""} | Authenticity ${formatPercent(metrics.authenticityPct, "N/A")}${metrics.authenticityEstimated ? " (est.)" : ""}`,
-      8.5,
-      regular,
-      INK_SOFT,
-      6,
-    );
-
-    if (metrics.estimateConfidence) {
-      line(
-        `Estimate confidence: ${ESTIMATE_CONFIDENCE_LABEL[metrics.estimateConfidence]}. ${toAscii(metrics.estimateMethodology ?? "", "")}`,
-        8,
-        regular,
-        MUTED,
-        5,
-      );
-      const signalText = metrics.estimateSignals
-        .map((signal) => `${signal.label}: ${signal.value} (${signal.impact})`)
-        .join(" | ");
-      paragraph(`Signals: ${signalText}`, 7.5, MUTED, 8, MARGIN, CONTENT_WIDTH, 4);
-    } else if (profile.source === "demo") {
-      line("Demo fixture: these values are fixed for testing and are not modeled.", 8, regular, MUTED, 8);
-    } else {
-      line(
-        "No modeled estimate is used because the public source does not expose enough evidence.",
-        8,
-        regular,
-        MUTED,
-        8,
-      );
-    }
-
-    section("Recent posts", "Up to 12 public posts; saved values appear only when exposed");
-    if (postCount === 0) {
-      line("Recent posts are not exposed for this account.", 9, regular, MUTED, 8);
-    } else {
-      const columns = [
-        { label: "DATE", width: 58 },
-        { label: "TYPE", width: 54 },
-        { label: "LIKES", width: 58 },
-        { label: "COMMENTS", width: 66 },
-        { label: "SAVES", width: 58 },
-        { label: "CAPTION / TOPIC", width: CONTENT_WIDTH - 294 },
-      ];
-      const drawPostHeader = () => {
-        ensureSpace(22);
-        page.drawRectangle({
-          x: MARGIN,
-          y: y - 18,
-          width: CONTENT_WIDTH,
-          height: 18,
-          color: ACCENT_SOFT,
-        });
-        let colX = MARGIN + 5;
-        for (const column of columns) {
-          text(column.label, colX, y - 4, 6.5, bold, ACCENT, column.width - 8);
-          colX += column.width;
-        }
-        y -= 22;
-      };
-      drawPostHeader();
-
-      for (const [postIndex, post] of profile.recentPosts.slice(0, 12).entries()) {
-        if (y - 28 < FOOTER_TOP + 16) {
-          addPage();
-          drawPostHeader();
-        }
-        const rowTop = y;
-        if (postIndex % 2 === 1) {
-          page.drawRectangle({
-            x: MARGIN,
-            y: rowTop - 26,
-            width: CONTENT_WIDTH,
-            height: 26,
-            color: PANEL,
-          });
-        }
-        let colX = MARGIN + 5;
-        const cells = [
-          formatDate(post.postedAt, false),
-          post.type,
-          likesVisible(post) ? postMetric(post.likes, [post]) : "Hidden",
-          postMetric(post.comments, [post]),
-          post.saves === undefined ? "N/A" : formatCompact(post.saves, "N/A"),
-          post.caption || post.hashtags.join(" ") || "No caption",
-        ];
-        cells.forEach((cell, cellIndex) => {
-          const width = columns[cellIndex].width - 8;
-          text(cell, colX, rowTop - 16, 7.5, regular, cellIndex === 5 ? MUTED : INK_SOFT, width);
-          colX += columns[cellIndex].width;
-        });
-        y -= 28;
-      }
-      if (postCount >= 12) {
-        line(
-          "Public view exposes at most 12 recent posts; totals in this table are a sample, not the account lifetime.",
-          7.5,
-          regular,
-          MUTED,
-          8,
-        );
-      }
-    }
-
-    section("Audience and source limits", "What Instagram publishes and what remains unavailable");
-    if (profile.audience) {
-      line(
-        `Top countries: ${profile.audience.topCountries
-          .slice(0, 3)
-          .map((slice) => `${slice.label} ${slice.percentage}%`)
-          .join(" | ") || "N/A"}`,
-        8.5,
-        regular,
-        INK_SOFT,
-        4,
-      );
-      line(
-        `Age: ${profile.audience.ageGroups
-          .slice(0, 3)
-          .map((slice) => `${slice.label} ${slice.percentage}%`)
-          .join(" | ") || "N/A"} | Gender: ${profile.audience.gender
-          .slice(0, 3)
-          .map((slice) => `${slice.label} ${slice.percentage}%`)
-          .join(" | ") || "N/A"}`,
-        8.5,
-        regular,
-        MUTED,
-        8,
-      );
-    } else {
-      line(
-        "Audience demographics are not published by Instagram for this account and are left blank.",
-        8.5,
-        regular,
-        MUTED,
-        8,
-      );
-    }
-    line(
-      "Saves, reach and measured follower history remain unavailable unless explicitly shown above. N/A means not exposed, never zero.",
-      8,
-      regular,
-      MUTED,
-      8,
-    );
-  }
-
-  if (profiles.length > 1) {
-    addPage();
-    section("Side-by-side comparison", "Identical fields, source labels and honest gaps");
-    const columns = [
-      { label: "PROFILE", width: 126 },
-      { label: "FOLLOWERS", width: 66 },
-      { label: "ENGAGEMENT", width: 76 },
-      { label: "12M GROWTH", width: 72 },
-      { label: "AUTHENTICITY", width: 80 },
-      { label: "SOURCE", width: CONTENT_WIDTH - 420 },
-    ];
-    const drawHeader = () => {
-      ensureSpace(22);
-      page.drawRectangle({
-        x: MARGIN,
-        y: y - 18,
-        width: CONTENT_WIDTH,
-        height: 18,
-        color: ACCENT_SOFT,
-      });
-      let x = MARGIN + 5;
-      for (const column of columns) {
-        text(column.label, x, y - 4, 6.5, bold, ACCENT, column.width - 8);
-        x += column.width;
-      }
-      y -= 22;
-    };
-    drawHeader();
-    for (const [rowIndex, { profile, metrics }] of reportRows.entries()) {
-      if (y - 28 < FOOTER_TOP + 16) {
-        addPage();
-        drawHeader();
-      }
-      const rowTop = y;
-      if (rowIndex % 2 === 1) {
-        page.drawRectangle({
-          x: MARGIN,
-          y: rowTop - 26,
-          width: CONTENT_WIDTH,
-          height: 26,
-          color: PANEL,
-        });
-      }
-      let x = MARGIN + 5;
-      const cells = [
-        `@${profile.username}`,
-        formatCompact(profile.followers, "N/A"),
-        engagementValue(profile, metrics) + (metrics.storedEngagement ? " (stored)" : ""),
-        formatPercent(metrics.followerGrowthPct, "N/A") + (metrics.growthEstimated ? " est." : ""),
-        formatPercent(metrics.authenticityPct, "N/A") + (metrics.authenticityEstimated ? " est." : ""),
-        profileSourceLabel(profile),
-      ];
-      cells.forEach((cell, cellIndex) => {
-        text(cell, x, rowTop - 16, 7.5, regular, INK_SOFT, columns[cellIndex].width - 8);
-        x += columns[cellIndex].width;
-      });
-      y -= 28;
-    }
-    y -= 8;
-    paragraph(
-      "Comparison rows use the same source-aware rules as the individual sections. Do not treat a modeled est. value as an Instagram-measured metric; stored values are dated earlier measurements.",
-      8,
-      MUTED,
-      8,
-    );
-  }
-
-  addPage();
-  section("Methodology and disclosures", "How to interpret this document");
-  const disclosures = [
-    "Measured data: follower, following and post counts plus likes, comments and any exposed saves from public posts.",
-    "Modeled estimates: fake followers, authenticity and growth use disclosed public signals only when Instagram publishes no measured history. Confidence, methodology and signals are listed per profile.",
-    "Stored measurements: when Instagram hides every post on a lookup, engagement uses this site's own most recent stored snapshot with visible posts, dated per profile, and is never mixed into the public-signal model.",
-    "Unavailable values: N/A means Instagram did not expose the value. It is not a zero and is not invented.",
-    "Public sample: at most 12 recent, non-pinned posts are visible. Captions and topic labels are descriptive only and are not audience-demographic claims.",
-    "Profile photos: small circular icons use the public Instagram avatar URL when it is reachable; otherwise initials are shown. No synthetic profile image is generated.",
-    "Audience, saves, reach and true follower history are not published by Instagram for public lookups and remain omitted unless explicitly present above.",
-  ];
-  for (const disclosure of disclosures) {
-    ensureSpace(30);
-    page.drawCircle({ x: MARGIN + 3, y: y - 4, size: 2, color: ACCENT });
-    paragraph(disclosure, 8.5, INK_SOFT, 8, MARGIN + 14, CONTENT_WIDTH - 14);
-  }
-  y -= 4;
-  line(
-    "This is an unofficial analysis of public information. Instagram is a trademark of Meta Platforms, Inc.; this report is not affiliated with or endorsed by Meta.",
+    `Generated ${generated} | ${sourceLabel(profiles)} | ${profiles.length} profile${profiles.length === 1 ? "" : "s"}`,
+    PAGE_MARGIN,
+    PAGE_HEIGHT - 53,
     7.5,
     regular,
-    MUTED,
-    4,
+    rgb(0.75, 0.8, 0.9),
   );
+  const buttonLabel = "Open live dashboard >";
+  const buttonWidth = bold.widthOfTextAtSize(buttonLabel, 8) + 18;
+  const buttonX = PAGE_WIDTH - PAGE_MARGIN - buttonWidth;
+  page.drawRectangle({ x: buttonX, y: PAGE_HEIGHT - 47, width: buttonWidth, height: 20, color: ACCENT });
+  text(buttonLabel, buttonX + 9, PAGE_HEIGHT - 33, 8, bold, WHITE);
+  link(buttonX, PAGE_HEIGHT - 47, buttonWidth, 20, dashboardUrl);
 
-  for (const [pageIndex, reportPage] of pages.entries()) {
-    reportPage.drawLine({
-      start: { x: MARGIN, y: FOOTER_TOP + 8 },
-      end: { x: PAGE_WIDTH - MARGIN, y: FOOTER_TOP + 8 },
-      thickness: 0.5,
-      color: RULE,
+  let y = PAGE_HEIGHT - 86;
+
+  if (profiles.length === 1) {
+    const { profile, metrics } = rows[0];
+
+    // Identity.
+    const diameter = 46;
+    avatar(await avatarImage(profile.profilePictureUrl), profile, PAGE_MARGIN, y - diameter, diameter);
+    const idX = PAGE_MARGIN + diameter + 12;
+    const idWidth = INNER_WIDTH - diameter - 12;
+    text(toAscii(profile.displayName, `@${profile.username}`), idX, y - 2, 14, bold, INK, idWidth);
+    let lineX = idX;
+    lineX += linkText(`@${profile.username}`, instagramProfileUrl(profile.username), lineX, y - 20, 8.5) + 4;
+    const country = inferCountrySignal(profile).country;
+    text(
+      `| ${toAscii(profile.category, "Uncategorized")} | ${country ?? "Country not published"}`,
+      lineX,
+      y - 20,
+      8.5,
+      regular,
+      MUTED,
+      idWidth - (lineX - idX),
+    );
+    let badgeX = idX;
+    badgeX += badge(profile.isVerified ? "Verified" : "Not verified", badgeX, y - 33) + 5;
+    badgeX += badge(profileSourceLabel(profile), badgeX, y - 33, INK_SOFT, PANEL) + 5;
+    if (metrics.growthEstimated || metrics.authenticityEstimated) {
+      badge("Includes est. values", badgeX, y - 33, WARN, rgb(1, 0.96, 0.9));
+    }
+    y -= diameter + 6;
+    if (profile.bio) {
+      const bio = wrapText(profile.bio, regular, 7.5, INNER_WIDTH).slice(0, 2);
+      for (const [index, content] of bio.entries()) {
+        text(index === 1 && wrapText(profile.bio, regular, 7.5, INNER_WIDTH).length > 2 ? `${content}...` : content, PAGE_MARGIN, y, 7.5, regular, INK_SOFT);
+        y -= 10;
+      }
+    }
+    y -= 6;
+
+    // KPIs: two rows of four.
+    y = sectionTitle("Key metrics", y, "est. = modeled from public signals; N/A = not published");
+    const gap = 6;
+    const cardWidth = (INNER_WIDTH - gap * 3) / 4;
+    const trend = engagementTrend(profile.recentPosts);
+    const cadence = postsPerWeek(profile.recentPosts);
+    const cards: [string, string, string?, boolean?][] = [
+      ["FOLLOWERS", formatCompact(profile.followers, "N/A"), `${formatCompact(profile.following, "N/A")} following`],
+      [
+        metrics.storedEngagement ? "ENGAGEMENT (STORED)" : "ENGAGEMENT RATE",
+        engagementValue(profile, metrics),
+        `typical ~${typicalEngagement(profile.followers)}% at this size`,
+        true,
+      ],
+      ["AVG LIKES", postMetric(metrics.avgLikes, profile.recentPosts), `per post, ${profile.recentPosts.length} posts`],
+      ["AVG COMMENTS", postMetric(metrics.avgComments, profile.recentPosts), "per post"],
+      ["POSTS / WEEK", cadence === null ? "N/A" : cadence.toFixed(1), `${formatCompact(profile.postsCount, "N/A")} posts total`],
+      ["INTERACTION TREND", trend === null ? "N/A" : `${trend > 0 ? "+" : ""}${trend.toFixed(1)}%`, "latest vs earlier posts"],
+      [
+        "FAKE FOLLOWERS",
+        describeFakeFollowers(metrics, "N/A").replace(/\s*\(.*\)$/, ""),
+        metrics.authenticityEstimated ? "est." : metrics.fakeFollowers === null ? "not estimated" : "measured",
+      ],
+      [
+        "12-MONTH GROWTH",
+        formatPercent(metrics.followerGrowthPct, "N/A"),
+        metrics.growthEstimated ? "est." : metrics.followerGrowthPct === null ? "not published" : "measured",
+      ],
+    ];
+    cards.forEach(([label, value, note, highlight], index) => {
+      const column = index % 4;
+      const row = Math.floor(index / 4);
+      kpi(PAGE_MARGIN + column * (cardWidth + gap), y - row * 46, cardWidth, label, value, note, highlight);
     });
-    reportPage.drawText(REPORT_BRAND, {
-      x: MARGIN,
-      y: FOOTER_TOP - 4,
-      size: 7,
-      font: bold,
-      color: ACCENT,
-    });
-    const pageLabel = `Page ${pageIndex + 1} of ${pages.length}`;
-    reportPage.drawText(pageLabel, {
-      x: PAGE_WIDTH - MARGIN - regular.widthOfTextAtSize(pageLabel, 7),
-      y: FOOTER_TOP - 4,
-      size: 7,
-      font: regular,
-      color: MUTED,
-    });
+    y -= 46 * 2 + 8;
+
+    // Interactions chart, oldest to newest; each bar opens its post.
+    const posts = [...profile.recentPosts].slice(0, 12).reverse();
+    y = sectionTitle("Interactions per post", y, posts.length > 0 ? "likes + comments | click a bar to open the post" : undefined);
+    const chartHeight = 92;
+    if (posts.length === 0) {
+      text(
+        "No posts are exposed by the public source. Engagement-related averages are shown as N/A, not zeros.",
+        PAGE_MARGIN,
+        y,
+        8,
+        regular,
+        MUTED,
+      );
+      y -= 18;
+    } else {
+      const max = Math.max(...posts.map(interactions), 1);
+      const slot = INNER_WIDTH / posts.length;
+      const barWidth = Math.min(slot * 0.62, 30);
+      const base = y - chartHeight;
+      page.drawLine({ start: { x: PAGE_MARGIN, y: base }, end: { x: PAGE_WIDTH - PAGE_MARGIN, y: base }, thickness: 0.5, color: RULE });
+      const average = posts.reduce((sum, post) => sum + interactions(post), 0) / posts.length;
+      const averageY = base + (average / max) * (chartHeight - 14);
+      page.drawLine({
+        start: { x: PAGE_MARGIN, y: averageY },
+        end: { x: PAGE_WIDTH - PAGE_MARGIN, y: averageY },
+        thickness: 0.5,
+        color: CYAN,
+        dashArray: [3, 2],
+      });
+      text(`avg ${formatCompact(average)}`, PAGE_WIDTH - PAGE_MARGIN - 40, averageY + 9, 6, bold, CYAN);
+      posts.forEach((post, index) => {
+        const value = interactions(post);
+        const height = Math.max(1.5, (value / max) * (chartHeight - 14));
+        const x = PAGE_MARGIN + index * slot + (slot - barWidth) / 2;
+        page.drawRectangle({ x, y: base, width: barWidth, height, color: value >= average ? ACCENT : rgb(0.66, 0.64, 0.96) });
+        const label = formatCompact(value);
+        text(label, x + barWidth / 2 - regular.widthOfTextAtSize(label, 5.5) / 2, base + height + 8, 5.5, regular, INK_SOFT);
+        const date = formatDate(post.postedAt, false);
+        text(date, x + barWidth / 2 - regular.widthOfTextAtSize(date, 5.5) / 2, base - 3, 5.5, regular, MUTED);
+        link(x, base, barWidth, Math.max(height, 12), postUrl(profile, post));
+      });
+      y = base - 16;
+    }
+
+    // Top posts.
+    const top = [...profile.recentPosts].sort((a, b) => interactions(b) - interactions(a)).slice(0, 3);
+    if (top.length > 0) {
+      y = sectionTitle("Top posts", y, "by interactions | click to open");
+      for (const [index, post] of top.entries()) {
+        if (index % 2 === 0) {
+          page.drawRectangle({ x: PAGE_MARGIN, y: y - 17, width: INNER_WIDTH, height: 18, color: PANEL });
+        }
+        const cells: [string, number, PDFFont, typeof INK][] = [
+          [`${index + 1}. ${formatDate(post.postedAt, false)}`, 62, bold, INK],
+          [post.type, 46, regular, INK_SOFT],
+          [`${likesVisible(post) ? formatCompact(post.likes) : "Hidden"} likes`, 70, regular, INK_SOFT],
+          [`${formatCompact(post.comments)} comments`, 74, regular, INK_SOFT],
+        ];
+        let x = PAGE_MARGIN + 5;
+        for (const [value, width, font, color] of cells) {
+          text(value, x, y - 5, 7.5, font, color, width - 6);
+          x += width;
+        }
+        const openWidth = 34;
+        text(post.caption || post.hashtags.join(" ") || "No caption", x, y - 5, 7.5, regular, MUTED, PAGE_WIDTH - PAGE_MARGIN - x - openWidth - 6);
+        linkText("Open >", postUrl(profile, post), PAGE_WIDTH - PAGE_MARGIN - openWidth, y - 5, 7.5);
+        y -= 19;
+      }
+      y -= 6;
+    }
+
+    // Insights.
+    y = sectionTitle("Key insights", y);
+    for (const insight of profileInsights(profile, metrics)) {
+      const color = insight.tone === "good" ? GOOD : insight.tone === "warn" ? WARN : ACCENT;
+      page.drawCircle({ x: PAGE_MARGIN + 4, y: y - 4, size: 2.4, color });
+      const lines = wrapText(insight.text, regular, 8, INNER_WIDTH - 14).slice(0, 2);
+      for (const content of lines) {
+        text(content, PAGE_MARGIN + 12, y, 8, regular, INK_SOFT);
+        y -= 11;
+      }
+      y -= 2;
+    }
+    if (profile.audience && profile.audience.topCountries.length > 0) {
+      y -= 2;
+      text(
+        `Audience (Instagram Insights): ${profile.audience.topCountries
+          .slice(0, 3)
+          .map((slice) => `${slice.label} ${slice.percentage}%`)
+          .join(", ")}`,
+        PAGE_MARGIN,
+        y,
+        7.5,
+        regular,
+        MUTED,
+        INNER_WIDTH,
+      );
+      y -= 12;
+    }
+  } else {
+    // Comparison: one row per profile, then an engagement bar chart.
+    y = sectionTitle("Side-by-side", y, "click a handle to open its live dashboard");
+    const columns = [
+      { label: "PROFILE", width: 118 },
+      { label: "FOLLOWERS", width: 56 },
+      { label: "ENGAGEMENT", width: 62 },
+      { label: "AVG LIKES", width: 54 },
+      { label: "AVG COMMENTS", width: 62 },
+      { label: "POSTS/WK", width: 46 },
+      { label: "12M GROWTH", width: 58 },
+      { label: "AUTHENTICITY", width: INNER_WIDTH - 456 },
+    ];
+    page.drawRectangle({ x: PAGE_MARGIN, y: y - 15, width: INNER_WIDTH, height: 15, color: ACCENT_SOFT });
+    let headerX = PAGE_MARGIN + 5;
+    for (const column of columns) {
+      text(column.label, headerX, y - 4.5, 6, bold, ACCENT, column.width - 6);
+      headerX += column.width;
+    }
+    y -= 17;
+    const maxRows = Math.min(rows.length, 20);
+    for (const [index, { profile, metrics }] of rows.slice(0, maxRows).entries()) {
+      if (index % 2 === 1) {
+        page.drawRectangle({ x: PAGE_MARGIN, y: y - 16, width: INNER_WIDTH, height: 17, color: PANEL });
+      }
+      let x = PAGE_MARGIN + 5;
+      linkText(`@${profile.username}`, `${SITE_URL}/profile/${encodeURIComponent(profile.username)}`, x, y - 4, 7.5);
+      x += columns[0].width;
+      const cadence = postsPerWeek(profile.recentPosts);
+      const cells = [
+        formatCompact(profile.followers, "N/A"),
+        engagementValue(profile, metrics),
+        postMetric(metrics.avgLikes, profile.recentPosts),
+        postMetric(metrics.avgComments, profile.recentPosts),
+        cadence === null ? "N/A" : cadence.toFixed(1),
+        formatPercent(metrics.followerGrowthPct, "N/A") + (metrics.growthEstimated ? " est." : ""),
+        formatPercent(metrics.authenticityPct, "N/A") + (metrics.authenticityEstimated ? " est." : ""),
+      ];
+      cells.forEach((cell, cellIndex) => {
+        text(cell, x, y - 4, 7.5, regular, INK_SOFT, columns[cellIndex + 1].width - 6);
+        x += columns[cellIndex + 1].width;
+      });
+      y -= 18;
+    }
+    if (rows.some(({ profile }) => profile.recentPosts.length === 0)) {
+      text("No posts are exposed by the public source for some profiles; their averages are N/A, not zeros.", PAGE_MARGIN, y, 7, regular, MUTED);
+      y -= 12;
+    }
+    y -= 8;
+
+    const measured = rows.filter(({ profile, metrics }) => engagementAvailable(profile, metrics));
+    if (measured.length > 0) {
+      y = sectionTitle("Engagement rate", y, "click a bar to open the profile");
+      const max = Math.max(...measured.map(({ metrics }) => metrics.engagementRate), 0.01);
+      const labelWidth = 110;
+      const barMax = INNER_WIDTH - labelWidth - 50;
+      for (const { profile, metrics } of [...measured].sort((a, b) => b.metrics.engagementRate - a.metrics.engagementRate).slice(0, 12)) {
+        text(`@${profile.username}`, PAGE_MARGIN, y, 7.5, regular, INK_SOFT, labelWidth - 6);
+        const width = Math.max(2, (metrics.engagementRate / max) * barMax);
+        page.drawRectangle({ x: PAGE_MARGIN + labelWidth, y: y - 9, width, height: 9, color: ACCENT });
+        text(formatPercent(metrics.engagementRate), PAGE_MARGIN + labelWidth + width + 5, y - 1, 7, bold, INK);
+        link(PAGE_MARGIN + labelWidth, y - 9, width, 9, instagramProfileUrl(profile.username));
+        y -= 15;
+      }
+      y -= 6;
+    }
+
+    y = sectionTitle("Key insights", y);
+    const leaders: string[] = [];
+    const largest = [...rows].sort((a, b) => b.profile.followers - a.profile.followers)[0];
+    leaders.push(`Largest audience: @${largest.profile.username} with ${formatCompact(largest.profile.followers)} followers.`);
+    if (measured.length > 0) {
+      const best = [...measured].sort((a, b) => b.metrics.engagementRate - a.metrics.engagementRate)[0];
+      leaders.push(`Highest engagement: @${best.profile.username} at ${formatPercent(best.metrics.engagementRate)}.`);
+    }
+    const growing = rows.filter(({ metrics }) => metrics.followerGrowthPct !== null);
+    if (growing.length > 0) {
+      const fastest = [...growing].sort((a, b) => (b.metrics.followerGrowthPct ?? 0) - (a.metrics.followerGrowthPct ?? 0))[0];
+      leaders.push(
+        `Fastest 12-month growth: @${fastest.profile.username} at ${formatPercent(fastest.metrics.followerGrowthPct)}${fastest.metrics.growthEstimated ? " (est.)" : ""}.`,
+      );
+    }
+    for (const leader of leaders) {
+      page.drawCircle({ x: PAGE_MARGIN + 4, y: y - 4, size: 2.4, color: ACCENT });
+      text(leader, PAGE_MARGIN + 12, y, 8, regular, INK_SOFT, INNER_WIDTH - 14);
+      y -= 13;
+    }
   }
+
+  // Footer: short disclosure, brand and page count.
+  const footerTop = FOOTER_TOP + 30;
+  page.drawLine({ start: { x: PAGE_MARGIN, y: footerTop }, end: { x: PAGE_WIDTH - PAGE_MARGIN, y: footerTop }, thickness: 0.5, color: RULE });
+  const disclosure = wrapText(
+    "Measured: followers, posts, likes and comments from public posts (at most 12 recent). est. values are modeled from public signals; N/A means Instagram did not publish the value, never zero. Unofficial analysis of public information; not affiliated with Meta.",
+    regular,
+    6.5,
+    INNER_WIDTH,
+  ).slice(0, 2);
+  disclosure.forEach((content, index) => text(content, PAGE_MARGIN, footerTop - 6 - index * 8.5, 6.5, regular, MUTED));
+  page.drawText(REPORT_BRAND, { x: PAGE_MARGIN, y: FOOTER_TOP - 8, size: 7, font: bold, color: ACCENT });
+  const pageLabel = "Page 1 of 1";
+  page.drawText(pageLabel, {
+    x: PAGE_WIDTH - PAGE_MARGIN - regular.widthOfTextAtSize(pageLabel, 7),
+    y: FOOTER_TOP - 8,
+    size: 7,
+    font: regular,
+    color: MUTED,
+  });
 
   const bytes = await pdf.save();
   const filename = `ig-analysis-${profiles.map((profile) => profile.username).join("-")}.pdf`;
-
   return { bytes, filename };
 }

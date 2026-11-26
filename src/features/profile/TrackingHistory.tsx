@@ -20,7 +20,7 @@ import { formatAxisCompact, formatDate, formatPercent } from "../../core/format"
 const RANGES = [
   { label: "30D", days: 30 },
   { label: "90D", days: 90 },
-  { label: "1Y", days: 365 },
+  { label: "180D", days: 180 },
 ] as const;
 
 const TOOLTIP_STYLE = {
