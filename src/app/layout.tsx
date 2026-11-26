@@ -25,7 +25,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <span className="leading-tight">
                 Instagram Analytics
                 <span className="block text-[10px] font-normal leading-tight text-slate-400">
-                  by Campaign Masters UAE
+                  by Campaign Masters
                 </span>
               </span>
             </Link>
@@ -63,7 +63,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                   <Link href="/" className="font-bold tracking-tight text-slate-950">
                     Instagram Analytics
                     <span className="block text-[10px] font-normal text-slate-500">
-                      by Campaign Masters UAE
+                      by Campaign Masters
                     </span>
                   </Link>
                 </div>
