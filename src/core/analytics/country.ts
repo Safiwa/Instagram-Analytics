@@ -333,7 +333,6 @@ const CURATED_COUNTRY_BY_HANDLE: Record<string, string> = {
   // Real public UAE creator accounts in @alaaabuharb's 1.7–3.1M follower band.
   sarahmalas: "United Arab Emirates",
   randdalati: "United Arab Emirates",
-  rima_alosta: "United Arab Emirates",
   lookatsascha: "United Arab Emirates",
   khalus_recipes: "United Arab Emirates",
   ladyandhersweetescapes: "United Arab Emirates",
@@ -728,6 +727,14 @@ export function countryReason(
 // curated Middle East handles. Accounts elsewhere, or with no country signal at
 // all, do not get the Middle East panel.
 export function isMiddleEastAccount(profile: CreatorProfile): boolean {
+  // A published or recorded "Account based in" value decides on its own: an
+  // account on a Middle East list but based elsewhere is not Middle East.
+  const signal = inferCountrySignal(profile);
+  if (signal.basis === "account" || (signal.basis === null && signal.label === "Country not published")) {
+    return (
+      signal.country !== null && (MIDDLE_EAST_COUNTRIES as readonly string[]).includes(signal.country)
+    );
+  }
   const region = regionForHandle(profile.username);
   if (region === "middle-east" || region === "uae") {
     return true;

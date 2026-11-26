@@ -117,7 +117,6 @@ export const LEADERBOARD_HANDLES = [
   // They fill the Middle East rank panel honestly without widening the ±30% gate.
   "sarahmalas",
   "randdalati",
-  "rima_alosta",
   "lookatsascha",
   // Real, explicitly labeled creators in @zuhaboutique2024's 30.8–57.1K band.
   // They bracket its rank without widening the gate.
@@ -164,7 +163,6 @@ export const UAE_GCC_HANDLES = [
   "baneenstars",
   "sarahmalas",
   "randdalati",
-  "rima_alosta",
   "lookatsascha",
   "khalus_recipes",
   "ladyandhersweetescapes",

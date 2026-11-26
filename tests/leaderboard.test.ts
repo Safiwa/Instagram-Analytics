@@ -230,7 +230,7 @@ describe("country leaderboards", () => {
     expect(regionForHandle("zeniamk")).toBe("uae");
     expect(regionForHandle("sarahmalas")).toBe("uae");
     expect(regionForHandle("randdalati")).toBe("uae");
-    expect(regionForHandle("rima_alosta")).toBe("uae");
+    expect(regionForHandle("rima_alosta")).toBeNull();
     expect(regionForHandle("lookatsascha")).toBe("uae");
     expect(regionForHandle("elsakahwaji")).toBe("middle-east");
     expect(regionForHandle("leomessi")).toBeNull();
@@ -287,7 +287,6 @@ describe("country leaderboards", () => {
       "zeniamk",
       "sarahmalas",
       "randdalati",
-      "rima_alosta",
       "lookatsascha",
     ]) {
       expect(isInRegionBoard(handle, "middle-east"), handle).toBe(true);

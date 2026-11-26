@@ -147,7 +147,6 @@ const ACCOUNT_REGIONS: Record<string, Region> = {
   baneenstars: "uae",
   sarahmalas: "uae",
   randdalati: "uae",
-  rima_alosta: "uae",
   lookatsascha: "uae",
   khalus_recipes: "uae",
   ladyandhersweetescapes: "uae",
