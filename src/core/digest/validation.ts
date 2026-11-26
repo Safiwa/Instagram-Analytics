@@ -1,6 +1,7 @@
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const HANDLE_PATTERN = /^[a-z0-9._]{1,30}$/;
-const TRIAL_DAYS = 30;
+// Same length as the Pro plan trial (see core/billing/plans.ts).
+export const DIGEST_TRIAL_DAYS = 14;
 
 export type DigestSignupInput = {
   email?: unknown;
@@ -40,6 +41,6 @@ export function validateSignup(input: DigestSignupInput): ValidationResult {
   return { ok: true, value: { email, handle } };
 }
 
-export function trialEndsAt(from: Date, days = TRIAL_DAYS): string {
+export function trialEndsAt(from: Date, days = DIGEST_TRIAL_DAYS): string {
   return new Date(from.getTime() + days * 24 * 60 * 60 * 1000).toISOString();
 }

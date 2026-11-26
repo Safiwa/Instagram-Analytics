@@ -215,3 +215,23 @@ describe("PDF report", () => {
     });
   });
 });
+
+describe("one-page interactive report", () => {
+  it("fits one profile on a single page with clickable links", async () => {
+    const report = await buildReport([fixture("nora.style")]);
+    const doc = await PDFDocument.load(report.bytes);
+    expect(doc.getPageCount()).toBe(1);
+    const annots = doc.getPage(0).node.Annots();
+    expect(annots?.size() ?? 0).toBeGreaterThan(3);
+    const text = await extractPdfText(report.bytes);
+    expect(text).toContain("Open live dashboard");
+    expect(text).toContain("Key insights");
+  });
+
+  it("fits a comparison on a single page", async () => {
+    const report = await buildReport([fixture("nora.style"), fixture("lumen.travel")]);
+    const doc = await PDFDocument.load(report.bytes);
+    expect(doc.getPageCount()).toBe(1);
+    await expect(extractPdfText(report.bytes)).resolves.toContain("Side-by-side");
+  });
+});

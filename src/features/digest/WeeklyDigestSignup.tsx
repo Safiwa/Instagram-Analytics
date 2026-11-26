@@ -57,13 +57,13 @@ export function WeeklyDigestSignup() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
             <Mail className="h-3 w-3" aria-hidden="true" />
-            Free 30-day trial
+            Free 14-day trial
           </div>
           <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
             Prove Instagram performance with real data
           </h2>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-slate-600">
-            Need to back up your numbers? Start a FREE 30-day trial and use Instagram analytics to
+            Need to back up your numbers? Start a FREE 14-day trial and use Instagram analytics to
             benchmark, compare, and report with confidence. Add your email and a public handle, and
             we&apos;ll send a weekly digest of your profile&apos;s performance every Monday.
           </p>

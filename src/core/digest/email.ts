@@ -97,7 +97,7 @@ export function buildDigestEmail(input: DigestEmailInput): {
     "",
     `Full analysis: ${profileUrl}`,
     "",
-    "Received this because you signed up for the free 30-day weekly digest.",
+    "Received this because you signed up for the free 14-day weekly digest.",
     `Unsubscribe: ${input.unsubscribeUrl}`,
   ].join("\n");
 
@@ -137,7 +137,7 @@ export function buildDigestEmail(input: DigestEmailInput): {
         <a href="${profileUrl}" style="color:#4f46e5">Open the full analysis</a>
       </p>
       <p style="margin:0;font-size:12px;color:#94a3b8">
-        You signed up for the free 30-day weekly digest.
+        You signed up for the free 14-day weekly digest.
         <a href="${unsubscribeUrl}" style="color:#64748b">Unsubscribe</a>
       </p>
     </div>
