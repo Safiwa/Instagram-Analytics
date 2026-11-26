@@ -3,7 +3,6 @@ import {
   categoryGroup,
   inferCategory,
   inferExplicitCategory,
-  isBusinessCategory,
   isSimilarCategory,
 } from "./category";
 import {
@@ -97,9 +96,6 @@ type ScoreOptions = {
   // Rank tables may fall back to inferred creator-group labels only when there
   // are not enough explicitly labeled peers. Benchmark suggestions never do.
   allowInferredCandidates?: boolean;
-  // Business rank tables may complete a thin exact group with other real
-  // business-category profiles. Creators are still excluded.
-  allowBusinessFamily?: boolean;
 };
 
 function scorePeers(
@@ -132,10 +128,7 @@ function scorePeers(
       candidate.followers > 0 &&
       candidate.recentPosts.length > 0 &&
       (!requireExplicitCandidate || hasExplicitCandidate || inferredCreatorFallback) &&
-      (isSimilarCategory(targetCategory, candidateCategory) ||
-        (options.allowBusinessFamily === true &&
-          isBusinessCategory(targetCategory) &&
-          isBusinessCategory(candidateCategory))) &&
+      isSimilarCategory(targetCategory, candidateCategory) &&
       (!requireSameCountry || candidateCountry.country === targetCountry.country)
     );
   });
@@ -298,12 +291,12 @@ export type PeerRankingRow = {
 // Rank tables aim for five profiles. Peers come from the same country and a
 // similar category; when the pool has fewer, rows are filled only from the same
 // region and category group, and each such row says so.
-export type RankFill = "same-region" | "country-limit" | "business-family";
+export type RankFill = "same-region" | "country-limit" | "same-category";
 
 export const RANK_FILL_LABEL: Record<RankFill, string> = {
   "same-region": "same category from a neighbouring country, added to complete the table",
   "country-limit": "same category, added beyond 3 per country to complete the table",
-  "business-family": "similar business category, added to complete the table",
+  "same-category": "same category from another country, added to complete the table",
 };
 
 export type PeerRanking = {
@@ -352,9 +345,9 @@ export function buildPeerRanking(
   // admit inferred creator-group labels, and only to fill the remaining rows.
   add(scorePeers(target, metrics, pool, { ...options, allowInferredCandidates: true }), null);
 
-  // Still short of the configured table size: fill only from the same region
-  // and the same category group (e.g. a Saudi agency for a UAE agency), marked
-  // as such. A known-country target never gets unrelated countries here.
+  // Still short of the configured table size: prefer the same category from a
+  // neighbouring country, then the same category from any other country. Never
+  // borrow a different business activity (media, travel, retail) to fill rows.
   const anyCountry = {
     ...options,
     requireSameCountry: false,
@@ -362,32 +355,18 @@ export function buildPeerRanking(
     allowInferredCandidates: true,
   };
   const wider = scorePeers(target, metrics, pool, anyCountry);
+  const sameCategory = wider.filter((peer) => isSimilarCategory(targetCategory, peer.category));
   if (targetCountry.country !== null) {
     add(
-      wider.filter(
-        (peer) =>
-          peer.countryRelationship === "same-region" && isSimilarCategory(targetCategory, peer.category),
-      ),
+      sameCategory.filter((peer) => peer.countryRelationship === "same-region"),
       "same-region",
     );
   }
-
-  // Business, agency and brand targets often have too few exact-label peers.
-  // Only for non-creator targets, complete the table with real profiles from
-  // the wider business-category family. Each row is labelled so it is never
-  // mistaken for an exact-category match; creators are never used as padding.
-  if (isBusinessCategory(targetCategory) && peers.length < limit) {
-    const businessFamily = scorePeers(target, metrics, pool, {
-      ...options,
-      requireSameCountry: false,
-      fillCountryTiers: true,
-      allowInferredCandidates: false,
-      allowBusinessFamily: true,
-    });
-    add(
-      businessFamily.filter((peer) => isBusinessCategory(peer.category)),
-      "business-family",
-    );
+  // Creator tables keep their strict country/region scope. Non-creator tables
+  // (e.g. a marketing agency) may complete their own category from another
+  // country, but never from a different business activity.
+  if (categoryGroup(targetCategory) !== "creator") {
+    add(sameCategory, "same-category");
   }
 
   if (peers.length === 0) {

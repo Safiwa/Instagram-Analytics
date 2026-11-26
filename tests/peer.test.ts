@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { computeMetrics } from "../src/core/analytics/metrics";
 import { buildPeerRanking, findClosestPeer, findSimilarPeers } from "../src/core/analytics/peer";
+import { AGENCY_HANDLES } from "../src/core/data/agencies";
 import type { CreatorProfile, Post } from "../src/core/data/types";
 
 function post(likes: number): Post {
@@ -338,6 +339,12 @@ describe("Syrian same-country peers", () => {
 });
 
 describe("ten-profile rank tables", () => {
+  it("curates enough real agency handles for nine agency peers", () => {
+    expect(new Set(AGENCY_HANDLES).size).toBe(AGENCY_HANDLES.length);
+    expect(AGENCY_HANDLES.length).toBeGreaterThanOrEqual(10);
+    expect(AGENCY_HANDLES).toContain("campaignmastersagency");
+  });
+
   it("lists the searched profile plus nine same-country peers when asked", () => {
     const target = profile("dubai.target", 60_000, "Fashion and beauty in Dubai", 2_000);
     const pool = Array.from({ length: 12 }, (_, index) =>
@@ -348,18 +355,18 @@ describe("ten-profile rank tables", () => {
     expect(ranking?.rows.some((row) => row.isTarget)).toBe(true);
   });
 
-  it("completes a thin business category with real business profiles, never creators", () => {
+  it("fills an agency table with nine other agencies, never media or retail", () => {
     const agency = (username: string, followers: number, likes: number) =>
       profile(username, followers, "Digital marketing agency", likes);
-    const business = (username: string, followers: number, likes: number) =>
-      profile(username, followers, "Retail company and brand", likes);
+    const media = (username: string, followers: number, likes: number) =>
+      profile(username, followers, "News and media outlets", likes);
     const target = profile("agency.target", 30_000, "Marketing agency with global clients", 200);
     const pool = [
-      agency("agency.a", 12_000, 100),
-      agency("agency.b", 15_000, 120),
-      agency("agency.c", 20_000, 140),
+      ...Array.from({ length: 9 }, (_, index) =>
+        agency(`agency.${index}`, 12_000 + index * 2_000, 100 + index * 20),
+      ),
       ...Array.from({ length: 6 }, (_, index) =>
-        business(`brand.${index}`, 25_000 + index * 2_000, 160 + index * 10),
+        media(`media.${index}`, 25_000 + index * 2_000, 160 + index * 10),
       ),
       profile("creator.noise", 18_000, "Digital creator daily lifestyle", 300),
     ];
@@ -367,12 +374,25 @@ describe("ten-profile rank tables", () => {
     const ranking = buildPeerRanking(target, computeMetrics(target), pool, 9);
     const usernames = ranking?.rows.map((row) => row.profile.username) ?? [];
     expect(ranking?.total).toBe(10);
+    expect(usernames.filter((name) => name.startsWith("agency.") && name !== "agency.target")).toHaveLength(9);
+    expect(usernames.some((name) => name.startsWith("media."))).toBe(false);
     expect(usernames).not.toContain("creator.noise");
-    expect(usernames.filter((name) => name.startsWith("brand."))).toHaveLength(6);
+    expect(ranking?.rows.every((row) => row.category === "Marketing agency")).toBe(true);
+  });
 
-    const byName = new Map(ranking?.rows.map((row) => [row.profile.username, row]));
-    expect(byName.get("agency.a")?.fill).toBeUndefined();
-    expect(byName.get("brand.0")?.fill).toBe("business-family");
+  it("leaves an agency table short rather than borrowing another business activity", () => {
+    const agency = (username: string, followers: number, likes: number) =>
+      profile(username, followers, "Digital marketing agency", likes);
+    const target = profile("agency.target", 30_000, "Marketing agency with global clients", 200);
+    const pool = [
+      agency("agency.a", 12_000, 100),
+      agency("agency.b", 15_000, 120),
+      profile("media.noise", 25_000, "News and media outlets", 160),
+    ];
+
+    const ranking = buildPeerRanking(target, computeMetrics(target), pool, 9);
+    expect(ranking?.total).toBe(3);
+    expect(ranking?.rows.map((row) => row.profile.username)).not.toContain("media.noise");
   });
 
   it("does not pad a creator table with business profiles", () => {

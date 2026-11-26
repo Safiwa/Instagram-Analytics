@@ -1,5 +1,6 @@
 import { isMiddleEastAccount } from "../analytics/country";
 import { loadIndexedProfiles } from "../db/indexStore";
+import { AGENCY_HANDLES } from "./agencies";
 import { getTrackedProfiles } from "./leaderboard";
 import { isInRegionBoard, regionBoardHandles } from "./regions";
 import type { CreatorProfile } from "./types";
@@ -38,7 +39,7 @@ export async function getRegionalProfiles(): Promise<CreatorProfile[]> {
   const indexed = (await loadIndexedMiddleEast()).filter(
     (profile) => !seen.has(profile.username.toLowerCase()),
   );
-  return [...curated, ...indexed];
+  return mergePools([...curated, ...indexed], await getAgencyProfiles());
 }
 
 // Accounts never used as peers: handles that look like official tourism boards
@@ -77,6 +78,16 @@ export async function getIndexedPool(): Promise<CreatorProfile[]> {
 
 async function loadIndexedMiddleEast(): Promise<CreatorProfile[]> {
   return (await getIndexedPool()).filter((profile) => isMiddleEastAccount(profile));
+}
+
+// Marketing agencies are a thin category in the general top-400 index, so they
+// are loaded by handle from this site's own stored snapshots instead of being
+// dropped by the follower-count limit. Every value still comes from a real
+// snapshot; the constant only names accounts to look up.
+export async function getAgencyProfiles(): Promise<CreatorProfile[]> {
+  return (await loadIndexedProfiles({ usernames: AGENCY_HANDLES })).filter(
+    (profile) => !profile.isPrivate && profile.followers > 0 && profile.recentPosts.length > 0,
+  );
 }
 
 // Tracked profiles first (fresher data), then indexed profiles not already in.

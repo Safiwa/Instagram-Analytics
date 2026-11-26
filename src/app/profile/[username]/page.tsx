@@ -12,7 +12,12 @@ import {
 } from "../../../core/analytics/regional";
 import { resolveProfile } from "../../../core/data/adapter";
 import { getTrackedProfiles } from "../../../core/data/leaderboard";
-import { getIndexedPool, getRegionalProfiles, mergePools } from "../../../core/data/regional";
+import {
+  getAgencyProfiles,
+  getIndexedPool,
+  getRegionalProfiles,
+  mergePools,
+} from "../../../core/data/regional";
 import type { CreatorProfile } from "../../../core/data/types";
 import { indexPosition } from "../../../core/analytics/benchmark";
 import { withStoredHistory } from "../../../core/db/enrich";
@@ -117,18 +122,22 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
     after(() => recordLookups(subject, gate.period, gate.toRecord));
   }
 
-  const [stored, trackedOnly, sample, indexed, postHistory, myTracked] = await Promise.all([
-    withStoredHistory(resolved),
-    getTrackedProfiles(),
-    resolved.source === "demo" ? Promise.resolve([]) : getIndexSample(),
-    resolved.source === "demo" ? Promise.resolve([]) : getIndexedPool(),
-    // Up to a year of post metrics (Business and Creator accounts only), read
-    // at most once a day per account; never fails the page.
-    resolved.source === "live"
-      ? getPostHistory(resolved.username).catch(() => null)
-      : Promise.resolve(null),
-    viewer.user ? listTrackedHandles(viewer.user.id).catch(() => [] as string[]) : Promise.resolve([] as string[]),
-  ]);
+  const [stored, trackedOnly, sample, indexed, agencyIndexed, postHistory, myTracked] =
+    await Promise.all([
+      withStoredHistory(resolved),
+      getTrackedProfiles(),
+      resolved.source === "demo" ? Promise.resolve([]) : getIndexSample(),
+      resolved.source === "demo" ? Promise.resolve([]) : getIndexedPool(),
+      resolved.source === "demo" ? Promise.resolve([]) : getAgencyProfiles(),
+      // Up to a year of post metrics (Business and Creator accounts only), read
+      // at most once a day per account; never fails the page.
+      resolved.source === "live"
+        ? getPostHistory(resolved.username).catch(() => null)
+        : Promise.resolve(null),
+      viewer.user
+        ? listTrackedHandles(viewer.user.id).catch(() => [] as string[])
+        : Promise.resolve([] as string[]),
+    ]);
   // Stored daily history is limited to the plan's window.
   const historyDays = viewer.plan.limits.historyDays;
   const keptPoints = stored.tracking ? trimHistory(stored.tracking.points, historyDays) : [];
@@ -141,8 +150,10 @@ export default async function ProfilePage({ params, searchParams }: ProfilePageP
       : stored;
   // The same-country peer card and five-row rank table draw on tracked accounts
   // plus every profile this site has indexed, so smaller accounts and niche
-  // categories (e.g. marketing agencies) find real same-country peers.
-  const tracked = mergePools(trackedOnly, indexed);
+  // categories (e.g. marketing agencies) find real same-country peers. The
+  // curated agency handles are loaded explicitly because a thin agency category
+  // can fall outside the general top-400 index.
+  const tracked = mergePools(mergePools(trackedOnly, indexed), agencyIndexed);
   // The Middle East panel is hidden for accounts outside the region, so its
   // peer pool is only loaded for Middle East accounts.
   const regionalPool = isMiddleEastAccount(profile) ? await getRegionalProfiles() : [];

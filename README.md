@@ -461,9 +461,10 @@ Profile pages now surface verification, growth, and regional comparison:
   (`peer-ranking`): the searched profile plus up to nine closest category peers, ordered by
   `rankScore`, with the searched profile's rank (for example, "Rank #1 of 6") and the share of peers
   it outperforms. When explicitly labeled peers are scarce, the ranking table alone may use inferred
-  `creator`-group labels for creator targets, or real profiles from the wider business-category
-  family for non-creator targets; every filled row says why it was added, and benchmark suggestions
-  never use either fallback. This table is not range-gated, so it stays complete for accounts at
+  `creator`-group labels for creator targets, or more real profiles from the same category group for
+  non-creator targets; a marketing agency is never compared with media, travel or retail accounts
+  just to fill rows. Every filled row says why it was added, and benchmark suggestions never use
+  either fallback. This table is not range-gated, so it stays complete for accounts at
   either audience extreme. Compare-page
   suggestions (`findSimilarPeers()`) keep their separate best-tier behavior and are unchanged. If no
   tracked profile in the required country/category scope is available (for example, without API
