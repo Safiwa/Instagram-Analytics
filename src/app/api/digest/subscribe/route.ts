@@ -44,7 +44,7 @@ export async function POST(request: Request) {
         ok: true,
         message:
           result === "created"
-            ? "You're on the list. Your free 30-day weekly digest starts here."
+            ? "You're on the list. Your free 14-day weekly digest starts here."
             : "You're already subscribed to this profile's weekly digest.",
       },
       { status: result === "created" ? 201 : 200 },
