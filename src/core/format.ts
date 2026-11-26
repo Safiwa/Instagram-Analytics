@@ -20,6 +20,17 @@ export function formatCompact(value: number | null | undefined, fallback = "—"
   return typeof value === "number" ? compactFormatter.format(value) : fallback;
 }
 
+// Axis ticks need enough precision to stay distinct ("1.04M", "1.02M"), so
+// they use up to three significant digits.
+const axisFormatter = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumSignificantDigits: 3,
+});
+
+export function formatAxisCompact(value: number): string {
+  return axisFormatter.format(value);
+}
+
 export function formatPercent(value: number | null | undefined, fallback = "—"): string {
   return typeof value === "number" ? `${value.toFixed(2)}%` : fallback;
 }

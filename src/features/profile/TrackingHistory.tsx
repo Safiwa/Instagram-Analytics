@@ -15,7 +15,7 @@ import type { IndexPosition } from "../../core/analytics/benchmark";
 import type { EstimatedPoint } from "../../core/analytics/estimatedHistory";
 import { followerChanges, pointsInRange } from "../../core/analytics/history";
 import type { TrackingHistory as History } from "../../core/data/types";
-import { formatCompact, formatDate, formatPercent } from "../../core/format";
+import { formatAxisCompact, formatDate, formatPercent } from "../../core/format";
 
 const RANGES = [
   { label: "30D", days: 30 },
@@ -144,7 +144,7 @@ export function TrackingHistoryPanel({
             <YAxis
               yAxisId="followers"
               domain={["auto", "auto"]}
-              tickFormatter={(value) => formatCompact(Number(value))}
+              tickFormatter={(value) => formatAxisCompact(Number(value))}
               tick={{ fontSize: 11 }}
               tickLine={false}
               axisLine={false}
