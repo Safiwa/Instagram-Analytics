@@ -129,7 +129,7 @@ describe("peer ranking for the searched profile", () => {
   it("includes the searched profile and ranks the group by weighted score", () => {
     const target = profile("searched", 60_000, "Fashion and skincare boutique", 2_000);
     const low = profile("low.peer", 62_000, "Fashion and beauty", 1_600);
-    const high = profile("high.peer", 58_000, "Fashion and style", 2_600);
+    const high = profile("high.peer", 58_000, "Beauty skincare and style", 2_600);
     const pool = [target, low, high];
 
     const ranking = buildPeerRanking(target, computeMetrics(target), pool);
@@ -228,27 +228,23 @@ describe("peer ranking for the searched profile", () => {
     }
   });
 
-  it("falls back to inferred creator labels only when explicit peers are scarce", () => {
-    const target = profile("dubai.target", 60_000, "Fashion and beauty", 2_000);
-    const explicit = profile("uae.explicit", 61_000, "Beauty skincare reviews", 2_100);
+  it("does not relabel different creator categories to fill an explicit category table", () => {
+    const target = profile("dubai.target", 60_000, "Fashion model and runway looks", 2_000);
+    const beauty = profile("uae.beauty", 61_000, "Beauty skincare reviews", 2_100);
     const inferred = profile("uae.inferred", 62_000, "", 2_200);
-    const business = profile("uae.brand", 63_000, "", 2_300);
-    business.bio = "Retail mall and shopping offers";
+    const business = profile("uae.brand", 63_000, "Retail mall and shopping offers", 2_300);
 
     const strict = findClosestPeer(target, computeMetrics(target), [target, inferred]);
     expect(strict).toBeNull();
 
     const ranking = buildPeerRanking(target, computeMetrics(target), [
       target,
-      explicit,
+      beauty,
       inferred,
       business,
     ]);
-    const usernames = ranking!.rows.map((row) => row.profile.username);
 
-    expect(usernames).toContain("uae.explicit");
-    expect(usernames).toContain("uae.inferred");
-    expect(usernames).not.toContain("uae.brand");
+    expect(ranking).toBeNull();
   });
 
   it("returns null when no comparable peer is available", () => {
@@ -325,16 +321,15 @@ describe("Syrian same-country peers", () => {
 
     const ranking = buildPeerRanking(target, computeMetrics(target), [...pool, kitchen]);
     const usernames = ranking?.rows.map((row) => row.profile.username) ?? [];
-    // Recorded "Account based in" values beat bio signals: Egypt, the UK and an
-    // unrecorded country are not Syria, and "Syrian" in a bio is not a location.
-    expect(usernames).toEqual(expect.arrayContaining(["yaman.najjar", "dima_dalati", "jennyesber"]));
-    // Syria first; Egypt (same region, same category group) fills a row, marked.
-    // The UK kitchen and the unpublished account never do.
-    const byName = new Map(ranking?.rows.map((row) => [row.profile.username, row]));
-    expect(byName.get("dima_dalati")?.fill).toBeUndefined();
-    expect(byName.get("nesreentafesh")?.fill).toBe("same-region");
-    expect(byName.has("imadssyriankitchen")).toBe(false);
-    expect(byName.has("wafamoustafa")).toBe(false);
+    // Recorded "Account based in" values beat bio signals, and only the same
+    // inferred category label qualifies: Egypt, the UK and an unrecorded
+    // country are not Syria, and "Syrian" in a bio is not a location.
+    expect(usernames).toEqual(expect.arrayContaining(["yaman.najjar", "jennyesber"]));
+    // Beauty/fashion and digitally inferred accounts are not Public figures.
+    expect(usernames).not.toContain("dima_dalati");
+    expect(usernames).not.toContain("nesreentafesh");
+    expect(usernames).not.toContain("imadssyriankitchen");
+    expect(usernames).not.toContain("wafamoustafa");
   });
 });
 

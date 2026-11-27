@@ -1,10 +1,5 @@
 import type { CreatorProfile } from "../data/types";
-import {
-  categoryGroup,
-  inferCategory,
-  inferExplicitCategory,
-  isSimilarCategory,
-} from "./category";
+import { categoryGroup, inferCategory, inferExplicitCategory } from "./category";
 import {
   countryReason,
   countryRelationship,
@@ -128,7 +123,7 @@ function scorePeers(
       candidate.followers > 0 &&
       candidate.recentPosts.length > 0 &&
       (!requireExplicitCandidate || hasExplicitCandidate || inferredCreatorFallback) &&
-      isSimilarCategory(targetCategory, candidateCategory) &&
+      candidateCategory === targetCategory &&
       (!requireSameCountry || candidateCountry.country === targetCountry.country)
     );
   });
@@ -288,9 +283,9 @@ export type PeerRankingRow = {
   fill?: RankFill;
 };
 
-// Rank tables aim for five profiles. Peers come from the same country and a
-// similar category; when the pool has fewer, rows are filled only from the same
-// region and category group, and each such row says so.
+// Rank tables aim for five profiles. Peers come from the same country and the
+// same inferred category label; when the pool has fewer, rows are filled only
+// from the same region and same category, and each such row says so.
 export type RankFill = "same-region" | "country-limit" | "same-category";
 
 export const RANK_FILL_LABEL: Record<RankFill, string> = {
@@ -355,7 +350,7 @@ export function buildPeerRanking(
     allowInferredCandidates: true,
   };
   const wider = scorePeers(target, metrics, pool, anyCountry);
-  const sameCategory = wider.filter((peer) => isSimilarCategory(targetCategory, peer.category));
+  const sameCategory = wider.filter((peer) => peer.category === targetCategory);
   if (targetCountry.country !== null) {
     add(
       sameCategory.filter((peer) => peer.countryRelationship === "same-region"),

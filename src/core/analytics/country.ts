@@ -271,6 +271,9 @@ const ACCOUNT_BASED_IN_BY_HANDLE: Record<string, string | null> = {
   leomessi: "United States",
   rima_alosta: "Russia",
   "najet.dh": "United Arab Emirates",
+  // Recorded by the site owner from Instagram's "Account based in" field.
+  // Recent posts from an Egypt visit must not override the account's UAE base.
+  joellemardinian: "United Arab Emirates",
 };
 
 // Values entered on the /admin/locations page (stored in the database) are

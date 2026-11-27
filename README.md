@@ -447,28 +447,28 @@ Profile pages now surface verification, growth, and regional comparison:
   Candidates must also carry a creator category label in the same creator group. The panel copy
   intentionally stays concise; the gate is enforced in code and tests rather than spelled out in the
   UI.
-- **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest category-compatible tracked
-  real public profile. Country is inferred from the handle first, then profile text, then promoted
-  hashtags/captions. When the searched profile has a country signal, both the closest-peer card and
-  its ranking table are limited to accounts with that same inferred country; there is no
+- **Peer benchmark** (`src/core/analytics/peer.ts`) selects the closest tracked real public profile
+  with the **same inferred category label**. Country is inferred from Instagram's published
+  "Account based in" value first, then strong public post/reel signals, then the handle, profile
+  text and curated metadata. When the searched profile has a country signal, both the closest-peer
+  card and its ranking table are limited to accounts with that same inferred country; there is no
   cross-country fallback for a known-country profile. When no country signal is published, the best
   available country/region tier is used and the UI discloses the fallback. Within that scope,
   candidates are scored by the shared weighted fit (followers, engagement rate, average likes,
-  average comments, 30-day follower change), exact category and shared themes. Each peer row shows
-  its inferred category and country badges, match score, followers, engagement, average likes,
-  average comments and estimated follower change, why it matched, and how this profile compares,
-  with a link to a side-by-side comparison. The same matched set powers a ten-profile ranking table
-  (`peer-ranking`): the searched profile plus up to nine closest category peers, ordered by
+  average comments, 30-day follower change) and shared themes. Each peer row shows its inferred
+  category and country badges, match score, followers, engagement, average likes, average comments
+  and estimated follower change, why it matched, and how this profile compares, with a link to a
+  side-by-side comparison. The same matched set powers a ten-profile ranking table
+  (`peer-ranking`): the searched profile plus up to nine closest same-category peers, ordered by
   `rankScore`, with the searched profile's rank (for example, "Rank #1 of 6") and the share of peers
-  it outperforms. When explicitly labeled peers are scarce, the ranking table alone may use inferred
-  `creator`-group labels for creator targets, or more real profiles from the same category group for
-  non-creator targets; a marketing agency is never compared with media, travel or retail accounts
-  just to fill rows. Every filled row says why it was added, and benchmark suggestions never use
-  either fallback. This table is not range-gated, so it stays complete for accounts at
-  either audience extreme. Compare-page
-  suggestions (`findSimilarPeers()`) keep their separate best-tier behavior and are unchanged. If no
-  tracked profile in the required country/category scope is available (for example, without API
-  credentials) the panel shows an empty state rather than unrelated profiles.
+  it outperforms. A Content creator table never borrows a Travel blogger or Beauty account just to
+  fill rows, and a marketing agency is never compared with media, travel or retail accounts. When
+  the pool is short, the table stays short instead of relabelling another activity. Every filled
+  row says why it was added. This table is not range-gated, so it stays complete for accounts at
+  either audience extreme. Compare-page suggestions (`findSimilarPeers()`) and the compare ranking
+  (`buildCompareRanking()`) use the same exact-category rule. If no tracked profile in the required
+  country/category scope is available (for example, without API credentials) the panel shows an
+  empty state rather than unrelated profiles.
 - **Middle East category benchmark** (`regional-benchmark`, `src/core/analytics/regional.ts` +
   `src/core/data/regional.ts`) replaces the old UAE/GCC panel. Its pool is every tracked profile on
   the Middle East homepage board (`isInRegionBoard(username, "middle-east")`), which includes the

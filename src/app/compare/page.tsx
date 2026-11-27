@@ -150,8 +150,8 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
             Same country or region for @{rows[0].profile.username}
           </h2>
           <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Other real public profiles in the same country or wider region. Same-country profiles
-            lead and same-region profiles fill the remaining rows; each group is ordered by the same
+            Other real public profiles in the same category and country or wider region. Same-country
+            profiles lead and same-region profiles fill the remaining rows; each group is ordered by the same
             five signals: 55% followers, 20% engagement rate, 10% average likes, 5% average comments
             and 10% follower change. Country uses Instagram’s published “Account based in” value
             first; when it is not shared, it is inferred from public post/reel hashtags, locations

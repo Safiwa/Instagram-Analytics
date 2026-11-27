@@ -174,6 +174,25 @@ describe("country signal inference", () => {
     }
   });
 
+  it("keeps @joellemardinian in the UAE despite Egypt visit posts", () => {
+    const signal = inferCountrySignal(
+      profile({
+        username: "joellemardinian",
+        displayName: "Joelle Mardinian",
+        recentPosts: [
+          post(["#joellemardinian", "#egypt", "#cairo"]),
+          post(["#joellemardinian", "#egypt", "#cairo"]),
+          { ...post(["#joellemardinian"]), caption: "Hello Egypt 🇪🇬 I came for a visit" },
+        ],
+      }),
+    );
+
+    expect(signal.country).toBe("United Arab Emirates");
+    expect(signal.region).toBe("uae");
+    expect(signal.basis).toBe("account");
+    expect(hasPublishedCountryEvidence(signal)).toBe(true);
+  });
+
   it("does not infer the UAE for @technicalguruji from India-promoting content", () => {
     const signal = inferCountrySignal(
       profile({

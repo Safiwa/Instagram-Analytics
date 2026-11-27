@@ -1,5 +1,5 @@
 import type { CreatorProfile } from "../data/types";
-import { inferCategory, isSimilarCategory } from "./category";
+import { inferCategory } from "./category";
 import {
   countryRelationship,
   countryTier,
@@ -53,7 +53,7 @@ export function buildCompareRanking(
         !excludedHandles.has(normalizeExcludedHandle(candidate.username)) &&
         candidate.followers > 0 &&
         candidate.recentPosts.length > 0 &&
-        isSimilarCategory(targetCategory, inferCategory(candidate)),
+        inferCategory(candidate) === targetCategory,
     )
     .map((candidate) => {
       const factors = rankFactors(candidate, computeMetrics(candidate));
