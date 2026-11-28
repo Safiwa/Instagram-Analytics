@@ -82,12 +82,12 @@ describe("responsive header navigation", () => {
     expect(source("src/app/layout.tsx")).toContain("sticky top-0");
   });
 
-  it("brands the logo as Instagram Analytics by Campaign Masters", () => {
+  it("brands the logo as Instagram Analytics by Creative Masters Agency", () => {
     const layout = source("src/app/layout.tsx");
 
     expect(layout).toContain("Instagram Analytics");
-    expect(layout.match(/by Campaign Masters\n/g)).toHaveLength(2);
-    expect(layout).not.toContain("Campaign Masters UAE");
+    expect(layout.match(/By Creative Masters Agency/g)).toHaveLength(2);
+    expect(layout).not.toContain("by Campaign Masters");
   });
 
   it("lists the company contact details on the Contact Us page", () => {

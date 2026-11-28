@@ -248,3 +248,63 @@ export async function loadConnectedInsights(username: string): Promise<StoredCon
     return null;
   }
 }
+
+// Admin-facing opt-in list. It deliberately selects no token or private
+// audience data. Country comes only from the manually recorded "Account based
+// in" value; a missing row and an explicit "not published" value stay distinct.
+export type ConnectedProfileForAdmin = {
+  id: string;
+  username: string;
+  accountType: string | null;
+  connectedAt: string;
+  lastSyncedAt: string | null;
+  country: string | null;
+  countryStatus: "recorded" | "not-published" | "not-recorded";
+};
+
+export type ConnectedCountryCount = { country: string; count: number };
+
+export type ConnectedProfilesForAdmin = {
+  total: number;
+  countries: ConnectedCountryCount[];
+  profiles: ConnectedProfileForAdmin[];
+};
+
+export async function listConnectedProfilesForAdmin(): Promise<ConnectedProfilesForAdmin> {
+  const sql = getSql();
+  if (!sql) {
+    return { total: 0, countries: [], profiles: [] };
+  }
+  const rows = await sql(
+    `select c.id, c.username, c.account_type, c.connected_at, c.last_synced_at,
+            l.country, l.recorded_at as country_recorded_at
+     from connected_accounts c
+     left join account_locations l on l.username = c.username
+     order by c.connected_at desc, c.username asc`,
+    [],
+  );
+  const profiles = rows.map((row): ConnectedProfileForAdmin => ({
+    id: String(row.id),
+    username: String(row.username),
+    accountType: typeof row.account_type === "string" ? row.account_type : null,
+    connectedAt: iso(row.connected_at) ?? "",
+    lastSyncedAt: iso(row.last_synced_at),
+    country: typeof row.country === "string" && row.country ? row.country : null,
+    countryStatus: row.country_recorded_at
+      ? typeof row.country === "string" && row.country
+        ? "recorded"
+        : "not-published"
+      : "not-recorded",
+  }));
+  const counts = new Map<string, number>();
+  for (const profile of profiles) {
+    const label =
+      profile.country ??
+      (profile.countryStatus === "not-published" ? "Not published" : "Not recorded");
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  const countries = [...counts.entries()]
+    .map(([country, count]) => ({ country, count }))
+    .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country));
+  return { total: profiles.length, countries, profiles };
+}

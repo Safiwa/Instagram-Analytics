@@ -23,15 +23,15 @@ async function loadStored(username: string): Promise<StoredPostHistory | null> {
   };
 }
 
-async function store(username: string, posts: HistoryPost[]): Promise<void> {
+async function store(username: string, posts: HistoryPost[], fetchedAt: string): Promise<void> {
   const sql = getSql();
   if (!sql) {
     return;
   }
   await sql(
-    `insert into post_history (username, fetched_at, posts) values ($1, now(), $2::jsonb)
-     on conflict (username) do update set fetched_at = now(), posts = excluded.posts`,
-    [username, JSON.stringify(posts)],
+    `insert into post_history (username, fetched_at, posts) values ($1, $2::timestamptz, $3::jsonb)
+     on conflict (username) do update set fetched_at = excluded.fetched_at, posts = excluded.posts`,
+    [username, fetchedAt, JSON.stringify(posts)],
   );
 }
 
@@ -53,7 +53,7 @@ export async function getPostHistory(
   if (!fresh) {
     return stored;
   }
-  await store(key, fresh).catch((error) =>
+  await store(key, fresh, new Date(now).toISOString()).catch((error) =>
     log.warn("post history store failed", {
       username: key,
       message: error instanceof Error ? error.message : "unknown",

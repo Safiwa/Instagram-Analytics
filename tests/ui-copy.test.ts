@@ -20,6 +20,19 @@ describe("homepage positioning copy", () => {
     expect(page).toContain("Stage brand events");
     expect(page.toLowerCase()).not.toContain("modash");
   });
+
+  it("does not tell visitors that no API keys or Meta app are needed", () => {
+    const page = source("src/app/page.tsx");
+    expect(page.toLowerCase()).not.toContain("no api keys or meta app needed");
+  });
+});
+
+describe("agency under-logo copy", () => {
+  it("uses the full agency name beside both logo placements", () => {
+    const layout = source("src/app/layout.tsx");
+    expect(layout.match(/By Creative Masters Agency/g)).toHaveLength(2);
+    expect(layout).not.toContain("by Campaign Masters");
+  });
 });
 
 describe("growth reel-count badge", () => {

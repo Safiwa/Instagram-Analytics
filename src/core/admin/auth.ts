@@ -8,6 +8,16 @@ export const ADMIN_COOKIE = "ia_admin";
 export const ADMIN_TTL_SECONDS = 12 * 60 * 60;
 const ADMIN_PAYLOAD = "admin";
 
+// Only these internal pages may be used as a post-login/logout destination.
+export const ADMIN_PATHS = ["/admin/locations", "/admin/profiles"] as const;
+export type AdminPath = (typeof ADMIN_PATHS)[number];
+
+export function adminReturnPath(value: unknown): AdminPath {
+  return typeof value === "string" && (ADMIN_PATHS as readonly string[]).includes(value)
+    ? (value as AdminPath)
+    : "/admin/locations";
+}
+
 export const ADMIN_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: true,

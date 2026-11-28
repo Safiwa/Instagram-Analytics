@@ -184,7 +184,7 @@ export default function Home() {
           </p>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-300">
             Explore any public Instagram profile to see how real signals support creator vetting,
-            partnership planning and a practical growth plan. No API keys or Meta app needed.
+            partnership planning and a practical growth plan.
           </p>
         </div>
 

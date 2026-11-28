@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { ADMIN_COOKIE, isAdminConfigured, isAdminSession } from "../../../core/admin/auth";
 import { recordableCountries } from "../../../core/analytics/country";
@@ -62,6 +63,12 @@ export default async function AdminLocationsPage({ searchParams }: PageProps) {
           to logged-in viewers, so the site cannot read it. Record it here and it overrides every
           inferred country signal on profile pages, rankings and boards within about 10 minutes.
         </p>
+        <Link
+          href="/admin/profiles"
+          className="mt-3 inline-block text-xs font-medium text-indigo-700 hover:underline"
+        >
+          View Instagram Connect profiles by country
+        </Link>
       </div>
 
       {error ? (
@@ -90,6 +97,7 @@ export default async function AdminLocationsPage({ searchParams }: PageProps) {
           action="/api/admin/login"
           className="space-y-3 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
         >
+          <input type="hidden" name="next" value="/admin/locations" />
           <label className="block text-sm font-medium text-slate-900" htmlFor="password">
             Admin password
           </label>
@@ -171,6 +179,7 @@ async function SignedIn() {
       </section>
 
       <form method="post" action="/api/admin/logout">
+        <input type="hidden" name="next" value="/admin/locations" />
         <button type="submit" className="text-xs font-medium text-slate-500 hover:text-slate-900">
           Sign out
         </button>
